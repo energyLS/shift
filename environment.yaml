@@ -1,0 +1,26 @@
+name: shift
+channels:
+  - conda-forge
+  - bioconda
+  - https://conda.anaconda.org/gurobi/linux-64
+  - https://conda.anaconda.org/gurobi/noarch
+dependencies:
+  - python>=3.8
+  - pip
+  - numpy
+  - pandas
+  - geopandas
+  - snakemake-minimal #<8.25 # See https://github.com/snakemake/snakemake/issues/3202
+  - pycountry
+  - seaborn
+  - jupyter
+  - ipython
+  - ipykernel
+  - jupyterlab
+  
+  - pip: 
+    - streamlit>=1.18
+    - plotly
+    - pyaml
+    - snakemake-storage-plugin-http
+    - pycountry_convert

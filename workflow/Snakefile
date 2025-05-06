@@ -1,0 +1,19 @@
+from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
+import sys
+
+sys.path.append("./scripts")
+
+from os.path import normpath, exists, isdir
+from shutil import copyfile, move
+
+
+
+
+configfile: "../config/config.yaml"
+
+localrules: all
+
+wildcard_constraints:
+    country="[a-zA-Z]+",
+    sweep="[a-zA-Z]+",
+    rule="(0|[1-9][0-9]?|100)"

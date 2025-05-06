@@ -1,0 +1,12 @@
+
+# Files
+*.qgz
+*.log
+*.pdf
+*.png
+
+
+# Folders
+\data
+\resources
+\results
