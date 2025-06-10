@@ -6,7 +6,7 @@ import pandas as pd
 from os.path import normpath, exists, isdir
 from shutil import copyfile, move
 
-
+HTTP = HTTPRemoteProvider()
 sys.path.append("./scripts")
 
 # Read scenario definitions to construct wildcard and instance patterns from them
@@ -23,6 +23,21 @@ wildcard_constraints:
     rule="(0|[1-9][0-9]?|100)"
 
 
+rule retrieve_cost_data:
+    input:
+        HTTP.remote(
+            f"raw.githubusercontent.com/PyPSA/technology-data/{config['costs']['version']}/outputs/costs"
+            + "_{cost_year}.csv",
+            keep_local=True,
+        ),
+    output:
+        costs="../resources/technology_data/costs_{cost_year}.csv",
+    resources:
+        mem_mb=5000,
+    run:
+        move(input[0], output[0])
+
+
 # Individual model calculating the LCoH for up to 60% of maximum potential as demand
 # Stores the resulting LCoH in a csv file
 rule model_lcoh:
@@ -30,7 +45,7 @@ rule model_lcoh:
         "Calculating LCoH for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
     input:
         supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
-        costs = "../data/technology_data/costs_{cost_year}.csv"
+        costs = "../resources/technology_data/costs_{cost_year}.csv"
     output:
         results="../resources/lcoh/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
         network="../resources/lcoh/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
