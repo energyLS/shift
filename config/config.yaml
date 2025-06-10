@@ -4,7 +4,7 @@
 # Region definitions
 regions:
   "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark",
-  "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Türkiye", "Ukraine"]
+  "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
   "Far_West_Europe": ["France", "Greenland", "Iceland", "Ireland", "Portugal", "Spain", "United Kingdom"]
   "Middle_East": ["Bahrain", "Iran, Islamic Republic of", "Iraq","Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "United Arab Emirates",
    "Yemen"]
