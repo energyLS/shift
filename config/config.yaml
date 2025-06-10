@@ -1,2 +1,25 @@
 
 
+
+# Region definitions
+regions:
+  "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark",
+  "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
+  "Far_West_Europe": ["France", "Greenland", "Iceland", "Ireland", "Portugal", "Spain", "United Kingdom"]
+  "Middle_East": ["Bahrain", "Iran, Islamic Republic of", "Iraq","Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "United Arab Emirates",
+   "Yemen"]
+  "North_West_Africa": ["Benin", "Burkina Faso", "Côte d’Ivoire", "Gambia", "Ghana", "Guinea", "Guinea-Bissau", "Liberia", "Nigeria", "Senegal", 
+  "Sierra Leone", "Togo + Algeria", "Chad", "Egypt", "Eritrea", "Libya", "Mali", "Mauritania", "Morocco", "Niger", "Sudan", "Tunisia", "Western Sahara"]
+  "Subsaharan_Africa": ["Angola", "Botswana", "Burundi", "Cameroon", "Central African Republic", "Democratic Republic of the Congo", "Ethiopia", 
+  "Kenya", "Gabon", "Madagascar", "Malawi", "Mozambique", "Namibia", "Republic of the Congo", "Rwanda", "Somalia", "South Africa", "South Sudan", 
+  "Tanzania", "Uganda", "Zambia", "Zimbabwe"]
+  "North_America": ["Canada", "United States"]
+  "Eurasia": ["Armenia", "Azerbaijan", "Georgia", "Kazakhstan", Kyrgyzstan, "Tajikistan", "Turkmenistan", "Uzbekistan", "Russian Federation"]
+  "South_America": ["Bolivia", "Brazil", "Colombia", "Ecuador", "Equatorial French Guiana", "Guyana", "Paraguay", "Peru", "Suriname","Venezuela"]
+  "South_South_America": ["Argentina", "Chile", "Uruguay"]
+  "Central_America": ["Costa Rica", El Salvador, "Guatemala", "Honduras", "Mexico", "Nicaragua", "Panama"]
+  "West_Asia": ["Afghanistan", "Bangladesh", "Bhutan", "India", "Nepal", "Pakistan", "Sri Lanka"]
+  "East_Asia": ["China", "Hong Kong", "Mongolia", "Taiwan"]
+  "Pacific_Asia": ["Brunei", "Cambodia", "Indonesia", "Laos", "Malaysia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam"]
+  "East_East_Asia": ["Japan", "South Korea"]
+  "Oceania": ["Australia", "New Zealand"]
