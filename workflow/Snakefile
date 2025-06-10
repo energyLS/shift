@@ -1,12 +1,16 @@
 from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
 import sys
-
-sys.path.append("./scripts")
-
+from email import utils
+from snakemake.utils import Paramspace
+import pandas as pd
 from os.path import normpath, exists, isdir
 from shutil import copyfile, move
 
 
+sys.path.append("./scripts")
+
+# Read scenario definitions to construct wildcard and instance patterns from them
+trade_scenarios = Paramspace(pd.read_csv("scenarios/trade_scenarios.csv", dtype=str))
 
 
 configfile: "../config/config.yaml"
