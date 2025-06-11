@@ -20,6 +20,20 @@ Create the environment with `conda`:
 conda env create -f environment.yaml
 ```
 
+Run the trade model by navigating to the `workflow/` folder via `cd workflow` and then run
+
+```sh
+snakemake -call model_trade_all
+```
+
+To plot the supply curves subtracted with demand, run
+
+```sh
+snakemake -c1 create_all_supply_curves_with_demand
+```
+
+
+*Under development:*
 
 Run the whole workflow using `snakemake`:
 
@@ -37,4 +51,5 @@ This repository is licensed under the MIT License. See `LICENCE` for details.
 
 Thanks to:
 
-* 
+* Oda Agdal and her Master's Thesis on the [Investigation of Future Global Trade of Hydrogen from Renewable Energy Sources](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/3031513).
+
