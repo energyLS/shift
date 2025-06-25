@@ -52,6 +52,18 @@ rule model_lcoh:
     script:
         "scripts/model_lcoh.py"
 
+rule model_lcos:
+    message:
+        "Calculating LCoS for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
+    input:
+        supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
+        costs = "../resources/technology_data/costs_{cost_year}.csv"
+    output:
+        results="../resources/lcos/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
+        network="../resources/lcos/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+    script:
+        "scripts/model_lcos.py"
+
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
 # stored as a single csv file per region.
