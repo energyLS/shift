@@ -37,6 +37,17 @@ rule retrieve_cost_data:
     run:
         move(input[0], output[0])
 
+# Prepare the trace file prior to running the model
+rule retrieve_trace_steel:
+    input:
+        trace = "../../trace-fneum/trace/resources/networks/default/{cost_year}/shipping-steel/DE-DE/network.nc"
+    output:
+        trace="../resources/trace/steel_{cost_year}.nc",
+    resources:
+        mem_mb=5000,
+    run:
+        copyfile(input[0], output[0])
+
 
 # Individual model calculating the LCoH for up to 60% of maximum potential as demand
 # Stores the resulting LCoH in a csv file
@@ -139,3 +150,13 @@ rule create_all_supply_curves_with_demand:
         expand(
             "../resources/supply_curves_subtracted_with_demand/cost_year~{cost_year}/{region}_hydrogen.pdf", cost_year=[2030,2050], region=config["regions"], allow_missing=True
             )
+
+### Toolkit
+
+# Under development
+# rule input_cost_comp:
+#     message: 
+#         "Comparing input costs"
+
+#     notebook:
+#         "workflow/notebooks/input-cost-comp.ipynb"
