@@ -1,26 +1,71 @@
+# SPDX-License-Identifier: CC0-1.0
+
 name: shift
 channels:
-  - conda-forge
-  - bioconda
-  - https://conda.anaconda.org/gurobi/linux-64
-  - https://conda.anaconda.org/gurobi/noarch
+- conda-forge
+- bioconda
 dependencies:
-  - python>=3.8
-  - pip
-  - numpy
-  - pandas
-  - geopandas
-  - snakemake-minimal #<8.25 # See https://github.com/snakemake/snakemake/issues/3202
-  - pycountry
-  - seaborn
-  - jupyter
-  - ipython
-  - ipykernel
-  - jupyterlab
-  
-  - pip: 
-    - streamlit>=1.18
-    - plotly
-    - pyaml
-    - snakemake-storage-plugin-http
-    - pycountry_convert
+- python>=3.10
+- pip
+
+# Inhouse packages
+- pypsa>=0.32.1
+- atlite>=0.3
+- linopy>=0.4.4
+- powerplantmatching>=0.5.15
+
+# Dependencies of the workflow itself
+- dask
+- xlrd
+- openpyxl
+- seaborn
+- snakemake-minimal>=9
+- snakemake-storage-plugin-http>=0.3
+- snakemake-executor-plugin-slurm
+- snakemake-executor-plugin-cluster-generic
+- memory_profiler
+- yaml
+- pytables
+- lxml
+- numpy
+- pandas>=2.1
+- geopandas>=1
+- xarray>=2024.03.0
+- rioxarray
+- netcdf4
+- libgdal-netcdf
+- networkx
+- scipy
+- glpk
+- shapely>=2.0
+- matplotlib
+- proj
+- fiona
+- country_converter
+- geopy
+- tqdm
+- pytz
+- jpype1
+- pyxlsb
+- graphviz
+- geojson
+- pyscipopt
+
+# GIS dependencies:
+- cartopy
+- descartes
+- rasterio
+
+# Development dependencies
+- jupyter
+- ipython
+- pre-commit
+- ruff
+- pylint
+
+- pip:
+  - gurobipy
+  - highspy
+  - tsam>=2.3.1
+  - entsoe-py
+  - pypsatopo
