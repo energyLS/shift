@@ -52,7 +52,7 @@ def building_model(ds, dw, dc, load, h_cost):
     # network.add("Carrier","water")
 
     # adding wind and solar generators on el bus
-    interest_rate = 0.075
+    interest_rate = 0.070
     wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
     # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
     solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
@@ -208,12 +208,15 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "model_lcos", cost_year="2030", demand_factor=0.2, region="Europe"
+            "model_lcos", cost_year="2030", demand_factor=20, region="Europe"
         )
 
     # making dataframes from inputs
     dc = pd.read_csv(snakemake.input.costs, header=0)
     d = xr.open_dataset(snakemake.input.supply_data)
+
+    # load TRACE steel model
+    n = pypsa.Network(snakemake.input.trace)
 
     # subselecting each technology and cleaning for "0 and nan" - capacity values
     ds = d.sel({"technology": "pvplant"})
