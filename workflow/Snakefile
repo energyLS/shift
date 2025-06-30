@@ -6,7 +6,7 @@ import pandas as pd
 from os.path import normpath, exists, isdir
 from shutil import copyfile, move
 
-HTTP = HTTPRemoteProvider()
+# HTTP = HTTPRemoteProvider()
 sys.path.append("./scripts")
 
 # Read scenario definitions to construct wildcard and instance patterns from them
@@ -22,20 +22,18 @@ wildcard_constraints:
     sweep="[a-zA-Z]+",
     rule="(0|[1-9][0-9]?|100)"
 
-
 rule retrieve_cost_data:
-    input:
-        HTTP.remote(
-            f"raw.githubusercontent.com/PyPSA/technology-data/{config['costs']['version']}/outputs/costs"
-            + "_{cost_year}.csv",
-            keep_local=True,
-        ),
+    params:
+        # version=config_provider("costs", "version"),
+        version=config['costs']['version'],
     output:
         costs="../resources/technology_data/costs_{cost_year}.csv",
     resources:
-        mem_mb=5000,
-    run:
-        move(input[0], output[0])
+        mem_mb=1000,
+    retries: 2
+    script:
+        "scripts/retrieve_cost_data.py"
+
 
 # Prepare the trace file prior to running the model
 rule retrieve_trace_steel:
@@ -68,7 +66,8 @@ rule model_lcos:
         "Calculating LCoS for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
     input:
         supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
-        costs = "../resources/technology_data/costs_{cost_year}.csv"
+        costs = "../resources/technology_data/costs_{cost_year}.csv",
+        trace = "../resources/trace/steel_{cost_year}.nc"
     output:
         results="../resources/lcos/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
         network="../resources/lcos/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",

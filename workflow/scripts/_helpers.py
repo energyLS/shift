@@ -16,9 +16,10 @@ import numpy as np
 import pandas as pd
 import requests
 import yaml
-from fake_useragent import UserAgent
-from pypsa.components import component_attrs, components
+# from fake_useragent import UserAgent
+# from pypsa.components import component_attrs, components
 from shapely.geometry import Point
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -129,3 +130,30 @@ def mock_snakemake(
         if user_in_script_dir:
             os.chdir(script_dir)
     return snakemake
+
+
+def progress_retrieve(url, file, disable=False):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    # Hotfix - Bug, tqdm not working with disable=False
+    disable = True
+
+    if disable:
+        response = requests.get(url, headers=headers, stream=True)
+        with open(file, "wb") as f:
+            f.write(response.content)
+    else:
+        response = requests.get(url, headers=headers, stream=True)
+        total_size = int(response.headers.get("content-length", 0))
+        chunk_size = 1024
+
+        with tqdm(
+            total=total_size,
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+            desc=str(file),
+        ) as t:
+            with open(file, "wb") as f:
+                for data in response.iter_content(chunk_size=chunk_size):
+                    f.write(data)
+                    t.update(len(data))
