@@ -77,20 +77,24 @@ rule model_lcos:
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
 # stored as a single csv file per region.
-rule create_hydrogen_supply_curve:
+rule create_supply_curve:
     message:
-        "Combining individual LCoH results to create a supply curve for region {wildcards.region}."
+        "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
     input:
-        lcoh_data = expand(
-            "../resources/lcoh/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            demand_factor=config["demand_factors"], allow_missing=True
+        lco_product_data = lambda wildcards: expand(
+            f"../resources/lco{wildcards.product[0]}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
+            demand_factor=config["demand_factors"],
+            allow_missing=True
         ),
         local_demand = "../data/un_enerdata_demand_2050_final.csv"
     output:
-        supply="../resources/supply_curves/cost_year~{cost_year}/{region}_hydrogen.csv",
-        supply_curve="../resources/supply_curves/cost_year~{cost_year}/{region}_hydrogen.pdf"
+        supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+        supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf"
     script:
-        "scripts/create_hydrogen_supply_curve.py"
+        "scripts/create_supply_curve.py"
+
+
+# New: product = "steel" or "hydrogen"
 
 
 rule create_all_supply_curves:
