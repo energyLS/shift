@@ -24,7 +24,6 @@ wildcard_constraints:
 
 rule retrieve_cost_data:
     params:
-        # version=config_provider("costs", "version"),
         version=config['costs']['version'],
     output:
         costs="../resources/technology_data/costs_{cost_year}.csv",
@@ -64,6 +63,8 @@ rule model_lcoh:
 rule model_lcos:
     message:
         "Calculating LCoS for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
+    params:
+        interest_rate=config["interest_rate"],
     input:
         supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
         costs = "../resources/technology_data/costs_{cost_year}.csv",

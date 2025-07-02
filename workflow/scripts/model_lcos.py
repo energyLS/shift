@@ -36,11 +36,10 @@ def calc_cap_cost(costs, tech, i_rate):
 def building_model(n, ds, dw, dc, load, h_cost):
 
     # adding wind and solar generators on el bus
-    interest_rate = 0.070
+    interest_rate = snakemake.params.interest_rate
     wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
     # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
     solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
-    battery_cost = calc_cap_cost(dc, "battery storage", interest_rate)
 
     # hydrogen cost can either be 0 or real cost. Real cost is the default of the imported network
     if h_cost == False:
@@ -110,7 +109,7 @@ def building_model(n, ds, dw, dc, load, h_cost):
     #     )
 
     # p_set unit in MW
-    n.add("Load", "load", bus="berth (exp)", p_set=load)
+    n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
     print("network load: ", load)
 
     return n
