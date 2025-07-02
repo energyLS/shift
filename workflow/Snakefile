@@ -6,7 +6,7 @@ import pandas as pd
 from os.path import normpath, exists, isdir
 from shutil import copyfile, move
 
-HTTP = HTTPRemoteProvider()
+# HTTP = HTTPRemoteProvider()
 sys.path.append("./scripts")
 
 # Read scenario definitions to construct wildcard and instance patterns from them
@@ -22,20 +22,28 @@ wildcard_constraints:
     sweep="[a-zA-Z]+",
     rule="(0|[1-9][0-9]?|100)"
 
-
 rule retrieve_cost_data:
-    input:
-        HTTP.remote(
-            f"raw.githubusercontent.com/PyPSA/technology-data/{config['costs']['version']}/outputs/costs"
-            + "_{cost_year}.csv",
-            keep_local=True,
-        ),
+    params:
+        version=config['costs']['version'],
     output:
         costs="../resources/technology_data/costs_{cost_year}.csv",
     resources:
+        mem_mb=1000,
+    retries: 2
+    script:
+        "scripts/retrieve_cost_data.py"
+
+
+# Prepare the trace file prior to running the model
+rule retrieve_trace_steel:
+    input:
+        trace = "../../trace-fneum/trace/resources/networks/default/{cost_year}/shipping-steel/DE-DE/network.nc"
+    output:
+        trace="../resources/trace/steel_{cost_year}.nc",
+    resources:
         mem_mb=5000,
     run:
-        move(input[0], output[0])
+        copyfile(input[0], output[0])
 
 
 # Individual model calculating the LCoH for up to 60% of maximum potential as demand
@@ -52,30 +60,49 @@ rule model_lcoh:
     script:
         "scripts/model_lcoh.py"
 
+rule model_lcos:
+    message:
+        "Calculating LCoS for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
+    params:
+        interest_rate=config["interest_rate"],
+    input:
+        supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
+        costs = "../resources/technology_data/costs_{cost_year}.csv",
+        trace = "../resources/trace/steel_{cost_year}.nc"
+    output:
+        results="../resources/lcos/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
+        network="../resources/lcos/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+    script:
+        "scripts/model_lcos.py"
+
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
 # stored as a single csv file per region.
-rule create_hydrogen_supply_curve:
+rule create_supply_curve:
     message:
-        "Combining individual LCoH results to create a supply curve for region {wildcards.region}."
+        "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
     input:
-        lcoh_data = expand(
-            "../resources/lcoh/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            demand_factor=config["demand_factors"], allow_missing=True
+        lco_product_data = lambda wildcards: expand(
+            f"../resources/lco{wildcards.product[0]}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
+            demand_factor=config["demand_factors"],
+            allow_missing=True
         ),
         local_demand = "../data/un_enerdata_demand_2050_final.csv"
     output:
-        supply="../resources/supply_curves/cost_year~{cost_year}/{region}_hydrogen.csv",
-        supply_curve="../resources/supply_curves/cost_year~{cost_year}/{region}_hydrogen.pdf"
+        supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+        supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf"
     script:
-        "scripts/create_hydrogen_supply_curve.py"
+        "scripts/create_supply_curve.py"
+
+
+# New: product = "steel" or "hydrogen"
 
 
 rule create_all_supply_curves:
     input:
         expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_hydrogen.csv",
-            region=config["regions"], allow_missing=True
+            "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+            cost_year=[2030,2050], region=config["regions"], product=["steel"], allow_missing=True
             )
 
 
@@ -127,3 +154,13 @@ rule create_all_supply_curves_with_demand:
         expand(
             "../resources/supply_curves_subtracted_with_demand/cost_year~{cost_year}/{region}_hydrogen.pdf", cost_year=[2030,2050], region=config["regions"], allow_missing=True
             )
+
+### Toolkit
+
+# Under development
+# rule input_cost_comp:
+#     message: 
+#         "Comparing input costs"
+
+#     notebook:
+#         "workflow/notebooks/input-cost-comp.ipynb"

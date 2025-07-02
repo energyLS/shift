@@ -6,7 +6,28 @@ The model identifies cost-optimal configurations for mining, hydrogen production
 
 ---
 
-## Download, Install, and Run
+
+## Prerequesite: TRACE model
+
+The SHIFT model integrates the energy supply chain `shipping-steel` from a [fork](https://github.com/fneum/trace/tree/pypsa-eur-sec-imports-atlite) of the [TRACE model](https://github.com/euronion/trace).
+
+Therefore, clone the TRACE fork with `git`:
+
+```sh
+git clone https://github.com/fneum/trace.git
+```
+
+and switch to the branch `pypsa-eur-sec-imports-atlite` (commit [8bf0571](https://github.com/fneum/trace/commit/8bf057142d4e035926ffb084493462eff64fe188)) and follow these steps:
+- delete `escs/shipping-steel/loads.csv`,
+- delete `escs/shipping-steel/ships.csv`,
+- set `technology_data: "v0.12.0"` in the `config/config.default.yaml` (same as in SHIFT: `config/config.yaml`),
+- run `snakemake -c1 resources/networks/default/2030/shipping-steel/DE-DE/network.nc`,
+- run `snakemake -c1 resources/networks/default/2050/shipping-steel/DE-DE/network.nc`.
+
+This creates a steel supply chain for 2030 and 2050 without loads and shipping, those parameters will be added later in the SHIFT workflow. The resulting steel model will be stored in `resources/networks/default/2050/shipping-steel/DE-DE/network.nc` and automatically fetched by the SHIFT model.
+
+
+## Download, Install, and Run the SHIFT model
 
 Clone the repository with `git`:
 

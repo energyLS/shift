@@ -33,38 +33,21 @@ def calc_cap_cost(costs, tech, i_rate):
 
 
 # inputs are solar potentials, wind potentials, costs and load
-def building_model(ds, dw, dc, load, h_cost):
-    # create network + buses + carriers
-    network = pypsa.Network()
-
-    network.set_snapshots(pd.to_datetime(ds.time.to_pandas()))
-
-    # defining the buses
-    network.add("Bus", "bus el", carrier="el")
-    network.add("Bus", "bus hydrogen", carrier="hydrogen")
-    # network.add("Bus","bus water", carrier = "water")
-
-    # adding carriers
-    network.add("Carrier", "el")
-    network.add("Carrier", "hydrogen")
-    network.add("Carrier", "wind")
-    network.add("Carrier", "solar")
-    # network.add("Carrier","water")
+def building_model(n, ds, dw, dc, load, h_cost):
 
     # adding wind and solar generators on el bus
-    interest_rate = 0.075
+    interest_rate = snakemake.params.interest_rate
     wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
     # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
     solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
-    battery_cost = calc_cap_cost(dc, "battery storage", interest_rate)
 
-    # hydrogen cost can either be 0 or real cost
+    # hydrogen cost can either be 0 or real cost. Real cost is the default of the imported network
     if h_cost == False:
-        hydrogen_storage_cost = 0
+        n.stores.at[
+            "hydrogen storage tank type 1 including compressor (exp)", "capital_cost"
+        ] = 0
     else:
-        hydrogen_storage_cost = calc_cap_cost(
-            dc, "hydrogen storage tank incl. compressor", interest_rate
-        )
+        pass
 
     # for every class in solar data
     print("---------------------------- starting with solar data ")
@@ -73,17 +56,18 @@ def building_model(ds, dw, dc, load, h_cost):
         sol_df = ds.sel({"class": ds["class"][i]})
 
         # costs taken from dae: solar costs
-        network.add(
+        n.add(
             "Generator",
-            "PV {}".format(i),
-            bus="bus el",
-            carrier="solar",
-            # p_nom = 8, #leave it commented out, start cap should be zero
+            "pv {}".format(i),
+            bus="electricity (exp)",
+            carrier="pv",
             p_nom_extendable=True,
             p_nom_max=sol_df["capacity"]
             .to_pandas()
             .item(),  # this will be ds.capacities
-            p_max_pu=sol_df["capacity factor"].to_pandas(),  # this will be ds.profiles
+            p_max_pu=sol_df["capacity factor"]
+            .to_pandas()
+            .clip(lower=0),  # this will be ds.profiles
             capital_cost=solar_cost[0],  # EUR/MW, this will be read in from costs file
         )
 
@@ -92,18 +76,16 @@ def building_model(ds, dw, dc, load, h_cost):
     for i in range(0, len(dw.capacity)):
         wind_df = dw.sel({"class": dw["class"][i]})
 
-        network.add(
+        n.add(
             "Generator",
-            "on_wind turbine {}".format(i),
-            bus="bus el",
+            "onwind {}".format(i),
+            bus="electricity (exp)",
             carrier="wind",
-            # p_nom = 8, #this is capacity
             p_nom_extendable=True,
-            # p_nom_min = 8,
             p_nom_max=wind_df["capacity"].to_pandas().item(),
-            p_max_pu=wind_df[
-                "capacity factor"
-            ].to_pandas(),  # read in from potentials file
+            p_max_pu=wind_df["capacity factor"]
+            .to_pandas()
+            .clip(lower=0),  # read in from potentials file
             capital_cost=wind_cost[
                 0
             ],  # EUR/MW, read in from costs file and calculated in above function
@@ -126,42 +108,11 @@ def building_model(ds, dw, dc, load, h_cost):
     #         capital_cost= offshore_wind_cost  #EUR/MW, read in from costs file and calculated in above function
     #     )
 
-    # adding storage
-    # battery storage investment cost = 75EUR/kWh
-    network.add(
-        "Store",
-        "battery",
-        bus="bus el",
-        e_cyclic=True,
-        e_nom_extendable=True,
-        capital_cost=battery_cost[0],
-    )  # EUR/MWh
-
-    # hydrogen storage
-    network.add(
-        "Store",
-        "hydrogen",
-        bus="bus hydrogen",
-        e_cyclic=True,
-        e_nom_extendable=True,
-        capital_cost=hydrogen_storage_cost,
-    )  # EUR/MWh
-
     # p_set unit in MW
-    network.add("Load", "load", bus="bus hydrogen", p_set=load)
+    n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
     print("network load: ", load)
 
-    # values for electrolysis link from cost outputs in 2050 (dae data)
-    network.add(
-        "Link",
-        "electrolysis",
-        bus0="bus el",
-        bus1="bus hydrogen",
-        efficiency=0.75,  # per unit
-        capital_cost=calc_cap_cost(dc, "electrolysis", interest_rate)[0],  # EUR/MW
-        p_nom_extendable=True,
-    )
-    return network
+    return n
 
 
 def save_lcoh(solved_network):
@@ -169,10 +120,10 @@ def save_lcoh(solved_network):
     res = pd.DataFrame(
         columns=[
             "demand factor [%]",
-            "demand [MWh]",
-            "load [MW]",
+            "demand [t]",
+            "load [t/h]",
             "cost [EUR]",
-            "LCOH [EUR/MWh]",
+            "LCOS [EUR/t]",
         ]
     )
 
@@ -211,12 +162,15 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "model_lcoh", cost_year="2030", demand_factor=20, region="Europe"
+            "model_lcos", cost_year="2030", demand_factor=20, region="Middle_East"
         )
 
     # making dataframes from inputs
     dc = pd.read_csv(snakemake.input.costs, header=0)
     d = xr.open_dataset(snakemake.input.supply_data)
+
+    # load TRACE steel model
+    n = pypsa.Network(snakemake.input.trace)
 
     # subselecting each technology and cleaning for "0 and nan" - capacity values
     ds = d.sel({"technology": "pvplant"})
@@ -226,24 +180,9 @@ if __name__ == "__main__":
     # dww = d.sel({"technology":"windoffshore"})
     # dww_cleaned = dww.where(dww.capacity > 0.0,drop=True)
 
+    # calculating (max) load
     max_load = (
         int(
-            (ds_cleaned.capacity * ds_cleaned["capacity factor"]).sum(
-                dim=["time", "class"]
-            )
-            + (dw_cleaned.capacity * dw_cleaned["capacity factor"]).sum(
-                dim=["time", "class"]
-            )
-        )
-        / 8760
-        * 0.75
-    )
-    print("max load, (solar+wind)/8760*0.75:", max_load)
-
-    # calculating load
-    # load = int(ds_cleaned.capacity.max()+dw_cleaned.capacity.max())*(int(snakemake.wildcards['demand_factor'])/100)
-    load = float(
-        (
             (ds_cleaned.capacity * ds_cleaned["capacity factor"]).sum(
                 dim=["time", "class"]
             )
@@ -256,22 +195,30 @@ if __name__ == "__main__":
             # ).sum(dim=["time","class"])
         )
         / 8760
-        * (int(snakemake.wildcards["demand_factor"]) / 100)
+        * 0.75
     )
-    print("load:", load)
-    print("diff:", max_load - load)
+
+    steel_restriction = 0.1  # steel can only use 10% of hydrogen
+    load = (
+        max_load * steel_restriction * (int(snakemake.wildcards["demand_factor"]) / 100)
+    )
+
+    print(f"max load hydrogen, (solar+onwind)*0.75: {max_load:.1f}")
+    print(f"max load steel (restriced 10% of hydrogen): {max_load * 0.1:.1f}")
+    print(f"load steel with demand factor: {load:.1f}")
+
     print("data loaded successfully")
 
     # building model
-    print("building model")
-    network = building_model(
-        ds_cleaned, dw_cleaned, dc, load, snakemake.config["hydrogen_storage_cost"]
+    print("adding RE to network")
+    n = building_model(
+        n, ds_cleaned, dw_cleaned, dc, load, snakemake.config["hydrogen_storage_cost"]
     )
 
     # solving model
     print("solving model")
-    network.optimize(
-        network.snapshots,
+    n.optimize(
+        n.snapshots,
         solver_name="gurobi",
         solver_options={
             "crossover": 0,
@@ -285,4 +232,4 @@ if __name__ == "__main__":
 
     # saving results and calculating LCOH
     print("saving results and calculating lcoh")
-    save_lcoh(network)
+    save_lcoh(n)
