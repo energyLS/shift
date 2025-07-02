@@ -66,7 +66,9 @@ def building_model(n, ds, dw, dc, load, h_cost):
             p_nom_max=sol_df["capacity"]
             .to_pandas()
             .item(),  # this will be ds.capacities
-            p_max_pu=sol_df["capacity factor"].to_pandas(),  # this will be ds.profiles
+            p_max_pu=sol_df["capacity factor"]
+            .to_pandas()
+            .clip(lower=0),  # this will be ds.profiles
             capital_cost=solar_cost[0],  # EUR/MW, this will be read in from costs file
         )
 
@@ -82,9 +84,9 @@ def building_model(n, ds, dw, dc, load, h_cost):
             carrier="wind",
             p_nom_extendable=True,
             p_nom_max=wind_df["capacity"].to_pandas().item(),
-            p_max_pu=wind_df[
-                "capacity factor"
-            ].to_pandas(),  # read in from potentials file
+            p_max_pu=wind_df["capacity factor"]
+            .to_pandas()
+            .clip(lower=0),  # read in from potentials file
             capital_cost=wind_cost[
                 0
             ],  # EUR/MW, read in from costs file and calculated in above function
@@ -161,7 +163,7 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "model_lcos", cost_year="2030", demand_factor=20, region="Europe"
+            "model_lcos", cost_year="2030", demand_factor=20, region="Middle_East"
         )
 
     # making dataframes from inputs
