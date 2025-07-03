@@ -87,15 +87,15 @@ rule create_supply_curve:
             demand_factor=config["demand_factors"],
             allow_missing=True
         ),
-        local_demand = "../data/un_enerdata_demand_2050_final.csv"
+        local_demand = "../data/un_enerdata_demand_2050_final.csv",
+        steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
     output:
         supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-        supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf"
+        supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
     script:
         "scripts/create_supply_curve.py"
 
 
-# New: product = "steel" or "hydrogen"
 
 
 rule create_all_supply_curves:
