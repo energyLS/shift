@@ -323,10 +323,9 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
-    network.lopf(
+    network.optimize(
         network.snapshots,
         solver_name="gurobi",
-        pyomo=False,
         solver_options={
             "crossover": 0,
             "method": 2,
