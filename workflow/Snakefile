@@ -102,8 +102,8 @@ rule create_all_supply_curves:
     input:
         expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            cost_year=[2030,2050], region=config["regions"], product=["steel", "hydrogen"], allow_missing=True
-            )
+            cost_year=[2030], region="South_South_America", product=["steel"], allow_missing=True
+            ) #cost_year=[2030,2050], region=config["regions"], product=["steel", "hydrogen"]
 
 
 rule model_trade:

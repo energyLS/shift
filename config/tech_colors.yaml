@@ -77,6 +77,8 @@ tech_colors:
   Oil: 'black'
   lines: k
   transmission lines: k
+  steel: 'grey'
+  hydrogen: m
   H2: m
   H2 liquefaction: m
   hydrogen storage: m
