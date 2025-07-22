@@ -15,7 +15,9 @@ def building_model(supply_curves, demands, bus_location, product):
     network = pypsa.Network()
 
     # adding carriers
-    network.add("Carrier", product)
+    network.add(
+        "Carrier", name=product, color=snakemake.config["plot"]["colors"][product]
+    )
 
     c = 0
     # for each region we are creating a bus with all the potentials and load
@@ -33,7 +35,7 @@ def building_model(supply_curves, demands, bus_location, product):
         # defining the bus with region name
         network.add(
             "Bus",
-            "bus {}".format(region_name),
+            region_name,
             carrier=product,
             x=float(
                 bus_location.loc[bus_location["region_name"] == region_name]["long"]
@@ -53,8 +55,8 @@ def building_model(supply_curves, demands, bus_location, product):
 
         network.add(
             "Load",
-            "load {}".format(region_name),
-            bus="bus {}".format(region_name),
+            region_name,
+            bus=region_name,
             p_set=load,
         )
 
@@ -73,7 +75,7 @@ def building_model(supply_curves, demands, bus_location, product):
                 "{} supply {}_{}".format(
                     product, region_name, region_data["demand factor [%]"][s]
                 ),
-                bus="bus {}".format(region_name),
+                bus=region_name,
                 carrier=product,
                 p_nom_extendable=True,
                 p_nom_max=p_nom_supply,  # MWh or t, demand = potential supply
@@ -141,8 +143,8 @@ def create_links(transport_costs, trade_options):
             network.add(
                 "Link",
                 "shipping {}-{}".format(r_from, r_to),
-                bus0="bus {}".format(r_from),
-                bus1="bus {}".format(r_to),
+                bus0=r_from,
+                bus1=r_to,
                 efficiency=eff,  # %, calculated above
                 marginal_cost=total_cost,  # EUR/MWh or EUR/t
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
@@ -164,8 +166,8 @@ def create_links(transport_costs, trade_options):
             network.add(
                 "Link",
                 "pipeline {}-{}".format(r_from, r_to),
-                bus0="bus {}".format(r_from),
-                bus1="bus {}".format(r_to),
+                bus0=r_from,
+                bus1=r_to,
                 efficiency=eff,  # calculated above
                 marginal_cost=p_cost,  # EUR/MWh
                 p_nom_extendable=True,
