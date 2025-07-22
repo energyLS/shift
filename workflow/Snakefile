@@ -109,13 +109,13 @@ rule create_all_supply_curves:
 rule model_trade:
     input:
         supply_curves = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_hydrogen.csv",
-            allow_missing=True, region=config["regions"]
-        ),
+            "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+            allow_missing=True, region=config["regions"]    ),
         transport_costs = "../data/transport_costs/{transport_cost}.csv",
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
-        demand = "../data/un_enerdata_demand_2050_final.csv"
+        demand = "../data/un_enerdata_demand_2050_final.csv",
+        steel_demand = "../resources/steel_production_clustered.csv",
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",

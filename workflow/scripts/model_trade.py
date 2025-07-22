@@ -7,7 +7,7 @@ plt.style.use("bmh")
 
 
 # inputs are transportation costs, supply curves, trade options and load demand for all regions
-def building_model(supply_curves, demands, bus_location):
+def building_model(supply_curves, demands, bus_location, product):
     # this function creates network, carrier and a bus for each region
     # with a load and all supply possibilities added
 
@@ -15,7 +15,7 @@ def building_model(supply_curves, demands, bus_location):
     network = pypsa.Network()
 
     # adding carriers
-    network.add("Carrier", "hydrogen")
+    network.add("Carrier", product)
 
     c = 0
     # for each region we are creating a bus with all the potentials and load
@@ -26,7 +26,7 @@ def building_model(supply_curves, demands, bus_location):
         region_data = pd.read_csv(region_file, header=0)
         filename = os.path.basename(region_file)
         # Extract region name
-        region_name = filename.split("_hydrogen")[0]
+        region_name = filename.split("_" + product)[0]
 
         print("building generators and loads for ", region_name)
 
@@ -34,7 +34,7 @@ def building_model(supply_curves, demands, bus_location):
         network.add(
             "Bus",
             "bus {}".format(region_name),
-            carrier="hydrogen",
+            carrier=product,
             x=float(
                 bus_location.loc[bus_location["region_name"] == region_name]["long"]
             ),  # long
@@ -61,23 +61,23 @@ def building_model(supply_curves, demands, bus_location):
         # defining the supply opportunities for the region (apart from last supply as that is the 75% infeasible one)
         for s in range(0, len(region_data) - 1):
             if s == 0:
-                p_nom_supply = float(region_data["demand [MWh]"][s])
+                p_nom_supply = float(region_data[f"demand [{unit}]"][s])
             else:
-                p_nom_supply = float(region_data["demand [MWh]"][s]) - float(
-                    region_data["demand [MWh]"][s - 1]
+                p_nom_supply = float(region_data[f"demand [{unit}]"][s]) - float(
+                    region_data[f"demand [{unit}]"][s - 1]
                 )
-            M_cost_supply = float(region_data["LCOH [EUR/MWh]"][s])
+            M_cost_supply = float(region_data[f"{cost_descriptor} [EUR/{unit}]"][s])
 
             network.add(
                 "Generator",
-                "hydrogen supply {}_{}".format(
-                    region_name, region_data["demand factor [%]"][s]
+                "{} supply {}_{}".format(
+                    product, region_name, region_data["demand factor [%]"][s]
                 ),
                 bus="bus {}".format(region_name),
-                carrier="hydrogen",
+                carrier=product,
                 p_nom_extendable=True,
-                p_nom_max=p_nom_supply,  # MWh, demand = potential supply
-                marginal_cost=M_cost_supply,  # EUR/MWh
+                p_nom_max=p_nom_supply,  # MWh or t, demand = potential supply
+                marginal_cost=M_cost_supply,  # EUR/MWh or EUR/t
                 capital_cost=1 / 1000,  # to prevent optimisation shennanigans
             )
 
@@ -144,14 +144,14 @@ def create_links(transport_costs, trade_options):
                 bus0="bus {}".format(r_from),
                 bus1="bus {}".format(r_to),
                 efficiency=eff,  # %, calculated above
-                marginal_cost=total_cost,  # EUR/MWh
+                marginal_cost=total_cost,  # EUR/MWh or EUR/t
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
             print("shipping link made from {} to {} - eff {}".format(r_from, r_to, eff))
 
         # checking if the row connects with pipeline
-        if trade_options["pipeline"][r] == 1:
+        if (trade_options["pipeline"][r] == 1) & (product == "hydrogen"):
             r_from = trade_options["region_from"][r]
             r_to = trade_options["region_to"][r]
             p_cost = int(float(trade_options["pipeline_distance [km]"][r]) * pipe_mc)
@@ -188,7 +188,7 @@ def save_trade_network(solved_network):
     df_gen.reset_index(inplace=True)
     df_gen = df_gen.rename(columns={"Generator": "variable", "now": "value"})
     df_gen.insert(0, "type", "generator")
-    df_gen.insert(3, "unit", "MWh")
+    df_gen.insert(3, "unit", unit)
     sol = pd.concat([sol, df_gen], ignore_index=True)
     print("added generators to sol")
 
@@ -197,7 +197,7 @@ def save_trade_network(solved_network):
     df_links.reset_index(inplace=True)
     df_links = df_links.rename(columns={"Link": "variable", "p_nom_opt": "value"})
     df_links.insert(0, "type", "link")
-    df_links.insert(3, "unit", "MWh")
+    df_links.insert(3, "unit", unit)
     sol = pd.concat([sol, df_links], ignore_index=True)
     print("added links to sol")
 
@@ -206,7 +206,7 @@ def save_trade_network(solved_network):
     df_bus.reset_index(inplace=True)
     df_bus = df_bus.rename(columns={"Bus": "variable", "now": "value"})
     df_bus.insert(0, "type", "bus")
-    df_bus.insert(3, "unit", "MW")
+    df_bus.insert(3, "unit", unit + "/a")
     sol = pd.concat([sol, df_bus], ignore_index=True)
     print("added bus_balances to sol")
 
@@ -252,17 +252,17 @@ def plot_trade_network(n):
     region_load = n.loads.groupby(["bus"]).p_set.sum()
     link_flow = n.links.p_nom_opt.astype(int)
     n.plot(
-        bus_sizes=1e-8 * region_load,
+        bus_sizes=region_load * plot_config["bus_size"],  # 1e-8
         bus_colors="seagreen",
         bus_alpha=1,
         link_widths=0,
         branch_components=["Link"],
     )  # the load at bus in green
     n.plot(
-        bus_sizes=1e-8 * region_gen,
+        bus_sizes=region_gen * plot_config["bus_size"],  # 1e-8
         bus_colors="lightsteelblue",
         bus_alpha=0.7,
-        link_widths=1e-9 * link_flow,
+        link_widths=link_flow * plot_config["link_width"],  # 1e-9
         branch_components=["Link"],
         link_colors=df_link["color"],
     )  # the gen at bus in light blue
@@ -275,7 +275,7 @@ def plot_trade_network(n):
             [0],
             marker="o",
             color="white",
-            label="load",
+            label="Demand",
             markerfacecolor="seagreen",
             markersize=10,
         ),
@@ -284,7 +284,7 @@ def plot_trade_network(n):
             [0],
             marker="o",
             color="white",
-            label="generation",
+            label="Supply",
             markerfacecolor="lightsteelblue",
             markersize=10,
         ),
@@ -301,8 +301,14 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "model_trade", transport_cost="irena", cost_year="2030", demand=0.2
+            "model_trade",
+            transport_cost="custom",
+            cost_year="2030",
+            demand=1,
+            product="steel",
         )
+
+    product = snakemake.wildcards["product"]
 
     print("starting up with all regions--- ")
     # making dataframes
@@ -310,12 +316,29 @@ if __name__ == "__main__":
     trade_options = pd.read_csv(snakemake.input.trade_options, header=0)
     supply_curves = snakemake.input.supply_curves
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
-    loads = pd.read_csv(snakemake.input.demand)
+    if product == "steel":
+
+        demands = pd.read_csv(snakemake.input.steel_demand, header=0)
+        demands.rename(columns={"SteelProductionMt": "demand"}, inplace=True)
+        demands["demand"] = demands["demand"] * 1e6  # Mt to t
+        unit = "t"
+        cost_descriptor = "LCOS"
+
+    elif product == "hydrogen":
+
+        demands = pd.read_csv(snakemake.input.demand, header=0)
+        unit = "MWh"
+        cost_descriptor = "LCOH"
+    else:
+        raise ValueError("Product must be either 'steel' or 'hydrogen'.")
+
+    plot_config = snakemake.config["plot"]["world_map"][product]
+
     print("data loaded successfully")
 
     # building model
     print("building model")
-    network = building_model(supply_curves, loads, bus_locations)
+    network = building_model(supply_curves, demands, bus_locations, product)
 
     # building transport network connecting the individual buses
     print("building transportation links")

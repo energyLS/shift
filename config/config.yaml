@@ -25,6 +25,16 @@ interest_rate: 0.07
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks analysis-steel.ipynb
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 
+
+plot:
+  world_map:
+    hydrogen:
+      bus_size: 1.0e-8
+      link_width: 1.0e-9
+    steel:
+      bus_size: 1.0e-7
+      link_width: 1.5e-8
+
 # Region definitions
 regions:
   "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
