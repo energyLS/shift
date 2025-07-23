@@ -116,6 +116,7 @@ rule model_trade:
         bus_locations = "../data/bus_locations.csv",
         demand = "../data/un_enerdata_demand_2050_final.csv",
         steel_demand = "../resources/steel_production_clustered.csv",
+        iron_ore = "../resources/ironore_production_clustered.csv",
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
