@@ -51,6 +51,12 @@ def building_model(supply_curves, demands, bus_location, product):
             color=snakemake.config["plot"]["colors"]["iron_ore"],
         )
 
+        network.add(
+            "Carrier",
+            name="shipping_iron_ore",
+            color=snakemake.config["plot"]["colors"]["iron_ore_shipping"],
+        )
+
         # Define the steel shipping carrier
         network.add(
             "Carrier",
@@ -72,13 +78,21 @@ def building_model(supply_curves, demands, bus_location, product):
         )
 
         # Define iron ore generators feeding iron ore buses in each region
+        iron_ore_limit = (
+            iron_ore.loc[iron_ore["region"] == region_name][
+                "IronOreProductionMt"
+            ].values[0]
+            * 1e6
+            * snakemake.config["iron_ore"]["potential_allowance"]
+        )  # Limit in t_ore
+
         network.add(
             "Generator",
             "{}_ore".format(region_name),
             bus=region_name + "_ore",
             carrier="iron_ore",
             p_nom_extendable=True,
-            # p_nom_max=float(region_data["demand [t]"][0]),  # t #TODO limit as per current production
+            p_nom_max=iron_ore_limit,  # t_ore
             marginal_cost=snakemake.config["iron_ore"]["marginal_cost"],  # EUR/t_ore
             capital_cost=1 / 1000,  # to prevent optimisation shenanigans
         )
@@ -203,7 +217,7 @@ def create_links(transport_costs, trade_options):
             network.add(
                 "Link",
                 "shipping {}-{}".format(r_from, r_to),
-                carrier=product + "_shipping",
+                carrier="shipping_" + product,
                 bus0=r_from,
                 bus1=r_to,
                 efficiency=eff,  # %, calculated above
@@ -212,6 +226,30 @@ def create_links(transport_costs, trade_options):
                 p_nom_extendable=True,
             )
             print("shipping link made from {} to {} - eff {}".format(r_from, r_to, eff))
+
+            # Add iron ore shipping link
+
+            iron_ore_mc = (
+                trade_options["shipping_distance [km]"][r]
+                * snakemake.config["iron_ore"]["shipping_cost_per_km"]
+            )
+
+            network.add(
+                "Link",
+                "iron ore shipping {}-{}".format(r_from, r_to),
+                carrier="shipping_iron_ore",
+                bus0=r_from + "_ore",
+                bus1=r_to + "_ore",
+                efficiency=1,
+                marginal_cost=iron_ore_mc,  # EUR/t_ironore
+                capital_cost=1 / 1000,  # to prevent optimisation shenenigans
+                p_nom_extendable=True,
+            )
+            print(
+                "iron ore shipping link made from {}_ore to {}_ore - eff {}".format(
+                    r_from, r_to, eff
+                )
+            )
 
         # checking if the row connects with pipeline
         if (trade_options["pipeline"][r] == 1) & (product == "hydrogen"):
@@ -379,6 +417,8 @@ if __name__ == "__main__":
     trade_options = pd.read_csv(snakemake.input.trade_options, header=0)
     supply_curves = snakemake.input.supply_curves
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
+    iron_ore = pd.read_csv(snakemake.input.iron_ore, header=0)
+
     if product == "steel":
 
         demands = pd.read_csv(snakemake.input.steel_demand, header=0)
