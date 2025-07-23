@@ -102,7 +102,7 @@ rule create_all_supply_curves:
     input:
         expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            cost_year=[2030], region="South_South_America", product=["steel"], allow_missing=True
+            cost_year=[2030,2050], region=config["regions"], product=["steel"], allow_missing=True
             ) #cost_year=[2030,2050], region=config["regions"], product=["steel", "hydrogen"]
 
 
@@ -154,6 +154,25 @@ rule create_all_supply_curves_with_demand:
         expand(
             "../resources/supply_curves_subtracted_with_demand/cost_year~{cost_year}/{region}_hydrogen.pdf", cost_year=[2030,2050], region=config["regions"], allow_missing=True
             )
+            
+
+# rule model_trade_singlestage:
+#     input:
+#         supply_curves = expand(
+#             "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+#             allow_missing=True, region=config["regions"]    ),
+#         transport_costs = "../data/transport_costs/{transport_cost}.csv",
+#         trade_options = "../data/trade_opt.csv",
+#         bus_locations = "../data/bus_locations.csv",
+#         demand = "../data/un_enerdata_demand_2050_final.csv",
+#         steel_demand = "../resources/steel_production_clustered.csv",
+#     output:
+#         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
+#         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
+#         trade_plot = f"../results/{trade_scenarios.wildcard_pattern}/plot.pdf"
+#     script:
+#         "scripts/model_trade_singlestage.py"
+
 
 ### Toolkit
 
