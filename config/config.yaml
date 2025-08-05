@@ -1,6 +1,3 @@
-
-
-
 enable:
   run_supply_chain: False # Enable for first run
 
@@ -41,12 +38,21 @@ plot:
     steel:
       bus_size: 1.0e-7
       link_width: 1.5e-8
+    iron_ore:
+      bus_size: 1.0e-7
+      link_width: 1.5e-8
   colors:
     steel: 'grey'
     steel_shipping: 'darkgrey'
     hydrogen: 'magenta'
     iron_ore: 'brown'
     iron_ore_shipping: "#6A000E"
+    steel_supply: 'lightsteelblue'
+    steel_demand: 'seagreen'
+    steel_link: 'skyblue'
+    iron_ore_supply: 'black'
+    iron_ore_demand: 'lightsteelblue'
+    iron_ore_link: "#6A000E"
 
 # Region definitions
 regions:

@@ -120,7 +120,8 @@ rule model_trade:
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
-        trade_plot = f"../results/{trade_scenarios.wildcard_pattern}/plot.pdf"
+        trade_plot_ironore = f"../results/{trade_scenarios.wildcard_pattern}/map_ironore.pdf",
+        trade_plot_steel = f"../results/{trade_scenarios.wildcard_pattern}/map_steel.pdf",
     script:
         "scripts/model_trade.py"
 

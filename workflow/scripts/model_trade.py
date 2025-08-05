@@ -334,66 +334,68 @@ def save_trade_network(solved_network):
     return
 
 
-def plot_trade_network(n):
-    # creating color dataframe for type of transportation method
-    df_link = n.links.type.astype(str).to_frame()
-    df_link.reset_index(inplace=True)
-    df_link = df_link.rename(
-        columns={df_link.columns[0]: "Link", df_link.columns[1]: "color"}
-    )
-    # setting all as default to green
-    df_link["color"] = "lightgreen"
-    # shipping links are changed to blue
-    df_link.loc[df_link["Link"].str.contains("shipping"), "color"] = "skyblue"
-    df_link.set_index("Link", inplace=True)
+def plot_trade_network(n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None):
+    """
+    Plot trade network using config-driven colors and sizes.
+    Calculates supply, demand, and trade according to product type.
+    """
+    config = snakemake.config
+    plot_config = config["plot"]["world_map"][product]
+    colors = config["plot"]["colors"]
+    supply_color = colors.get(f"{product}_supply", "black")
+    demand_color = colors.get(f"{product}_demand", "lightsteelblue")
+    link_colors = colors.get(f"{product}_link", "gray")
 
-    # creating figure
-    fig = plt.figure()
-    region_gen = n.generators.groupby(["bus"]).p_nom_opt.sum()
-    region_load = n.loads.groupby(["bus"]).p_set.sum()
-    link_flow = n.links.p_nom_opt.astype(int)
-    n.plot(
-        bus_sizes=region_load * plot_config["bus_size"],  # 1e-8
-        bus_colors="seagreen",
-        bus_alpha=1,
+    fig = plt.figure(figsize=(10, 5))
+
+    # Calculate supply, demand, trade according to product
+    if product == "steel":
+        supply = n.statistics.supply(comps=["Link"], groupby=["bus", "carrier"]).loc[:, :, "steel"].droplevel(0)
+        demand = n.loads.groupby("bus").p_set.sum()
+        trade = n.links[n.links.carrier == "shipping_steel"].p_nom_opt.astype(int)
+    elif product == "iron_ore":
+        supply = n.statistics.supply(comps=["Generator"], groupby=["bus", "carrier"]).loc[:, :, "iron_ore"].droplevel(0)
+        demand = n.statistics.withdrawal(comps=["Link"], groupby=["bus", "carrier"]).loc[:, :, "steel"].droplevel(0)
+        trade = n.links[n.links.carrier == "shipping_iron_ore"].p_nom_opt.astype(int)
+    else:
+        raise ValueError("Unsupported product for plotting.")
+
+    # Plot demand
+    n.plot.map(
+        bus_sizes=demand * plot_config["bus_size"],
+        bus_colors=demand_color,
+        bus_alpha=alpha_demand,
         link_widths=0,
         branch_components=["Link"],
-    )  # the load at bus in green
-    n.plot(
-        bus_sizes=region_gen * plot_config["bus_size"],  # 1e-8
-        bus_colors="lightsteelblue",
-        bus_alpha=0.7,
-        link_widths=link_flow * plot_config["link_width"],  # 1e-9
+    )
+
+    # Plot supply
+    n.plot.map(
+        bus_sizes=supply * plot_config["bus_size"],
+        bus_colors=supply_color,
+        bus_alpha=alpha_supply,
+        link_widths=trade * plot_config["link_width"],
         branch_components=["Link"],
-        link_colors=df_link["color"],
-    )  # the gen at bus in light blue
+        link_colors=link_colors,
+    )
 
+    # Legend
     legend_elements = [
-        plt.Line2D([0], [0], color="lightgreen", label="pipeline"),
-        plt.Line2D([0], [0], color="lightblue", label="shipping"),
-        plt.Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="white",
-            label="Demand",
-            markerfacecolor="seagreen",
-            markersize=10,
-        ),
-        plt.Line2D(
-            [0],
-            [0],
-            marker="o",
-            color="white",
-            label="Supply",
-            markerfacecolor="lightsteelblue",
-            markersize=10,
-        ),
+        plt.Line2D([0], [0], color=link_colors, label="shipping"),
+        plt.Line2D([0], [0], marker="o", color="white", label="Demand",
+                   markerfacecolor=demand_color, markersize=10),
+        plt.Line2D([0], [0], marker="o", color="white", label="Supply",
+                   markerfacecolor=supply_color, markersize=10),
     ]
-    fig.legend(handles=legend_elements, frameon=False)
+    fig.legend(
+        handles=legend_elements,
+        frameon=False,
+        loc="lower right",
+        bbox_to_anchor=(0.22, 0.28),
+    )
 
-    # fig.suptitle("scenario:{}-{}-{}".format(snakemake.wildcards["cost_year"],snakemake.wildcards["transport_cost"],snakemake.wildcards["demand"]))
-    fig.savefig(snakemake.output.trade_plot, format="pdf")
+    if output_path:
+        fig.savefig(output_path, format="pdf")
     return
 
 
@@ -466,4 +468,7 @@ if __name__ == "__main__":
     # saving results and calculating LCOH
     print("saving results as network+csv and pdf")
     save_trade_network(network)
-    plot_trade_network(network)
+    # Plot steel map
+    plot_trade_network(network, product="steel", alpha_supply=0.7, output_path=snakemake.output.trade_plot_steel)
+    # Plot iron ore map
+    plot_trade_network(network, product="iron_ore", alpha_supply=0.5, output_path=snakemake.output.trade_plot_ironore)
