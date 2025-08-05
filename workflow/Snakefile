@@ -78,7 +78,7 @@ if config["enable"].get("run_supply_chain", True):
 
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
-# stored as a single csv file per region.
+# stored as a single csv file per region. Note: the visiual plot includes iron ore costs, the csv without since it is added later in the workflow.
 rule create_supply_curve:
     message:
         "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."

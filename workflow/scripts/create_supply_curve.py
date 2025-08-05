@@ -72,9 +72,17 @@ def create_supply_curve():
     df_sub.to_csv(snakemake.output.supply)
 
     # creates and saves supply curve plot
+    if product == "steel":
+        iron_ore_total_cost = snakemake.config["iron_ore"]["marginal_cost"] * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
+        y_merged = df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+        y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+    else:
+        y_merged = df_merged[columns["cost per unit"]].astype(float)
+        y_sub = df_sub[columns["cost per unit"]].astype(float)
+
     plt.plot(
         df_merged[columns["demand"]].astype(int) / (1e6),
-        df_merged[columns["cost per unit"]].astype(int),
+        y_merged,
         linestyle="-",
         marker="o",
         label="supply",
@@ -83,7 +91,7 @@ def create_supply_curve():
     # the subtracted plot
     plt.plot(
         df_sub[columns["demand"]].astype(int) / (1e6),
-        df_sub[columns["cost per unit"]].astype(int),
+        y_sub,
         linestyle="--",
         color="C1",
         marker="o",
@@ -166,7 +174,7 @@ if __name__ == "__main__":
             "cost per unit": "LCOS [EUR/t]",
             "xlabel": "Demand in Mt",
             "product_unit": "t",
-            "ylim": (0, 600),
+            "ylim": (0, 700),
         }
 
     create_supply_curve()
