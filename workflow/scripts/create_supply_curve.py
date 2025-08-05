@@ -135,7 +135,7 @@ def create_supply_curve():
     plt.ylim(columns["ylim"])
     plt.xlabel(columns["xlabel"])
     plt.ylabel(columns["cost per unit"])
-    plt.legend()
+    plt.legend(loc="lower right")
     plt.savefig(snakemake.output.supply_curve, format="pdf", bbox_inches="tight")
 
     return
