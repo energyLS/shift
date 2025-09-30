@@ -1,3 +1,7 @@
+enable:
+  run_supply_chain: False # Enable for first run
+
+
 # Different demand factors of maximum hydrogen potential as demand in [%]
 demand_factors: [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 hydrogen_storage_cost: False
@@ -14,6 +18,41 @@ costs:
   version: v0.12.0
 
 interest_rate: 0.07
+
+electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks analysis-steel.ipynb
+embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
+pv_p_nom_max_cor: 0.1
+onwind_p_nom_max_cor: 0.1
+
+iron_ore:
+  marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
+  ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
+  potential_allowance: 1.2 # Factor, which the current iron ore production is multiplied with
+  shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
+
+plot:
+  world_map:
+    hydrogen:
+      bus_size: 1.0e-8
+      link_width: 1.0e-9
+    steel:
+      bus_size: 1.0e-7
+      link_width: 1.5e-8
+    iron_ore:
+      bus_size: 1.0e-7
+      link_width: 1.5e-8
+  colors:
+    steel: 'grey'
+    steel_shipping: 'darkgrey'
+    hydrogen: 'magenta'
+    iron_ore: 'brown'
+    iron_ore_shipping: "#6A000E"
+    steel_supply: 'lightsteelblue'
+    steel_demand: 'seagreen'
+    steel_link: 'skyblue'
+    iron_ore_supply: 'black'
+    iron_ore_demand: 'lightsteelblue'
+    iron_ore_link: "#6A000E"
 
 # Region definitions
 regions:

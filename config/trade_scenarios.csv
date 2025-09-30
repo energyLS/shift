@@ -1,9 +1,7 @@
-cost_year,transport_cost,demand
-2030,irena,0.2
-2030,irena,0.6
-2030,heuser,0.2
-2030,heuser,0.6
-2050,irena,0.2
-2050,irena,0.6
-2050,heuser,0.2
-2050,heuser,0.6
+cost_year,transport_cost,demand,product
+2030,steel_z_iron_z,1,steel
+2030,steel_z_iron_r,1,steel
+2030,steel_r_iron_z,1,steel
+2030,steel_r_iron_r,1,steel
+2030,steel_rhigh_iron_z,1,steel
+2030,steel_rhigh_iron_r,1,steel

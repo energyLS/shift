@@ -62,9 +62,8 @@ def building_model(n, ds, dw, dc, load, h_cost):
             bus="electricity (exp)",
             carrier="pv",
             p_nom_extendable=True,
-            p_nom_max=sol_df["capacity"]
-            .to_pandas()
-            .item(),  # this will be ds.capacities
+            p_nom_max=sol_df["capacity"].to_pandas().item()
+            * pv_p_nom_max_cor,  # this will be ds.capacities
             p_max_pu=sol_df["capacity factor"]
             .to_pandas()
             .clip(lower=0),  # this will be ds.profiles
@@ -82,7 +81,7 @@ def building_model(n, ds, dw, dc, load, h_cost):
             bus="electricity (exp)",
             carrier="wind",
             p_nom_extendable=True,
-            p_nom_max=wind_df["capacity"].to_pandas().item(),
+            p_nom_max=wind_df["capacity"].to_pandas().item() * onwind_p_nom_max_cor,
             p_max_pu=wind_df["capacity factor"]
             .to_pandas()
             .clip(lower=0),  # read in from potentials file
@@ -162,7 +161,10 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "model_lcos", cost_year="2030", demand_factor=20, region="Middle_East"
+            "model_lcos",
+            cost_year="2030",
+            demand_factor=20,
+            region="South_South_America",
         )
 
     # making dataframes from inputs
@@ -180,31 +182,37 @@ if __name__ == "__main__":
     # dww = d.sel({"technology":"windoffshore"})
     # dww_cleaned = dww.where(dww.capacity > 0.0,drop=True)
 
+    pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
+    onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
+
     # calculating (max) load
     max_load = (
         int(
-            (ds_cleaned.capacity * ds_cleaned["capacity factor"]).sum(
-                dim=["time", "class"]
-            )
-            + (dw_cleaned.capacity * dw_cleaned["capacity factor"]).sum(
-                dim=["time", "class"]
-            )
+            (
+                ds_cleaned.capacity * pv_p_nom_max_cor * ds_cleaned["capacity factor"]
+            ).sum(dim=["time", "class"])
+            + (
+                dw_cleaned.capacity
+                * onwind_p_nom_max_cor
+                * dw_cleaned["capacity factor"]
+            ).sum(dim=["time", "class"])
             # +
             # (
             # dww_cleaned.capacity * dww_cleaned["capacity factor"]
             # ).sum(dim=["time","class"])
         )
         / 8760
-        * 0.75
+        / snakemake.config["electricity_steel_ratio"]
     )
 
-    steel_restriction = 0.1  # steel can only use 10% of hydrogen
+    pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
+    onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
+
     load = (
-        max_load * steel_restriction * (int(snakemake.wildcards["demand_factor"]) / 100)
+        max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
     )
 
-    print(f"max load hydrogen, (solar+onwind)*0.75: {max_load:.1f}")
-    print(f"max load steel (restriced 10% of hydrogen): {max_load * 0.1:.1f}")
+    print(f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}")
     print(f"load steel with demand factor: {load:.1f}")
 
     print("data loaded successfully")
