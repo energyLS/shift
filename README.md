@@ -20,6 +20,7 @@ git clone https://github.com/fneum/trace.git
 and switch to the branch `pypsa-eur-sec-imports-atlite` (commit [8bf0571](https://github.com/fneum/trace/commit/8bf057142d4e035926ffb084493462eff64fe188)) and follow these steps:
 - delete `escs/shipping-steel/loads.csv`,
 - delete `escs/shipping-steel/ships.csv`,
+- in `data/efficiencies.csv` and `escs/shipping-steel/links.csv`, and `escs/shipping-hbi/links.csv`, add replace `direct iron reduction furnace` with `hydrogen direct iron reduction furnace` to match the latest technology-data version
 - set `technology_data: "v0.12.0"` in the `config/config.default.yaml` (same as in SHIFT: `config/config.yaml`),
 - run `snakemake -c1 resources/networks/default/2030/shipping-steel/DE-DE/network.nc`,
 - run `snakemake -c1 resources/networks/default/2050/shipping-steel/DE-DE/network.nc`.
