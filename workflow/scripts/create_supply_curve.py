@@ -126,7 +126,7 @@ def create_supply_curve():
     elif product == "steel":
         steel_demand = get_steel_demand(snakemake.wildcards["region"])
         plt.axvline(
-            x=0.6 * steel_demand.values[0], linestyle=":", label="local steel demand"
+            x= steel_demand.values[0], linestyle=":", label="local steel demand"
         )
 
     plt.title(
