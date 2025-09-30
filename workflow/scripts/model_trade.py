@@ -184,12 +184,30 @@ def create_links(transport_costs, trade_options):
             "fixed_cost"
         ]
     )
+
+
+    ship_steel_mc = (
+        transport_costs.loc[transport_costs["transport_type"] == "shipping_steel"][
+            "marginal_cost"
+        ].values[0]
+    )
+
+    ship_iron_ore_mc = (
+        transport_costs.loc[transport_costs["transport_type"] == "shipping_iron_ore"][
+            "marginal_cost"
+        ].values[0]
+    )
+
+
     input_demand = 0.42  # MWh/km for LH2, IEA future of hydrogen 2019
     boat_capacity = 363000  # MWh for LH2, IEA future of hydrogen 2019
     speed = 30  # km/h, IEA future of hydrogen 2019
     BOG = 0.2 / 100  # %/day, IEA future of hydrogen 2019
 
     print("ship + pipe cost", ship_mc, ship_c, pipe_mc)
+    print(f"shipping cost steel {ship_steel_mc} EUR/(t*km)")
+    print(f"shipping cost iron ore {ship_iron_ore_mc} EUR/(t*km)")
+
 
     # if there should be a link, create a link
     # do this for both shipping and pipeline
@@ -198,9 +216,14 @@ def create_links(transport_costs, trade_options):
         if trade_options["shipping"][r] == 1:
             r_from = trade_options["region_from"][r]
             r_to = trade_options["region_to"][r]
-            total_cost = ship_c + int(
-                float(trade_options["shipping_distance [km]"][r]) * ship_mc
-            )
+
+            # If shipping costs are made up from marginal and capital
+            # total_cost = ship_c + int(
+            #     float(trade_options["shipping_distance [km]"][r]) * ship_mc
+            # )
+            # If shipping costs are made up from marginal only
+            total_cost_steel = ship_steel_mc * float(trade_options["shipping_distance [km]"][r]) 
+            total_cost = total_cost_steel
 
             # calculating efficiency
             days_at_sea = (
@@ -228,11 +251,9 @@ def create_links(transport_costs, trade_options):
             print("shipping link made from {} to {} - eff {}".format(r_from, r_to, eff))
 
             # Add iron ore shipping link
-
-            iron_ore_mc = (
+            total_cost_iron_ore = ship_iron_ore_mc * float(
                 trade_options["shipping_distance [km]"][r]
-                * snakemake.config["iron_ore"]["shipping_cost_per_km"]
-            )
+            ) # TODO Capital cost are not separate but included
 
             network.add(
                 "Link",
@@ -241,7 +262,7 @@ def create_links(transport_costs, trade_options):
                 bus0=r_from + "_ore",
                 bus1=r_to + "_ore",
                 efficiency=1,
-                marginal_cost=iron_ore_mc,  # EUR/t_ironore
+                marginal_cost=total_cost_iron_ore,  # EUR/t_ironore
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
@@ -395,7 +416,7 @@ def plot_trade_network(n, product="steel", alpha_supply=0.7, alpha_demand=1, out
     )
 
     if output_path:
-        fig.savefig(output_path, format="pdf")
+        fig.savefig(output_path, format="pdf", bbox_inches="tight", pad_inches=0.1)
     return
 
 
