@@ -33,7 +33,7 @@ def calc_cap_cost(costs, tech, i_rate):
 
 
 # inputs are solar potentials, wind potentials, costs and load
-def building_model(n, ds, dw, dc, load, h_cost):
+def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
 
     # adding wind and solar generators on el bus
     interest_rate = snakemake.params.interest_rate
@@ -46,6 +46,11 @@ def building_model(n, ds, dw, dc, load, h_cost):
         n.stores.at[
             "hydrogen storage tank type 1 including compressor (exp)", "capital_cost"
         ] = 0
+    else:
+        pass
+
+    if iron_ore_cost == False:
+        n.generators.at["iron ore DRI-ready (exp)", "marginal_cost"] = 0
     else:
         pass
 
@@ -163,7 +168,7 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "model_lcos",
             cost_year="2030",
-            demand_factor=20,
+            demand_factor=1,
             region="South_South_America",
         )
 
@@ -208,11 +213,11 @@ if __name__ == "__main__":
     pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
     onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
 
-    load = (
-        max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
-    )
+    load = max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
 
-    print(f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}")
+    print(
+        f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}"
+    )
     print(f"load steel with demand factor: {load:.1f}")
 
     print("data loaded successfully")
@@ -220,7 +225,13 @@ if __name__ == "__main__":
     # building model
     print("adding RE to network")
     n = building_model(
-        n, ds_cleaned, dw_cleaned, dc, load, snakemake.config["hydrogen_storage_cost"]
+        n,
+        ds_cleaned,
+        dw_cleaned,
+        dc,
+        load,
+        snakemake.config["hydrogen_storage_cost"],
+        snakemake.config["iron_ore_cost_in_supply_chain"],
     )
 
     # solving model
