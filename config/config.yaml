@@ -1,5 +1,5 @@
 enable:
-  run_supply_chain: True # Enable for first run
+  run_supply_chain: False # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -73,3 +73,11 @@ regions:
   "Pacific_Asia": ["Brunei", "Cambodia", "Indonesia", "Laos", "Malaysia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam"]
   "East_East_Asia": ["Japan", "South Korea"]
   "Oceania": ["Australia", "New Zealand"]
+
+
+colors:
+  electric arc furnace: 'orange'
+  direct reduction furnace: 'red'
+  electrolysis: 'magenta'
+  battery inverter (charging): 'lightblue'
+  battery inverter (discharging): 'blue'
