@@ -1,3 +1,4 @@
+from turtle import color
 import pypsa
 import pandas as pd
 import numpy as np
@@ -30,6 +31,49 @@ def calc_cap_cost(costs, tech, i_rate):
 
     # returns cap costs in EUR/MW
     return (annuity + FOM / 100) * CAPEX * 1e3
+
+
+def rename_trace_carriers(n):
+
+    # Updates for links: {'Electricity': 'Electrolysis', 'HBI': 'EAF', "Iron ore": "DRI"}
+
+    # Index name and new carrier
+    carrier_rename_dict = {
+        "electrolysis (exp)": "electrolysis",
+        "battery inverter (charging, exp)": "battery inverter (charging)",
+        "battery inverter (discharging, exp)": "battery inverter (discharging)",
+        "hydrogen direct iron reduction furnace": "direct reduction furnace",
+        "electric arc furnace": "electric arc furnace",
+    }
+
+    # New carriers: electrolysis
+    new_carriers = {
+        "electrolysis (exp)",
+        "battery inverter (charging, exp)",
+        "battery inverter (discharging, exp)",
+        "hydrogen direct iron reduction furnace",
+        "electric arc furnace",
+    }
+    nice_names = {
+        "electrolysis (exp)": "electrolysis",
+        "battery inverter (charging, exp)": "battery inverter (charging)",
+        "battery inverter (discharging, exp)": "battery inverter (discharging)",
+        "hydrogen direct iron reduction furnace": "direct reduction furnace",
+        "electric arc furnace": "electric arc furnace",
+    }
+    colors = snakemake.config["colors"]
+
+    n.madd(
+        "Carrier",
+        new_carriers,
+        nice_name=[nice_names[carrier] for carrier in new_carriers],
+        color=[colors[carrier] for carrier in nice_names.values()],
+    )
+
+    for idx, new_carrier in carrier_rename_dict.items():
+        n.links.loc[idx, "carrier"] = new_carrier
+
+    return n
 
 
 # inputs are solar potentials, wind potentials, costs and load
@@ -178,6 +222,7 @@ if __name__ == "__main__":
 
     # load TRACE steel model
     n = pypsa.Network(snakemake.input.trace)
+    n = rename_trace_carriers(n)
 
     # subselecting each technology and cleaning for "0 and nan" - capacity values
     ds = d.sel({"technology": "pvplant"})
