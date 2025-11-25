@@ -73,8 +73,13 @@ def create_supply_curve():
 
     # creates and saves supply curve plot
     if product == "steel":
-        iron_ore_total_cost = snakemake.config["iron_ore"]["marginal_cost"] * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
-        y_merged = df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+        iron_ore_total_cost = (
+            snakemake.config["iron_ore"]["marginal_cost"]
+            * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
+        )
+        y_merged = (
+            df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+        )
         y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
     else:
         y_merged = df_merged[columns["cost per unit"]].astype(float)
@@ -125,9 +130,7 @@ def create_supply_curve():
 
     elif product == "steel":
         steel_demand = get_steel_demand(snakemake.wildcards["region"])
-        plt.axvline(
-            x= steel_demand.values[0], linestyle=":", label="local steel demand"
-        )
+        plt.axvline(x=steel_demand.values[0], linestyle=":", label="local steel demand")
 
     plt.title(
         f"levelized cost of {product} production in {snakemake.wildcards['region']}",
@@ -149,7 +152,7 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "create_supply_curve",
             cost_year="2030",
-            region="Europe",
+            region="South_South_America",
             product="steel",
         )
 
