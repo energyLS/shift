@@ -1,3 +1,4 @@
+from turtle import color
 import pypsa
 import pandas as pd
 import numpy as np
@@ -32,8 +33,51 @@ def calc_cap_cost(costs, tech, i_rate):
     return (annuity + FOM / 100) * CAPEX * 1e3
 
 
+def rename_trace_carriers(n):
+
+    # Updates for links: {'Electricity': 'Electrolysis', 'HBI': 'EAF', "Iron ore": "DRI"}
+
+    # Index name and new carrier
+    carrier_rename_dict = {
+        "electrolysis (exp)": "electrolysis",
+        "battery inverter (charging, exp)": "battery inverter (charging)",
+        "battery inverter (discharging, exp)": "battery inverter (discharging)",
+        "hydrogen direct iron reduction furnace": "direct reduction furnace",
+        "electric arc furnace": "electric arc furnace",
+    }
+
+    # New carriers: electrolysis
+    new_carriers = {
+        "electrolysis (exp)",
+        "battery inverter (charging, exp)",
+        "battery inverter (discharging, exp)",
+        "hydrogen direct iron reduction furnace",
+        "electric arc furnace",
+    }
+    nice_names = {
+        "electrolysis (exp)": "electrolysis",
+        "battery inverter (charging, exp)": "battery inverter (charging)",
+        "battery inverter (discharging, exp)": "battery inverter (discharging)",
+        "hydrogen direct iron reduction furnace": "direct reduction furnace",
+        "electric arc furnace": "electric arc furnace",
+    }
+    colors = snakemake.config["colors"]
+
+    n.madd(
+        "Carrier",
+        new_carriers,
+        nice_name=[nice_names[carrier] for carrier in new_carriers],
+        color=[colors[carrier] for carrier in nice_names.values()],
+    )
+
+    for idx, new_carrier in carrier_rename_dict.items():
+        n.links.loc[idx, "carrier"] = new_carrier
+
+    return n
+
+
 # inputs are solar potentials, wind potentials, costs and load
-def building_model(n, ds, dw, dc, load, h_cost):
+def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
 
     # adding wind and solar generators on el bus
     interest_rate = snakemake.params.interest_rate
@@ -46,6 +90,11 @@ def building_model(n, ds, dw, dc, load, h_cost):
         n.stores.at[
             "hydrogen storage tank type 1 including compressor (exp)", "capital_cost"
         ] = 0
+    else:
+        pass
+
+    if iron_ore_cost == False:
+        n.generators.at["iron ore DRI-ready (exp)", "marginal_cost"] = 0
     else:
         pass
 
@@ -163,7 +212,7 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "model_lcos",
             cost_year="2030",
-            demand_factor=20,
+            demand_factor=1,
             region="South_South_America",
         )
 
@@ -173,6 +222,7 @@ if __name__ == "__main__":
 
     # load TRACE steel model
     n = pypsa.Network(snakemake.input.trace)
+    n = rename_trace_carriers(n)
 
     # subselecting each technology and cleaning for "0 and nan" - capacity values
     ds = d.sel({"technology": "pvplant"})
@@ -208,11 +258,11 @@ if __name__ == "__main__":
     pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
     onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
 
-    load = (
-        max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
-    )
+    load = max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
 
-    print(f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}")
+    print(
+        f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}"
+    )
     print(f"load steel with demand factor: {load:.1f}")
 
     print("data loaded successfully")
@@ -220,7 +270,13 @@ if __name__ == "__main__":
     # building model
     print("adding RE to network")
     n = building_model(
-        n, ds_cleaned, dw_cleaned, dc, load, snakemake.config["hydrogen_storage_cost"]
+        n,
+        ds_cleaned,
+        dw_cleaned,
+        dc,
+        load,
+        snakemake.config["hydrogen_storage_cost"],
+        snakemake.config["iron_ore_cost_in_supply_chain"],
     )
 
     # solving model

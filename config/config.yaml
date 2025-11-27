@@ -5,6 +5,7 @@ enable:
 # Different demand factors of maximum hydrogen potential as demand in [%]
 demand_factors: [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 hydrogen_storage_cost: False
+iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
 run:
   # prefix: ""
@@ -72,3 +73,11 @@ regions:
   "Pacific_Asia": ["Brunei", "Cambodia", "Indonesia", "Laos", "Malaysia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam"]
   "East_East_Asia": ["Japan", "South Korea"]
   "Oceania": ["Australia", "New Zealand"]
+
+
+colors:
+  electric arc furnace: 'orange'
+  direct reduction furnace: 'red'
+  electrolysis: 'magenta'
+  battery inverter (charging): 'lightblue'
+  battery inverter (discharging): 'blue'
