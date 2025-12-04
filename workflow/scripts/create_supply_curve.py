@@ -50,7 +50,7 @@ def create_supply_curve():
 
     if product == "hydrogen":
         conversion_factor = 0.75
-    elif product == "steel":
+    elif product in ["steel", "eaf", "hbi"]:
         conversion_factor = 1 / snakemake.config["electricity_steel_ratio"]
 
     local_load = float(df_local_demand["demand"] * df_local_demand["el_share"] / 100)
@@ -72,7 +72,7 @@ def create_supply_curve():
     df_sub.to_csv(snakemake.output.supply)
 
     # creates and saves supply curve plot
-    if product == "steel":
+    if product in ["steel", "eaf", "hbi"]:
         iron_ore_total_cost = (
             snakemake.config["iron_ore"]["marginal_cost"]
             * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
@@ -128,7 +128,7 @@ def create_supply_curve():
             label="20% final energy demand",
         )
 
-    elif product == "steel":
+    elif product in ["steel", "eaf", "hbi"]:
         steel_demand = get_steel_demand(snakemake.wildcards["region"])
         plt.axvline(x=steel_demand.values[0], linestyle=":", label="local steel demand")
 
@@ -168,13 +168,13 @@ if __name__ == "__main__":
             "product_unit": "MWh",
             "ylim": (0, 100),
         }
-    elif product == "steel":
+    elif product in ["steel", "eaf", "hbi"]:
         columns = {
             "demand factor": "demand factor [%]",
             "demand": "demand [t]",
             "load": "load [t/h]",
             "total cost": "cost [EUR]",
-            "cost per unit": "LCOS [EUR/t]",
+            "cost per unit": "LCOX [EUR/t]",
             "xlabel": "Demand in Mt",
             "product_unit": "t",
             "ylim": (0, 900),
