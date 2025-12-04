@@ -85,19 +85,6 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
     # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
     solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
 
-    # hydrogen cost can either be 0 or real cost. Real cost is the default of the imported network
-    if h_cost == False:
-        n.stores.at[
-            "hydrogen storage tank type 1 including compressor (exp)", "capital_cost"
-        ] = 0
-    else:
-        pass
-
-    if iron_ore_cost == False:
-        n.generators.at["iron ore DRI-ready (exp)", "marginal_cost"] = 0
-    else:
-        pass
-
     # for every class in solar data
     print("---------------------------- starting with solar data ")
     for i in range(0, len(ds.capacity)):
@@ -156,6 +143,19 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
     #         capital_cost= offshore_wind_cost  #EUR/MW, read in from costs file and calculated in above function
     #     )
 
+    # hydrogen cost can either be 0 or real cost. Real cost is the default of the imported network
+    if h_cost == False:
+        n.stores.at[
+            "hydrogen storage tank type 1 including compressor (exp)", "capital_cost"
+        ] = 0
+    else:
+        pass
+
+    if iron_ore_cost == False:
+        n.generators.at["iron ore DRI-ready (exp)", "marginal_cost"] = 0
+    else:
+        pass
+
     # p_set unit in MW
     n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
     print("network load: ", load)
@@ -163,7 +163,7 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
     return n
 
 
-def save_lcoh(solved_network):
+def save_lcox(solved_network):
     # creating dataframe for saving
     res = pd.DataFrame(
         columns=[
@@ -204,25 +204,26 @@ def save_lcoh(solved_network):
     return
 
 
-if __name__ == "__main__":
+def solve_network(n):
 
-    if "snakemake" not in globals():
-        from _helpers import mock_snakemake
+    print("solving model")
+    n.optimize(
+        n.snapshots,
+        solver_name="gurobi",
+        solver_options={
+            "crossover": 0,
+            "method": 2,
+            "BarConvTol": 1.0e-5,
+            "OptimalityTol": 1.0e-5,
+        },
+    )
+    # , "barHomogeneous":1, "FeasibilityTol": 1.e-5,
+    print("network was solved succesfully")
 
-        snakemake = mock_snakemake(
-            "model_lcos",
-            cost_year="2030",
-            demand_factor=1,
-            region="South_South_America",
-        )
+    return n
 
-    # making dataframes from inputs
-    dc = pd.read_csv(snakemake.input.costs, header=0)
-    d = xr.open_dataset(snakemake.input.supply_data)
 
-    # load TRACE steel model
-    n = pypsa.Network(snakemake.input.trace)
-    n = rename_trace_carriers(n)
+def prepare_re(d):
 
     # subselecting each technology and cleaning for "0 and nan" - capacity values
     ds = d.sel({"technology": "pvplant"})
@@ -232,8 +233,10 @@ if __name__ == "__main__":
     # dww = d.sel({"technology":"windoffshore"})
     # dww_cleaned = dww.where(dww.capacity > 0.0,drop=True)
 
-    pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
-    onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
+    return ds_cleaned, dw_cleaned
+
+
+def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_cor):
 
     # calculating (max) load
     max_load = (
@@ -255,9 +258,6 @@ if __name__ == "__main__":
         / snakemake.config["electricity_steel_ratio"]
     )
 
-    pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
-    onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
-
     load = max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
 
     print(
@@ -265,7 +265,40 @@ if __name__ == "__main__":
     )
     print(f"load steel with demand factor: {load:.1f}")
 
-    print("data loaded successfully")
+    return load
+
+
+if __name__ == "__main__":
+
+    if "snakemake" not in globals():
+        from _helpers import mock_snakemake
+
+        snakemake = mock_snakemake(
+            "model_lcos",
+            cost_year="2030",
+            demand_factor=1,
+            region="South_South_America",
+        )
+
+    # making dataframes from inputs
+    dc = pd.read_csv(snakemake.input.costs, header=0)
+    d = xr.open_dataset(snakemake.input.supply_data)
+
+    # load TRACE steel model
+    n = pypsa.Network(snakemake.input.trace)
+    n = rename_trace_carriers(n)
+
+    # Get correction factors
+    pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
+    onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
+
+    # preparing RE data
+    ds_cleaned, dw_cleaned = prepare_re(d)
+
+    # calculating load
+    load = calculate_load(
+        ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_cor
+    )
 
     # building model
     print("adding RE to network")
@@ -280,20 +313,8 @@ if __name__ == "__main__":
     )
 
     # solving model
-    print("solving model")
-    n.optimize(
-        n.snapshots,
-        solver_name="gurobi",
-        solver_options={
-            "crossover": 0,
-            "method": 2,
-            "BarConvTol": 1.0e-5,
-            "OptimalityTol": 1.0e-5,
-        },
-    )
-    # , "barHomogeneous":1, "FeasibilityTol": 1.e-5,
-    print("network was solved succesfully")
+    n = solve_network(n)
 
-    # saving results and calculating LCOH
-    print("saving results and calculating lcoh")
-    save_lcoh(n)
+    # saving results and calculating LCOX
+    print("saving results and calculating lcoX")
+    save_lcox(n)
