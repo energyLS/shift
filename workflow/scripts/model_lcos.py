@@ -156,8 +156,65 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
     else:
         pass
 
-    # p_set unit in MW
-    n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
+    if product == "steel":
+
+        # p_set unit in MW
+        n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
+
+    elif product == "hbi":
+
+        # Remove steel components from the network
+        n.remove(
+            "Link",
+            ["electric arc furnace", "ship loading (exp)", "ship unloading (imp)"],
+        )
+        n.remove("Bus", ["steel (exp)", "steel (imp)", "berth (exp)", "berth (imp)"])
+        n.remove("Carrier", ["steel", "electric arc furnace"])
+        n.remove("Store", ["steel storage (exp)", "steel storage (imp)"])
+
+        # p_set unit in MW
+        n.add(
+            "Load", "load", bus="hot briquetted iron (exp)", carrier="hbi", p_set=load
+        )
+
+    elif product == "eaf":
+
+        # Remove components up to hbi and leave eaf/steel components
+        n.remove(
+            "Link",
+            ["electrolysis (exp)", "hydrogen direct iron reduction furnace"],
+        )
+        n.remove(
+            "Bus",
+            ["hydrogen (g) (exp)", "hydrogen (g) storage (exp)", "iron ore (exp)"],
+        )
+        n.remove(
+            "Carrier",
+            [
+                "hydrogen",
+                "iron ore",
+                "electrolysis (exp)",
+                "hydrogen direct iron reduction furnace",
+            ],
+        )
+        n.remove("Store", ["hydrogen storage tank type 1 including compressor (exp)"])
+
+        n.remove("Generator", ["iron ore DRI-ready (exp)"])
+
+        # Add Generator as HBI input  (at no cost)
+        n.add(
+            "Generator",
+            "hbi input",
+            bus="hot briquetted iron (exp)",
+            carrier="hot briquetted iron",
+            p_nom_extendable=True,
+            capital_cost=1,
+            marginal_cost=1,
+        )
+
+        # p_set unit in MW
+        n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
+
     print("network load: ", load)
 
     return n
@@ -278,6 +335,7 @@ if __name__ == "__main__":
             cost_year="2030",
             demand_factor=1,
             region="South_South_America",
+            product="hbi",
         )
 
     # making dataframes from inputs
@@ -288,9 +346,10 @@ if __name__ == "__main__":
     n = pypsa.Network(snakemake.input.trace)
     n = rename_trace_carriers(n)
 
-    # Get correction factors
+    # Get correction factors and product
     pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]
     onwind_p_nom_max_cor = snakemake.config["onwind_p_nom_max_cor"]
+    product = snakemake.wildcards.product
 
     # preparing RE data
     ds_cleaned, dw_cleaned = prepare_re(d)
