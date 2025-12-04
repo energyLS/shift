@@ -15,7 +15,7 @@ trade_scenarios = Paramspace(pd.read_csv("../config/trade_scenarios.csv", dtype=
 
 configfile: "../config/config.yaml"
 
-localrules: all
+# localrules: all
 
 wildcard_constraints:
     country="[a-zA-Z]+",
@@ -71,8 +71,8 @@ if config["enable"].get("run_supply_chain", True):
             costs = "../resources/technology_data/costs_{cost_year}.csv",
             trace = "../resources/trace/steel_{cost_year}.nc"
         output:
-            results="../resources/lcos/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            network="../resources/lcos/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+            results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
+            network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
         script:
             "scripts/model_lcos.py"
 
