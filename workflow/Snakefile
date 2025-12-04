@@ -61,9 +61,9 @@ if config["enable"].get("run_supply_chain", True):
         script:
             "scripts/model_lcoh.py"
 
-    rule model_lcos:
+    rule model_lcox:
         message:
-            "Calculating LCoS for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
+            "Calculating the LCoX of {wildcards.product} for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum product potential."
         params:
             interest_rate=config["interest_rate"],
         input:
@@ -74,8 +74,8 @@ if config["enable"].get("run_supply_chain", True):
             results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
             network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
         script:
-            "scripts/model_lcos.py"
-
+            "scripts/model_lcox.py"
+    
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
 # stored as a single csv file per region. Note: the visiual plot includes iron ore costs, the csv without since it is added later in the workflow.
@@ -84,7 +84,7 @@ rule create_supply_curve:
         "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
     input:
         lco_product_data = lambda wildcards: expand(
-            f"../resources/lco{wildcards.product[0]}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
+            f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
             demand_factor=config["demand_factors"],
             allow_missing=True
         ),
