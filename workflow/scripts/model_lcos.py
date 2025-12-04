@@ -208,8 +208,8 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
             bus="hot briquetted iron (exp)",
             carrier="hot briquetted iron",
             p_nom_extendable=True,
-            capital_cost=1,
-            marginal_cost=1,
+            capital_cost=0.1,
+            marginal_cost=0.1,
         )
 
         # p_set unit in MW
@@ -228,7 +228,7 @@ def save_lcox(solved_network):
             "demand [t]",
             "load [t/h]",
             "cost [EUR]",
-            "LCOS [EUR/t]",
+            "LCOX [EUR/t]",
         ]
     )
 
@@ -331,11 +331,11 @@ if __name__ == "__main__":
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
-            "model_lcos",
+            "model_lcox",
             cost_year="2030",
             demand_factor=1,
             region="South_South_America",
-            product="hbi",
+            product="eaf",
         )
 
     # making dataframes from inputs
