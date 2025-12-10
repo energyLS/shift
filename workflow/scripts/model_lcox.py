@@ -35,8 +35,6 @@ def calc_cap_cost(costs, tech, i_rate):
 
 def rename_trace_carriers(n):
 
-    # Updates for links: {'Electricity': 'Electrolysis', 'HBI': 'EAF', "Iron ore": "DRI"}
-
     # Index name and new carrier
     carrier_rename_dict = {
         "electrolysis (exp)": "electrolysis",
@@ -46,32 +44,31 @@ def rename_trace_carriers(n):
         "electric arc furnace": "electric arc furnace",
     }
 
-    # New carriers: electrolysis
-    new_carriers = {
-        "electrolysis (exp)",
-        "battery inverter (charging, exp)",
-        "battery inverter (discharging, exp)",
-        "hydrogen direct iron reduction furnace",
-        "electric arc furnace",
-    }
     nice_names = {
-        "electrolysis (exp)": "electrolysis",
-        "battery inverter (charging, exp)": "battery inverter (charging)",
-        "battery inverter (discharging, exp)": "battery inverter (discharging)",
-        "hydrogen direct iron reduction furnace": "direct reduction furnace",
+        "electrolysis": "electrolysis",
+        "battery inverter (charging)": "battery inverter (charging)",
+        "battery inverter (discharging)": "battery inverter (discharging)",
+        "direct reduction furnace": "direct reduction furnace",
         "electric arc furnace": "electric arc furnace",
     }
     colors = snakemake.config["colors"]
 
     n.madd(
         "Carrier",
-        new_carriers,
-        nice_name=[nice_names[carrier] for carrier in new_carriers],
+        carrier_rename_dict.values(),
+        nice_name=[nice_names[carrier] for carrier in carrier_rename_dict.values()],
         color=[colors[carrier] for carrier in nice_names.values()],
     )
 
     for idx, new_carrier in carrier_rename_dict.items():
         n.links.loc[idx, "carrier"] = new_carrier
+
+    # Adjust colors of all carriers, overwriting the TRACE colors
+    for carrier in n.carriers.index:
+        n.carriers.loc[carrier, "color"] = colors[carrier]
+
+    # Add carrier to DRI generator
+    n.generators.loc["iron ore DRI-ready (exp)", "carrier"] = "iron ore"
 
     return n
 
@@ -334,8 +331,8 @@ if __name__ == "__main__":
             "model_lcox",
             cost_year="2030",
             demand_factor=1,
-            region="South_South_America",
-            product="hbi",
+            region="Europe",
+            product="steel",
         )
 
     # making dataframes from inputs

@@ -1,5 +1,5 @@
 enable:
-  run_supply_chain: False # Enable for first run
+  run_supply_chain: True # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -79,5 +79,14 @@ colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'red'
   electrolysis: 'magenta'
-  battery inverter (charging): 'lightblue'
+  battery inverter (charging): '#6A000E'
   battery inverter (discharging): 'blue'
+  battery: 'purple'
+  wind: 'blue'
+  solar: 'yellow'
+  pv: 'yellow'
+  electricity: 'red'
+  iron ore: 'brown'
+  steel: 'grey'
+  hot briquetted iron: 'darkred'
+  hydrogen: 'magenta'
