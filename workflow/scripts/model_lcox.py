@@ -73,6 +73,18 @@ def rename_trace_carriers(n):
     return n
 
 
+def remove_shipping_importer_components(n):
+    # Remove trace shipping components
+    n.remove(
+        "Link",
+        ["ship loading (exp)", "ship unloading (imp)"],
+    )
+    n.remove("Bus", ["berth (exp)", "berth (imp)", "steel (imp)"])
+    n.remove("Store", ["steel storage (exp)", "steel storage (imp)"])
+
+    return n
+
+
 # inputs are solar potentials, wind potentials, costs and load
 def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
 
@@ -153,21 +165,23 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
     else:
         pass
 
+    # Remove trace shipping components
+    n = remove_shipping_importer_components(n)
+
     if product == "steel":
 
         # p_set unit in MW
-        n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
+        n.add("Load", "load", bus="steel (exp)", carrier="steel", p_set=load)
 
     elif product == "hbi":
 
         # Remove steel components from the network
         n.remove(
             "Link",
-            ["electric arc furnace", "ship loading (exp)", "ship unloading (imp)"],
+            ["electric arc furnace"],
         )
-        n.remove("Bus", ["steel (exp)", "steel (imp)", "berth (exp)", "berth (imp)"])
+        n.remove("Bus", ["steel (exp)"])
         n.remove("Carrier", ["steel", "electric arc furnace"])
-        n.remove("Store", ["steel storage (exp)", "steel storage (imp)"])
 
         # p_set unit in MW
         n.add(
@@ -190,11 +204,17 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
             [
                 "hydrogen",
                 "iron ore",
-                "electrolysis (exp)",
-                "hydrogen direct iron reduction furnace",
+                "electrolysis",
+                "direct reduction furnace",
             ],
         )
-        n.remove("Store", ["hydrogen storage tank type 1 including compressor (exp)"])
+        n.remove(
+            "Store",
+            [
+                "hydrogen storage tank type 1 including compressor (exp)",
+                "HBI storage (exp)",
+            ],
+        )
 
         n.remove("Generator", ["iron ore DRI-ready (exp)"])
 
@@ -210,7 +230,7 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
         )
 
         # p_set unit in MW
-        n.add("Load", "load", bus="berth (exp)", carrier="steel", p_set=load)
+        n.add("Load", "load", bus="steel (exp)", carrier="steel", p_set=load)
 
     print("network load: ", load)
 
@@ -331,8 +351,8 @@ if __name__ == "__main__":
             "model_lcox",
             cost_year="2030",
             demand_factor=1,
-            region="Europe",
-            product="steel",
+            region="South_South_America",
+            product="hbi",
         )
 
     # making dataframes from inputs
