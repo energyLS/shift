@@ -185,19 +185,13 @@ def create_links(transport_costs, trade_options):
         ]
     )
 
+    ship_steel_mc = transport_costs.loc[
+        transport_costs["transport_type"] == "shipping_steel"
+    ]["marginal_cost"].values[0]
 
-    ship_steel_mc = (
-        transport_costs.loc[transport_costs["transport_type"] == "shipping_steel"][
-            "marginal_cost"
-        ].values[0]
-    )
-
-    ship_iron_ore_mc = (
-        transport_costs.loc[transport_costs["transport_type"] == "shipping_iron_ore"][
-            "marginal_cost"
-        ].values[0]
-    )
-
+    ship_iron_ore_mc = transport_costs.loc[
+        transport_costs["transport_type"] == "shipping_iron_ore"
+    ]["marginal_cost"].values[0]
 
     input_demand = 0.42  # MWh/km for LH2, IEA future of hydrogen 2019
     boat_capacity = 363000  # MWh for LH2, IEA future of hydrogen 2019
@@ -207,7 +201,6 @@ def create_links(transport_costs, trade_options):
     print("ship + pipe cost", ship_mc, ship_c, pipe_mc)
     print(f"shipping cost steel {ship_steel_mc} EUR/(t*km)")
     print(f"shipping cost iron ore {ship_iron_ore_mc} EUR/(t*km)")
-
 
     # if there should be a link, create a link
     # do this for both shipping and pipeline
@@ -222,7 +215,9 @@ def create_links(transport_costs, trade_options):
             #     float(trade_options["shipping_distance [km]"][r]) * ship_mc
             # )
             # If shipping costs are made up from marginal only
-            total_cost_steel = ship_steel_mc * float(trade_options["shipping_distance [km]"][r]) 
+            total_cost_steel = ship_steel_mc * float(
+                trade_options["shipping_distance [km]"][r]
+            )
             total_cost = total_cost_steel
 
             # calculating efficiency
@@ -253,7 +248,7 @@ def create_links(transport_costs, trade_options):
             # Add iron ore shipping link
             total_cost_iron_ore = ship_iron_ore_mc * float(
                 trade_options["shipping_distance [km]"][r]
-            ) # TODO Capital cost are not separate but included
+            )  # TODO Capital cost are not separate but included
 
             network.add(
                 "Link",
@@ -355,7 +350,9 @@ def save_trade_network(solved_network):
     return
 
 
-def plot_trade_network(n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None):
+def plot_trade_network(
+    n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None
+):
     """
     Plot trade network using config-driven colors and sizes.
     Calculates supply, demand, and trade according to product type.
@@ -371,12 +368,24 @@ def plot_trade_network(n, product="steel", alpha_supply=0.7, alpha_demand=1, out
 
     # Calculate supply, demand, trade according to product
     if product == "steel":
-        supply = n.statistics.supply(comps=["Link"], groupby=["bus", "carrier"]).loc[:, :, "steel"].droplevel(0)
+        supply = (
+            n.statistics.supply(comps=["Link"], groupby=["bus", "carrier"])
+            .loc[:, :, "steel"]
+            .droplevel(0)
+        )
         demand = n.loads.groupby("bus").p_set.sum()
         trade = n.links[n.links.carrier == "shipping_steel"].p_nom_opt.astype(int)
     elif product == "iron_ore":
-        supply = n.statistics.supply(comps=["Generator"], groupby=["bus", "carrier"]).loc[:, :, "iron_ore"].droplevel(0)
-        demand = n.statistics.withdrawal(comps=["Link"], groupby=["bus", "carrier"]).loc[:, :, "steel"].droplevel(0)
+        supply = (
+            n.statistics.supply(comps=["Generator"], groupby=["bus", "carrier"])
+            .loc[:, :, "iron_ore"]
+            .droplevel(0)
+        )
+        demand = (
+            n.statistics.withdrawal(comps=["Link"], groupby=["bus", "carrier"])
+            .loc[:, :, "steel"]
+            .droplevel(0)
+        )
         trade = n.links[n.links.carrier == "shipping_iron_ore"].p_nom_opt.astype(int)
     else:
         raise ValueError("Unsupported product for plotting.")
@@ -403,10 +412,24 @@ def plot_trade_network(n, product="steel", alpha_supply=0.7, alpha_demand=1, out
     # Legend
     legend_elements = [
         plt.Line2D([0], [0], color=link_colors, label="shipping"),
-        plt.Line2D([0], [0], marker="o", color="white", label="Demand",
-                   markerfacecolor=demand_color, markersize=10),
-        plt.Line2D([0], [0], marker="o", color="white", label="Supply",
-                   markerfacecolor=supply_color, markersize=10),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="white",
+            label="Demand",
+            markerfacecolor=demand_color,
+            markersize=10,
+        ),
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="white",
+            label="Supply",
+            markerfacecolor=supply_color,
+            markersize=10,
+        ),
     ]
     fig.legend(
         handles=legend_elements,
@@ -429,7 +452,7 @@ if __name__ == "__main__":
             transport_cost="custom",
             cost_year="2030",
             demand=1,
-            product="steel",
+            product="hbi",
         )
 
     product = snakemake.wildcards["product"]
@@ -490,6 +513,16 @@ if __name__ == "__main__":
     print("saving results as network+csv and pdf")
     save_trade_network(network)
     # Plot steel map
-    plot_trade_network(network, product="steel", alpha_supply=0.7, output_path=snakemake.output.trade_plot_steel)
+    plot_trade_network(
+        network,
+        product="steel",
+        alpha_supply=0.7,
+        output_path=snakemake.output.trade_plot_steel,
+    )
     # Plot iron ore map
-    plot_trade_network(network, product="iron_ore", alpha_supply=0.5, output_path=snakemake.output.trade_plot_ironore)
+    plot_trade_network(
+        network,
+        product="iron_ore",
+        alpha_supply=0.5,
+        output_path=snakemake.output.trade_plot_ironore,
+    )
