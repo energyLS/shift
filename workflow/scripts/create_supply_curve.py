@@ -72,18 +72,22 @@ def create_supply_curve():
     df_sub.to_csv(snakemake.output.supply)
 
     # creates and saves supply curve plot
-    if product in ["steel", "eaf", "hbi"]:
+    if product in ["steel", "hbi"]:
         iron_ore_total_cost = (
             snakemake.config["iron_ore"]["marginal_cost"]
             * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
         )
-        y_merged = (
-            df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
-        )
-        y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+
+    elif product in ["hydrogen", "eaf"]:
+        iron_ore_total_cost = 0
+        
     else:
-        y_merged = df_merged[columns["cost per unit"]].astype(float)
-        y_sub = df_sub[columns["cost per unit"]].astype(float)
+        raise ValueError(f"product {product} not recognized for supply curve plotting")
+
+    y_merged = (
+        df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+    )
+    y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
 
     plt.plot(
         df_merged[columns["demand"]].astype(int) / (1e6),
