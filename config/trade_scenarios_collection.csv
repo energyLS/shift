@@ -10,3 +10,9 @@ cost_year,transport_cost,demand,product
 2030,custom,1,steel
 2030,steel_iron_zero,1,steel
 2030,steel_iron_real,1,steel
+2030,steel_z_iron_z,1,steel
+2030,steel_z_iron_r,1,steel
+2030,steel_r_iron_z,1,steel
+2030,steel_r_iron_r,1,steel
+2030,steel_rhigh_iron_z,1,steel
+2030,steel_rhigh_iron_r,1,steel

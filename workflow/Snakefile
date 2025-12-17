@@ -108,9 +108,15 @@ rule create_all_supply_curves:
 
 rule model_trade:
     input:
-        supply_curves = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            allow_missing=True, region=config["regions"]    ),
+        supply_curves_interone = expand(
+            "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
+            allow_missing=True, region=config["regions"]),
+        supply_curves_intertwo = expand(
+            "../resources/supply_curves/cost_year~{cost_year}/{region}_{intertwo}.csv",
+            allow_missing=True, region=config["regions"]),
+        supply_curves_final = expand(
+            "../resources/supply_curves/cost_year~{cost_year}/{region}_{final}.csv",
+            allow_missing=True, region=config["regions"]),
         transport_costs = "../data/transport_costs/{transport_cost}.csv",
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
