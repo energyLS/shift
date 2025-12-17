@@ -11,3 +11,6 @@
 \data
 \resources
 \results
+# pixi environments
+.pixi/*
+!.pixi/config.toml

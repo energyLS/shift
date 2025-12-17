@@ -1,0 +1,18 @@
+[workspace]
+authors = ["energyls <leon1.schumm@oth-regensburg.de>"]
+channels = ["conda-forge", "bioconda", "gurobi"]
+name = "shift"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = ">=3.10"
+pypsa = ">=0.25.1,<0.26"
+numpy = ">=2.3.5,<3"
+pandas = ">=2.3.3,<3"
+snakemake-executor-plugin-cluster-generic = ">=1.0.9"
+snakemake-executor-plugin-slurm = ">=1.9.2"
+snakemake-minimal = ">=9"
+snakemake-storage-plugin-http = ">=0.3"
