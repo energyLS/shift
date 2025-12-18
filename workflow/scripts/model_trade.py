@@ -7,7 +7,9 @@ plt.style.use("bmh")
 
 
 # inputs are transportation costs, supply curves, trade options and load demand for all regions
-def building_model(supply_curves, demands, bus_location, product):
+def building_model(
+    supply_curves_interone, supply_curves_intertwo, demands, bus_location, final
+):
     # this function creates network, carrier and a bus for each region
     # with a load and all supply possibilities added
 
@@ -15,54 +17,41 @@ def building_model(supply_curves, demands, bus_location, product):
     network = pypsa.Network()
 
     # adding carriers
+
+    network.add("Carrier", name=final, color=snakemake.config["plot"]["colors"][final])
+
+    # Define the iron ore carrier
     network.add(
-        "Carrier", name=product, color=snakemake.config["plot"]["colors"][product]
+        "Carrier",
+        name="iron_ore",
+        color=snakemake.config["plot"]["colors"]["iron_ore"],
+    )
+
+    network.add(
+        "Carrier",
+        name="shipping_" + shipping_first,
+        color=snakemake.config["plot"]["colors"][shipping_first + "_shipping"],
+    )
+
+    network.add(
+        "Carrier",
+        name="shipping_" + shipping_second,
+        color=snakemake.config["plot"]["colors"][shipping_second + "_shipping"],
     )
 
     # for each region we are creating a bus with all the potentials and load
-    for r in range(0, len(supply_curves)):
+    for r in range(0, len(supply_curves_interone)):
 
-        # getting the supply curve for one region
-        region_file = supply_curves[r]
-        region_data = pd.read_csv(region_file, header=0)
-        filename = os.path.basename(region_file)
+        # getting the supply curves for one region for different intermediates
+        region_file_interone = supply_curves_interone[r]
+        region_file_intertwo = supply_curves_intertwo[r]
+        region_data_interone = pd.read_csv(region_file_interone, header=0)
+        region_data_intertwo = pd.read_csv(region_file_intertwo, header=0)
+        filename = os.path.basename(region_file_interone)
         # Extract region name
-        region_name = filename.split("_" + product)[0]
+        region_name = filename.split("_" + interone)[0]
 
         print("building generators and loads for ", region_name)
-
-        # define the steel bus with region name
-        network.add(
-            "Bus",
-            region_name,
-            carrier=product,
-            x=float(
-                bus_location.loc[bus_location["region_name"] == region_name]["long"]
-            ),  # long
-            y=float(
-                bus_location.loc[bus_location["region_name"] == region_name]["lat"]
-            ),  # lat
-        )
-
-        # Define the iron ore carrier
-        network.add(
-            "Carrier",
-            name="iron_ore",
-            color=snakemake.config["plot"]["colors"]["iron_ore"],
-        )
-
-        network.add(
-            "Carrier",
-            name="shipping_iron_ore",
-            color=snakemake.config["plot"]["colors"]["iron_ore_shipping"],
-        )
-
-        # Define the steel shipping carrier
-        network.add(
-            "Carrier",
-            name="shipping_" + product,
-            color=snakemake.config["plot"]["colors"][product + "_shipping"],
-        )
 
         # define the iron ore bus with region name
         network.add(
@@ -76,6 +65,33 @@ def building_model(supply_curves, demands, bus_location, product):
                 bus_location.loc[bus_location["region_name"] == region_name]["lat"]
             ),  # lat
         )
+
+        # define the bus of intermediate product with region name
+        network.add(
+            "Bus",
+            region_name + "_" + interone,
+            carrier=interone,
+            x=float(
+                bus_location.loc[bus_location["region_name"] == region_name]["long"]
+            ),  # long
+            y=float(
+                bus_location.loc[bus_location["region_name"] == region_name]["lat"]
+            ),  # lat
+        )
+
+        # define the bus of final product with region name
+        if final != interone:
+            network.add(
+                "Bus",
+                region_name + "_" + final,
+                carrier=final,
+                x=float(
+                    bus_location.loc[bus_location["region_name"] == region_name]["long"]
+                ),  # long
+                y=float(
+                    bus_location.loc[bus_location["region_name"] == region_name]["lat"]
+                ),  # lat
+            )
 
         # Define iron ore generators feeding iron ore buses in each region
         iron_ore_limit = (
@@ -107,56 +123,147 @@ def building_model(supply_curves, demands, bus_location, product):
 
         network.add(
             "Load",
-            region_name,
-            bus=region_name,
+            region_name + "_" + final,
+            bus=region_name + "_" + final,
             p_set=load,
         )
 
         # defining the supply opportunities for the region (apart from last supply as that is the 75% infeasible one)
-        for s in range(0, len(region_data) - 1):
+        for s in range(0, len(region_data_interone) - 1):
             if s == 0:
-                p_nom_supply = float(region_data[f"demand [{unit}]"][s])
-            else:
-                p_nom_supply = float(region_data[f"demand [{unit}]"][s]) - float(
-                    region_data[f"demand [{unit}]"][s - 1]
+                p_nom_supply_interone = float(
+                    region_data_interone[f"demand [{unit}]"][s]
                 )
-            M_cost_supply = float(region_data[f"{cost_descriptor} [EUR/{unit}]"][s])
+                p_nom_supply_intertwo = float(
+                    region_data_intertwo[f"demand [{unit}]"][s]
+                )
+            else:
+                p_nom_supply_interone = float(
+                    region_data_interone[f"demand [{unit}]"][s]
+                ) - float(region_data_interone[f"demand [{unit}]"][s - 1])
+                p_nom_supply_intertwo = float(
+                    region_data_intertwo[f"demand [{unit}]"][s]
+                ) - float(region_data_intertwo[f"demand [{unit}]"][s - 1])
+            M_cost_supply_interone = float(
+                region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s]
+            )
+            M_cost_supply_intertwo = float(
+                region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
+            )
 
-            if product == "hydrogen":
+            if final == "hydrogen":
                 network.add(
                     "Generator",
                     "{} supply {}_{}".format(
-                        product, region_name, region_data["demand factor [%]"][s]
+                        final, region_name, region_data_interone["demand factor [%]"][s]
                     ),
                     bus=region_name,
-                    carrier=product,
+                    carrier=final,
                     p_nom_extendable=True,
-                    p_nom_max=p_nom_supply,  # MWh or t, demand = potential supply
-                    marginal_cost=M_cost_supply,  # EUR/MWh or EUR/t
+                    p_nom_max=p_nom_supply_interone,  # MWh or t, demand = potential supply
+                    marginal_cost=M_cost_supply_interone,  # EUR/MWh or EUR/t
                     capital_cost=1 / 1000,  # to prevent optimisation shennanigans
                 )
 
-            elif product == "steel":
-                network.add(
-                    "Link",
-                    "{} supply {}_{}".format(
-                        product, region_name, region_data["demand factor [%]"][s]
-                    ),
-                    bus0=region_name + "_ore",
-                    bus1=region_name,
-                    carrier=product,
-                    p_nom_max=p_nom_supply
-                    * snakemake.config["iron_ore"][
-                        "ore_to_steel_ratio"
-                    ],  # t, demand = potential supply
-                    p_nom_extendable=True,
-                    efficiency=1 / snakemake.config["iron_ore"]["ore_to_steel_ratio"],
-                    marginal_cost=M_cost_supply
-                    / snakemake.config["iron_ore"][
-                        "ore_to_steel_ratio"
-                    ],  # Note: marginal_cost are referred to bus0, hence we need to consider efficiency to apply €/t_steel value
-                    capital_cost=1 / 1000,  # to prevent optimisation shenanigans
-                )
+            elif final != "hydrogen":
+
+                if interone == intertwo:
+
+                    # Single link. bus0: iron ore, bus1: final product
+                    # Add link for first intermediate ("interone")
+                    network.add(
+                        "Link",
+                        "{} supply {}_{}".format(
+                            interone,
+                            region_name,
+                            region_data_interone["demand factor [%]"][s],
+                        ),
+                        bus0=region_name + "_ore",
+                        bus1=region_name + "_" + interone,
+                        carrier=interone,
+                        p_nom_max=p_nom_supply_interone
+                        * snakemake.config["iron_ore"][
+                            "ore_to_steel_ratio"
+                        ],  # t, demand = potential supply
+                        p_nom_extendable=True,
+                        efficiency=1
+                        / snakemake.config["iron_ore"]["ore_to_steel_ratio"],
+                        marginal_cost=M_cost_supply_interone
+                        / snakemake.config["iron_ore"][
+                            "ore_to_steel_ratio"
+                        ],  # Note: marginal_cost are referred to bus0, hence we need to consider efficiency to apply €/t_steel value
+                        capital_cost=1 / 1000,  # to prevent optimisation shenanigans
+                    )
+
+                elif interone != intertwo:
+
+                    # two links. First link: bus0=iron ore, bus1: interone, supply_curve: region_data_interone
+                    # second link: bus0=interone, bus1=final product, supply_curve: region_data_intertwo (no ratios for efficiency and marginal cost needed here!)
+
+                    # Add link for first intermediate ("interone")
+                    network.add(
+                        "Link",
+                        "{} supply {}_{}".format(
+                            interone,
+                            region_name,
+                            region_data_interone["demand factor [%]"][s],
+                        ),
+                        bus0=region_name + "_ore",
+                        bus1=region_name + "_" + interone,
+                        carrier=interone,
+                        p_nom_max=p_nom_supply_interone
+                        * snakemake.config["iron_ore"][
+                            "ore_to_steel_ratio"
+                        ],  # t, demand = potential supply
+                        p_nom_extendable=True,
+                        efficiency=1
+                        / snakemake.config["iron_ore"]["ore_to_steel_ratio"],
+                        marginal_cost=M_cost_supply_interone
+                        / snakemake.config["iron_ore"][
+                            "ore_to_steel_ratio"
+                        ],  # Note: marginal_cost are referred to bus0, hence we need to consider efficiency to apply €/t_steel value
+                        capital_cost=1 / 1000,  # to prevent optimisation shenanigans
+                    )
+
+                    # Add link for second intermediate ("intertwo" / final product)
+                    network.add(
+                        "Link",
+                        "{} supply {}_{}".format(
+                            final,
+                            region_name,
+                            region_data_intertwo["demand factor [%]"][s],
+                        ),
+                        bus0=region_name + "_" + interone,
+                        bus1=region_name + "_" + final,
+                        carrier=final,
+                        p_nom_max=p_nom_supply_intertwo,  # MWh or t, demand = potential supply
+                        p_nom_extendable=True,
+                        efficiency=1,  # direct conversion, no ratio needed
+                        marginal_cost=M_cost_supply_intertwo,  # EUR/MWh or EUR/t
+                        capital_cost=1 / 1000,  # to prevent optimisation shenanigans
+                    )
+
+                # OLD STEEL ONLY TODO
+                # network.add(
+                #     "Link",
+                #     "{} supply {}_{}".format(
+                #         product, region_name, region_data["demand factor [%]"][s]
+                #     ),
+                #     bus0=region_name + "_ore",
+                #     bus1=region_name,
+                #     carrier=product,
+                #     p_nom_max=p_nom_supply
+                #     * snakemake.config["iron_ore"][
+                #         "ore_to_steel_ratio"
+                #     ],  # t, demand = potential supply
+                #     p_nom_extendable=True,
+                #     efficiency=1 / snakemake.config["iron_ore"]["ore_to_steel_ratio"],
+                #     marginal_cost=M_cost_supply
+                #     / snakemake.config["iron_ore"][
+                #         "ore_to_steel_ratio"
+                #     ],  # Note: marginal_cost are referred to bus0, hence we need to consider efficiency to apply €/t_steel value
+                #     capital_cost=1 / 1000,  # to prevent optimisation shenanigans
+                # )
             else:
                 raise ValueError("Product must be either 'steel' or 'hydrogen'.")
 
@@ -452,42 +559,57 @@ if __name__ == "__main__":
             transport_cost="custom",
             cost_year="2030",
             demand=1,
-            product="hbi",
+            interone="hbi",
+            intertwo="eaf",
+            final="steel",
         )
 
-    product = snakemake.wildcards["product"]
+    final = snakemake.wildcards["final"]
+    interone = snakemake.wildcards["interone"]
+    intertwo = snakemake.wildcards["intertwo"]
+
+    print(
+        f"intermediate 1 ({interone}) and intermediate 2 ({intertwo}) to final product {final}"
+    )
+
+    shipping_first = "iron_ore"
+    shipping_second = interone if interone == "steel" else final
 
     print("starting up with all regions--- ")
     # making dataframes
     transport_costs = pd.read_csv(snakemake.input.transport_costs, header=0)
     trade_options = pd.read_csv(snakemake.input.trade_options, header=0)
-    supply_curves = snakemake.input.supply_curves
+    supply_curves_interone = snakemake.input.supply_curves_interone
+    supply_curves_intertwo = snakemake.input.supply_curves_intertwo
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
     iron_ore = pd.read_csv(snakemake.input.iron_ore, header=0)
 
-    if product == "steel":
+    if final == "steel":
 
         demands = pd.read_csv(snakemake.input.steel_demand, header=0)
         demands.rename(columns={"SteelProductionMt": "demand"}, inplace=True)
         demands["demand"] = demands["demand"] * 1e6  # Mt to t
         unit = "t"
-        cost_descriptor = "LCOS"
 
-    elif product == "hydrogen":
+    elif final == "hydrogen":
 
         demands = pd.read_csv(snakemake.input.demand, header=0)
         unit = "MWh"
-        cost_descriptor = "LCOH"
+
     else:
         raise ValueError("Product must be either 'steel' or 'hydrogen'.")
 
-    plot_config = snakemake.config["plot"]["world_map"][product]
+    cost_descriptor = "LCOX"
+
+    plot_config = snakemake.config["plot"]["world_map"][final]
 
     print("data loaded successfully")
 
     # building model
     print("building model")
-    network = building_model(supply_curves, demands, bus_locations, product)
+    network = building_model(
+        supply_curves_interone, supply_curves_intertwo, demands, bus_locations, final
+    )
 
     # building transport network connecting the individual buses
     print("building transportation links")
