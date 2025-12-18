@@ -14,26 +14,26 @@ def building_model(
     # with a load and all supply possibilities added
 
     # create network
-    network = pypsa.Network()
+    n = pypsa.Network()
 
     # adding carriers
 
-    network.add("Carrier", name=final, color=snakemake.config["plot"]["colors"][final])
+    n.add("Carrier", name=final, color=snakemake.config["plot"]["colors"][final])
 
     # Define the iron ore carrier
-    network.add(
+    n.add(
         "Carrier",
         name="iron_ore",
         color=snakemake.config["plot"]["colors"]["iron_ore"],
     )
 
-    network.add(
+    n.add(
         "Carrier",
         name="shipping_" + shipping_first,
         color=snakemake.config["plot"]["colors"][shipping_first + "_shipping"],
     )
 
-    network.add(
+    n.add(
         "Carrier",
         name="shipping_" + shipping_second,
         color=snakemake.config["plot"]["colors"][shipping_second + "_shipping"],
@@ -54,7 +54,7 @@ def building_model(
         print("building generators and loads for ", region_name)
 
         # define the iron ore bus with region name
-        network.add(
+        n.add(
             "Bus",
             region_name + "_ore",
             carrier="iron_ore",
@@ -67,7 +67,7 @@ def building_model(
         )
 
         # define the bus of intermediate product with region name
-        network.add(
+        n.add(
             "Bus",
             region_name + "_" + interone,
             carrier=interone,
@@ -81,7 +81,7 @@ def building_model(
 
         # define the bus of final product with region name
         if final != interone:
-            network.add(
+            n.add(
                 "Bus",
                 region_name + "_" + final,
                 carrier=final,
@@ -102,7 +102,7 @@ def building_model(
             * snakemake.config["iron_ore"]["potential_allowance"]
         )  # Limit in t_ore
 
-        network.add(
+        n.add(
             "Generator",
             "{}_ore".format(region_name),
             bus=region_name + "_ore",
@@ -121,7 +121,7 @@ def building_model(
             f"Load set via snakemake.wildcard to {float(snakemake.wildcards['demand'])*100}% of regional final energy demand."
         )
 
-        network.add(
+        n.add(
             "Load",
             region_name + "_" + final,
             bus=region_name + "_" + final,
@@ -129,7 +129,7 @@ def building_model(
         )
 
         # defining the supply opportunities for the region (apart from last supply as that is the 75% infeasible one)
-        for s in range(0, len(region_data_interone) - 1):
+        for s in range(0, len(region_data_intertwo) - 1):
             if s == 0:
                 p_nom_supply_interone = float(
                     region_data_interone[f"demand [{unit}]"][s]
@@ -152,7 +152,7 @@ def building_model(
             )
 
             if final == "hydrogen":
-                network.add(
+                n.add(
                     "Generator",
                     "{} supply {}_{}".format(
                         final, region_name, region_data_interone["demand factor [%]"][s]
@@ -171,7 +171,7 @@ def building_model(
 
                     # Single link. bus0: iron ore, bus1: final product
                     # Add link for first intermediate ("interone")
-                    network.add(
+                    n.add(
                         "Link",
                         "{} supply {}_{}".format(
                             interone,
@@ -201,7 +201,7 @@ def building_model(
                     # second link: bus0=interone, bus1=final product, supply_curve: region_data_intertwo (no ratios for efficiency and marginal cost needed here!)
 
                     # Add link for first intermediate ("interone")
-                    network.add(
+                    n.add(
                         "Link",
                         "{} supply {}_{}".format(
                             interone,
@@ -226,7 +226,7 @@ def building_model(
                     )
 
                     # Add link for second intermediate ("intertwo" / final product)
-                    network.add(
+                    n.add(
                         "Link",
                         "{} supply {}_{}".format(
                             final,
@@ -244,7 +244,7 @@ def building_model(
                     )
 
                 # OLD STEEL ONLY TODO
-                # network.add(
+                # n.add(
                 #     "Link",
                 #     "{} supply {}_{}".format(
                 #         product, region_name, region_data["demand factor [%]"][s]
@@ -267,7 +267,7 @@ def building_model(
             else:
                 raise ValueError("Product must be either 'steel' or 'hydrogen'.")
 
-    return network
+    return n
 
 
 def create_links(transport_costs, trade_options):
@@ -292,12 +292,12 @@ def create_links(transport_costs, trade_options):
         ]
     )
 
-    ship_steel_mc = transport_costs.loc[
-        transport_costs["transport_type"] == "shipping_steel"
-    ]["marginal_cost"].values[0]
-
     ship_iron_ore_mc = transport_costs.loc[
         transport_costs["transport_type"] == "shipping_iron_ore"
+    ]["marginal_cost"].values[0]
+
+    ship_interone_mc = transport_costs.loc[
+        transport_costs["transport_type"] == f"shipping_{interone}"
     ]["marginal_cost"].values[0]
 
     input_demand = 0.42  # MWh/km for LH2, IEA future of hydrogen 2019
@@ -306,7 +306,7 @@ def create_links(transport_costs, trade_options):
     BOG = 0.2 / 100  # %/day, IEA future of hydrogen 2019
 
     print("ship + pipe cost", ship_mc, ship_c, pipe_mc)
-    print(f"shipping cost steel {ship_steel_mc} EUR/(t*km)")
+    print(f"shipping cost {interone} {ship_interone_mc} EUR/(t*km)")
     print(f"shipping cost iron ore {ship_iron_ore_mc} EUR/(t*km)")
 
     # if there should be a link, create a link
@@ -322,10 +322,10 @@ def create_links(transport_costs, trade_options):
             #     float(trade_options["shipping_distance [km]"][r]) * ship_mc
             # )
             # If shipping costs are made up from marginal only
-            total_cost_steel = ship_steel_mc * float(
+            total_cost_interone = ship_interone_mc * float(
                 trade_options["shipping_distance [km]"][r]
             )
-            total_cost = total_cost_steel
+            total_cost = total_cost_interone
 
             # calculating efficiency
             days_at_sea = (
@@ -339,27 +339,27 @@ def create_links(transport_costs, trade_options):
             )
             eff = 1 - max(tot_BOG, tot_fuel_demand)
 
-            network.add(
+            n.add(
                 "Link",
-                "shipping {}-{}".format(r_from, r_to),
-                carrier="shipping_" + product,
-                bus0=r_from,
-                bus1=r_to,
+                f"shipping {interone} {r_from}-{r_to}",
+                carrier="shipping_" + interone,
+                bus0=r_from + "_" + interone,
+                bus1=r_to + "_" + interone,
                 efficiency=eff,  # %, calculated above
                 marginal_cost=total_cost,  # EUR/MWh or EUR/t
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
-            print("shipping link made from {} to {} - eff {}".format(r_from, r_to, eff))
+            print(f"shipping {interone} link made from {r_from} to {r_to} - eff {eff}")
 
             # Add iron ore shipping link
             total_cost_iron_ore = ship_iron_ore_mc * float(
                 trade_options["shipping_distance [km]"][r]
             )  # TODO Capital cost are not separate but included
 
-            network.add(
+            n.add(
                 "Link",
-                "iron ore shipping {}-{}".format(r_from, r_to),
+                "shipping iron ore {}-{}".format(r_from, r_to),
                 carrier="shipping_iron_ore",
                 bus0=r_from + "_ore",
                 bus1=r_to + "_ore",
@@ -375,7 +375,7 @@ def create_links(transport_costs, trade_options):
             )
 
         # checking if the row connects with pipeline
-        if (trade_options["pipeline"][r] == 1) & (product == "hydrogen"):
+        if (trade_options["pipeline"][r] == 1) & (final == "hydrogen"):
             r_from = trade_options["region_from"][r]
             r_to = trade_options["region_to"][r]
             p_cost = int(float(trade_options["pipeline_distance [km]"][r]) * pipe_mc)
@@ -385,7 +385,7 @@ def create_links(transport_costs, trade_options):
                 float(trade_options["pipeline_distance [km]"][r]) / 1000
             )
 
-            network.add(
+            n.add(
                 "Link",
                 "pipeline {}-{}".format(r_from, r_to),
                 bus0=r_from,
@@ -452,7 +452,7 @@ def save_trade_network(solved_network):
     print("added bus_capacities to sol")
 
     sol.to_csv(snakemake.output.trade_result)
-    network.export_to_netcdf(snakemake.output.trade_network)
+    n.export_to_netcdf(snakemake.output.trade_network)
 
     return
 
@@ -556,7 +556,7 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "model_trade",
-            transport_cost="custom",
+            transport_cost="steel_r_iron_r",
             cost_year="2030",
             demand=1,
             interone="hbi",
@@ -607,7 +607,7 @@ if __name__ == "__main__":
 
     # building model
     print("building model")
-    network = building_model(
+    n = building_model(
         supply_curves_interone, supply_curves_intertwo, demands, bus_locations, final
     )
 
@@ -617,8 +617,8 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
-    network.optimize(
-        network.snapshots,
+    n.optimize(
+        n.snapshots,
         solver_name="gurobi",
         solver_options={
             "crossover": 0,
@@ -633,17 +633,17 @@ if __name__ == "__main__":
 
     # saving results and calculating LCOH
     print("saving results as network+csv and pdf")
-    save_trade_network(network)
+    save_trade_network(n)
     # Plot steel map
     plot_trade_network(
-        network,
+        n,
         product="steel",
         alpha_supply=0.7,
         output_path=snakemake.output.trade_plot_steel,
     )
     # Plot iron ore map
     plot_trade_network(
-        network,
+        n,
         product="iron_ore",
         alpha_supply=0.5,
         output_path=snakemake.output.trade_plot_ironore,
