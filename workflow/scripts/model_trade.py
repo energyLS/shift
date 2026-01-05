@@ -19,6 +19,7 @@ def building_model(
     # adding carriers
 
     n.add("Carrier", name=final, color=snakemake.config["plot"]["colors"][final])
+    n.add("Carrier", name=interone, color=snakemake.config["plot"]["colors"][interone])
 
     # Define the iron ore carrier
     n.add(
@@ -58,12 +59,12 @@ def building_model(
             "Bus",
             region_name + "_ore",
             carrier="iron_ore",
-            x=float(
-                bus_location.loc[bus_location["region_name"] == region_name]["long"]
-            ),  # long
-            y=float(
-                bus_location.loc[bus_location["region_name"] == region_name]["lat"]
-            ),  # lat
+            x=bus_location.loc[bus_location["region_name"] == region_name]
+            .loc[:, "long"]
+            .values[0],  # long
+            y=bus_location.loc[bus_location["region_name"] == region_name]
+            .loc[:, "lat"]
+            .values[0],  # lat        )
         )
 
         # define the bus of intermediate product with region name
@@ -71,12 +72,12 @@ def building_model(
             "Bus",
             region_name + "_" + interone,
             carrier=interone,
-            x=float(
-                bus_location.loc[bus_location["region_name"] == region_name]["long"]
-            ),  # long
-            y=float(
-                bus_location.loc[bus_location["region_name"] == region_name]["lat"]
-            ),  # lat
+            x=bus_location.loc[bus_location["region_name"] == region_name]
+            .loc[:, "long"]
+            .values[0],  # long
+            y=bus_location.loc[bus_location["region_name"] == region_name]
+            .loc[:, "lat"]
+            .values[0],  # lat
         )
 
         # define the bus of final product with region name
@@ -86,10 +87,14 @@ def building_model(
                 region_name + "_" + final,
                 carrier=final,
                 x=float(
-                    bus_location.loc[bus_location["region_name"] == region_name]["long"]
+                    bus_location.loc[bus_location["region_name"] == region_name]
+                    .loc[:, "long"]
+                    .values[0]
                 ),  # long
                 y=float(
-                    bus_location.loc[bus_location["region_name"] == region_name]["lat"]
+                    bus_location.loc[bus_location["region_name"] == region_name]
+                    .loc[:, "lat"]
+                    .values[0]
                 ),  # lat
             )
 
@@ -114,9 +119,9 @@ def building_model(
         )
 
         # defining the demand for the region
-        load = int(demands.loc[demands["region"] == region_name]["demand"]) * float(
-            snakemake.wildcards["demand"]
-        )
+        load = demands.loc[demands["region"] == region_name].loc[:, "demand"].values[
+            0
+        ] * float(snakemake.wildcards["demand"])
         print(
             f"Load set via snakemake.wildcard to {float(snakemake.wildcards['demand'])*100}% of regional final energy demand."
         )
@@ -277,29 +282,32 @@ def create_links(transport_costs, trade_options):
 
     # marginal and fixed cost for the different type of transport
     ship_mc = float(
-        transport_costs.loc[transport_costs["transport_type"] == "shipping"][
-            "marginal_cost"
-        ]
+        transport_costs.loc[transport_costs["transport_type"] == "shipping"]
+        .loc[:, "marginal_cost"]
+        .values[0]
     )
     pipe_mc = float(
-        transport_costs.loc[transport_costs["transport_type"] == "pipeline"][
-            "marginal_cost"
-        ]
+        transport_costs.loc[transport_costs["transport_type"] == "pipeline"]
+        .loc[:, "marginal_cost"]
+        .values[0]
     )
     ship_c = float(
-        transport_costs.loc[transport_costs["transport_type"] == "shipping"][
-            "fixed_cost"
-        ]
+        transport_costs.loc[transport_costs["transport_type"] == "shipping"]
+        .loc[:, "fixed_cost"]
+        .values[0]
     )
 
-    ship_iron_ore_mc = transport_costs.loc[
-        transport_costs["transport_type"] == "shipping_iron_ore"
-    ]["marginal_cost"].values[0]
+    ship_iron_ore_mc = (
+        transport_costs.loc[transport_costs["transport_type"] == "shipping_iron_ore"]
+        .loc[:, "marginal_cost"]
+        .values[0]
+    )
 
-    ship_interone_mc = transport_costs.loc[
-        transport_costs["transport_type"] == f"shipping_{interone}"
-    ]["marginal_cost"].values[0]
-
+    ship_interone_mc = (
+        transport_costs.loc[transport_costs["transport_type"] == f"shipping_{interone}"]
+        .loc[:, "marginal_cost"]
+        .values[0]
+    )
     input_demand = 0.42  # MWh/km for LH2, IEA future of hydrogen 2019
     boat_capacity = 363000  # MWh for LH2, IEA future of hydrogen 2019
     speed = 30  # km/h, IEA future of hydrogen 2019
@@ -573,7 +581,7 @@ if __name__ == "__main__":
     )
 
     shipping_first = "iron_ore"
-    shipping_second = interone if interone == "steel" else final
+    shipping_second = interone if interone != "steel" else final
 
     print("starting up with all regions--- ")
     # making dataframes
@@ -583,6 +591,17 @@ if __name__ == "__main__":
     supply_curves_intertwo = snakemake.input.supply_curves_intertwo
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
     iron_ore = pd.read_csv(snakemake.input.iron_ore, header=0)
+    regions = snakemake.config["regions"]
+
+    # limit regions
+    trade_options = trade_options[
+        (trade_options["region_from"].isin(regions))
+        & (trade_options["region_to"].isin(regions))
+    ].reset_index(drop=True)
+    bus_locations = bus_locations[
+        bus_locations["region_name"].isin(regions)
+    ].reset_index(drop=True)
+    iron_ore = iron_ore[iron_ore["region"].isin(regions)].reset_index(drop=True)
 
     if final == "steel":
 
