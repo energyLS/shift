@@ -88,69 +88,90 @@ def remove_shipping_importer_components(n):
 # inputs are solar potentials, wind potentials, costs and load
 def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
 
-    # adding wind and solar generators on el bus
-    interest_rate = snakemake.params.interest_rate
-    wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
-    # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
-    solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
+    if product != "eaf-grid":
+        # adding wind and solar generators on el bus
+        interest_rate = snakemake.params.interest_rate
+        wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
+        # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
+        solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
 
-    # for every class in solar data
-    print("---------------------------- starting with solar data ")
-    for i in range(0, len(ds.capacity)):
-        # "time":slice("2013-01-01 00:00", "2013-01-30 14:00"),
-        sol_df = ds.sel({"class": ds["class"][i]})
+        # for every class in solar data
+        print("---------------------------- starting with solar data ")
+        for i in range(0, len(ds.capacity)):
+            # "time":slice("2013-01-01 00:00", "2013-01-30 14:00"),
+            sol_df = ds.sel({"class": ds["class"][i]})
 
-        # costs taken from dae: solar costs
+            # costs taken from dae: solar costs
+            n.add(
+                "Generator",
+                "pv {}".format(i),
+                bus="electricity (exp)",
+                carrier="pv",
+                p_nom_extendable=True,
+                p_nom_max=sol_df["capacity"].to_pandas().item()
+                * pv_p_nom_max_cor,  # this will be ds.capacities
+                p_max_pu=sol_df["capacity factor"]
+                .to_pandas()
+                .clip(lower=0),  # this will be ds.profiles
+                capital_cost=solar_cost[
+                    0
+                ],  # EUR/MW, this will be read in from costs file
+            )
+
+        # for every class in onshore wind data
+        print("---------------------------- starting with wind data ")
+        for i in range(0, len(dw.capacity)):
+            wind_df = dw.sel({"class": dw["class"][i]})
+
+            n.add(
+                "Generator",
+                "onwind {}".format(i),
+                bus="electricity (exp)",
+                carrier="wind",
+                p_nom_extendable=True,
+                p_nom_max=wind_df["capacity"].to_pandas().item() * onwind_p_nom_max_cor,
+                p_max_pu=wind_df["capacity factor"]
+                .to_pandas()
+                .clip(lower=0),  # read in from potentials file
+                capital_cost=wind_cost[
+                    0
+                ],  # EUR/MW, read in from costs file and calculated in above function
+            )
+
+        # for every class in offshore wind data
+        # for i in range (0,len(dww.capacity)):
+        #     offshore_wind_df = dww.sel({"class":dww["class"][i]})
+
+        #     network.add(
+        #         "Generator",
+        #         "off_wind turbine {}".format(i),
+        #         bus="bus el",
+        #         carrier="wind",
+        #         #p_nom = 8, #this is capacity
+        #         p_nom_extendable=True,
+        #         #p_nom_min = 8,
+        #         p_nom_max = offshore_wind_df["capacity"].to_pandas(),
+        #         p_max_pu= offshore_wind_df["capacity factor"].to_pandas(), #read in from potentials file
+        #         capital_cost= offshore_wind_cost  #EUR/MW, read in from costs file and calculated in above function
+        #     )
+
+    elif product == "eaf-grid":
+        # adding only electricity grid on el bus for eaf-grid case
         n.add(
             "Generator",
-            "pv {}".format(i),
+            "grid-electricity",
             bus="electricity (exp)",
-            carrier="pv",
+            carrier="electricity",
             p_nom_extendable=True,
-            p_nom_max=sol_df["capacity"].to_pandas().item()
-            * pv_p_nom_max_cor,  # this will be ds.capacities
-            p_max_pu=sol_df["capacity factor"]
-            .to_pandas()
-            .clip(lower=0),  # this will be ds.profiles
-            capital_cost=solar_cost[0],  # EUR/MW, this will be read in from costs file
+            p_nom_max=np.inf,
+            capital_cost=snakemake.config["grid_electricity"]["capital_cost"],  # EUR/MW
+            marginal_cost=snakemake.config["grid_electricity"][
+                "marginal_cost"
+            ],  # EUR/MW
         )
 
-    # for every class in onshore wind data
-    print("---------------------------- starting with wind data ")
-    for i in range(0, len(dw.capacity)):
-        wind_df = dw.sel({"class": dw["class"][i]})
-
-        n.add(
-            "Generator",
-            "onwind {}".format(i),
-            bus="electricity (exp)",
-            carrier="wind",
-            p_nom_extendable=True,
-            p_nom_max=wind_df["capacity"].to_pandas().item() * onwind_p_nom_max_cor,
-            p_max_pu=wind_df["capacity factor"]
-            .to_pandas()
-            .clip(lower=0),  # read in from potentials file
-            capital_cost=wind_cost[
-                0
-            ],  # EUR/MW, read in from costs file and calculated in above function
-        )
-
-    # for every class in offshore wind data
-    # for i in range (0,len(dww.capacity)):
-    #     offshore_wind_df = dww.sel({"class":dww["class"][i]})
-
-    #     network.add(
-    #         "Generator",
-    #         "off_wind turbine {}".format(i),
-    #         bus="bus el",
-    #         carrier="wind",
-    #         #p_nom = 8, #this is capacity
-    #         p_nom_extendable=True,
-    #         #p_nom_min = 8,
-    #         p_nom_max = offshore_wind_df["capacity"].to_pandas(),
-    #         p_max_pu= offshore_wind_df["capacity factor"].to_pandas(), #read in from potentials file
-    #         capital_cost= offshore_wind_cost  #EUR/MW, read in from costs file and calculated in above function
-    #     )
+    else:
+        raise ValueError("product not recognized, choose steel, hbi, eaf, eaf-grid")
 
     # hydrogen cost can either be 0 or real cost. Real cost is the default of the imported network
     if h_cost == False:
@@ -185,10 +206,14 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
 
         # p_set unit in MW
         n.add(
-            "Load", "load", bus="hot briquetted iron (exp)", carrier="hbi", p_set=load
+            "Load",
+            "load",
+            bus="hot briquetted iron (exp)",
+            carrier="hot briquetted iron",
+            p_set=load,
         )
 
-    elif product == "eaf":
+    elif product in ["eaf", "eaf-grid"]:
 
         # Remove components up to hbi and leave eaf/steel components
         n.remove(
@@ -231,6 +256,9 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
 
         # p_set unit in MW
         n.add("Load", "load", bus="steel (exp)", carrier="steel", p_set=load)
+
+    else:
+        raise ValueError("product not recognized, choose steel, hbi, eaf, eaf-grid")
 
     print("network load: ", load)
 
@@ -332,7 +360,7 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
         / snakemake.config["electricity_steel_ratio"]
     )
 
-    load = max_load * (int(snakemake.wildcards["demand_factor"]) / 100)
+    load = max_load * (float(snakemake.wildcards["demand_factor"]) / 100)
 
     print(
         f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}"
@@ -351,7 +379,7 @@ if __name__ == "__main__":
             "model_lcox",
             cost_year="2030",
             demand_factor=1,
-            region="South_South_America",
+            region="Europe",
             product="hbi",
         )
 
