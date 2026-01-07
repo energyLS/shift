@@ -134,26 +134,18 @@ def building_model(
         )
 
         # defining the supply opportunities for the region (apart from last supply as that is the 75% infeasible one)
-        for s in range(0, len(region_data_intertwo) - 1):
+        for s in range(0, len(region_data_interone)):
             if s == 0:
                 p_nom_supply_interone = float(
                     region_data_interone[f"demand [{unit}]"][s]
-                )
-                p_nom_supply_intertwo = float(
-                    region_data_intertwo[f"demand [{unit}]"][s]
                 )
             else:
                 p_nom_supply_interone = float(
                     region_data_interone[f"demand [{unit}]"][s]
                 ) - float(region_data_interone[f"demand [{unit}]"][s - 1])
-                p_nom_supply_intertwo = float(
-                    region_data_intertwo[f"demand [{unit}]"][s]
-                ) - float(region_data_intertwo[f"demand [{unit}]"][s - 1])
+
             M_cost_supply_interone = float(
                 region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s]
-            )
-            M_cost_supply_intertwo = float(
-                region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
             )
 
             if final == "hydrogen":
@@ -230,23 +222,38 @@ def building_model(
                         capital_cost=1 / 1000,  # to prevent optimisation shenanigans
                     )
 
-                    # Add link for second intermediate ("intertwo" / final product)
-                    n.add(
-                        "Link",
-                        "{} supply {}_{}".format(
-                            final,
-                            region_name,
-                            region_data_intertwo["demand factor [%]"][s],
-                        ),
-                        bus0=region_name + "_" + interone,
-                        bus1=region_name + "_" + final,
-                        carrier=final,
-                        p_nom_max=p_nom_supply_intertwo,  # MWh or t, demand = potential supply
-                        p_nom_extendable=True,
-                        efficiency=1,  # direct conversion, no ratio needed
-                        marginal_cost=M_cost_supply_intertwo,  # EUR/MWh or EUR/t
-                        capital_cost=1 / 1000,  # to prevent optimisation shenanigans
+        if interone != intertwo:
+            for s in range(0, len(region_data_intertwo)):
+                if s == 0:
+                    p_nom_supply_intertwo = float(
+                        region_data_intertwo[f"demand [{unit}]"][s]
                     )
+                else:
+                    p_nom_supply_intertwo = float(
+                        region_data_intertwo[f"demand [{unit}]"][s]
+                    ) - float(region_data_intertwo[f"demand [{unit}]"][s - 1])
+
+                M_cost_supply_intertwo = float(
+                    region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
+                )
+
+                # Add link for second intermediate ("intertwo" / final product)
+                n.add(
+                    "Link",
+                    "{} supply {}_{}".format(
+                        final,
+                        region_name,
+                        region_data_intertwo["demand factor [%]"][s],
+                    ),
+                    bus0=region_name + "_" + interone,
+                    bus1=region_name + "_" + final,
+                    carrier=final,
+                    p_nom_max=p_nom_supply_intertwo,  # MWh or t, demand = potential supply
+                    p_nom_extendable=True,
+                    efficiency=1,  # direct conversion, no ratio needed
+                    marginal_cost=M_cost_supply_intertwo,  # EUR/MWh or EUR/t
+                    capital_cost=1 / 1000,  # to prevent optimisation shenanigans
+                )
 
                 # OLD STEEL ONLY TODO
                 # n.add(
@@ -269,8 +276,8 @@ def building_model(
                 #     ],  # Note: marginal_cost are referred to bus0, hence we need to consider efficiency to apply €/t_steel value
                 #     capital_cost=1 / 1000,  # to prevent optimisation shenanigans
                 # )
-            else:
-                raise ValueError("Product must be either 'steel' or 'hydrogen'.")
+        else:
+            pass
 
     return n
 
@@ -568,7 +575,7 @@ if __name__ == "__main__":
             cost_year="2030",
             demand=1,
             interone="hbi",
-            intertwo="eaf",
+            intertwo="eaf-grid",
             final="steel",
         )
 
