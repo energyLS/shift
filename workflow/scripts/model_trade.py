@@ -233,6 +233,22 @@ def building_model(
                         region_data_intertwo[f"demand [{unit}]"][s]
                     ) - float(region_data_intertwo[f"demand [{unit}]"][s - 1])
 
+                if (
+                    intertwo == "eaf-grid"
+                    and snakemake.config["grid_electricity"]["grid_potential_custom"]
+                ):
+                    grid_potential = pd.read_csv(
+                        snakemake.input.grid_potential, header=0, index_col=0
+                    )
+                    grid_potential = (
+                        grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
+                    )  # from t to Mt steel
+                    p_nom_supply_intertwo = grid_potential / len(
+                        region_data_intertwo
+                    )  # split on all supply links
+                else:
+                    pass
+
                 M_cost_supply_intertwo = float(
                     region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
                 )
