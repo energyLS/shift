@@ -370,6 +370,22 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
     return load
 
 
+def adjust_part_load(n):
+
+    print(f"adjusting part-load limits for {snakemake.config["part_load"].keys()}")
+
+    for carrier in snakemake.config["part_load"].keys():
+
+        n.links.loc[
+            n.links.carrier == carrier,
+            "p_min_pu",
+        ] = snakemake.config[
+            "part_load"
+        ][carrier]
+
+    return n
+
+
 if __name__ == "__main__":
 
     if "snakemake" not in globals():
@@ -379,8 +395,8 @@ if __name__ == "__main__":
             "model_lcox",
             cost_year="2030",
             demand_factor=1,
-            region="Europe",
-            product="hbi",
+            region="South_South_America",
+            product="steel",
         )
 
     # making dataframes from inputs
@@ -390,6 +406,7 @@ if __name__ == "__main__":
     # load TRACE steel model
     n = pypsa.Network(snakemake.input.trace)
     n = rename_trace_carriers(n)
+    n = adjust_part_load(n)
 
     # Get correction factors and product
     pv_p_nom_max_cor = snakemake.config["pv_p_nom_max_cor"]

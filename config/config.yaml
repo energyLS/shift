@@ -23,6 +23,13 @@ interest_rate: 0.07
 grid_electricity:
   marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
   capital_cost: 0 # EUR/MW, guesstimate for average grid electricity cost in 2030
+  grid_potential_custom: true # Use custom grid potential for eaf-grid from data/grid_potential_custom.csv in Mt steel
+
+part_load:
+  electrolysis: 0.0
+  direct reduction furnace: 0.3
+  electric arc furnace: 0.0
+  # add part load limitations by naming the carrier of links
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks analysis-steel.ipynb
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
@@ -32,7 +39,7 @@ onwind_p_nom_max_cor: 0.1
 iron_ore:
   marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
-  potential_allowance: 1.2 # Factor, which the current iron ore production is multiplied with
+  potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
 
 plot:
@@ -86,7 +93,7 @@ colors:
   direct reduction furnace: 'red'
   electrolysis: 'magenta'
   battery inverter (charging): '#6A000E'
-  battery inverter (discharging): 'blue'
+  battery inverter (discharging): '#FF5733'
   battery: 'purple'
   wind: 'blue'
   solar: 'yellow'
