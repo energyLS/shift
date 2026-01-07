@@ -50,8 +50,10 @@ def create_supply_curve():
 
     if product == "hydrogen":
         conversion_factor = 0.75
-    elif product in ["steel", "eaf", "hbi"]:
+    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
         conversion_factor = 1 / snakemake.config["electricity_steel_ratio"]
+    else:
+        raise ValueError(f"product {product} not recognized for supply curve plotting")
 
     local_load = float(df_local_demand["demand"] * df_local_demand["el_share"] / 100)
 
@@ -78,15 +80,13 @@ def create_supply_curve():
             * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
         )
 
-    elif product in ["hydrogen", "eaf"]:
+    elif product in ["hydrogen", "eaf", "eaf-grid"]:
         iron_ore_total_cost = 0
-        
+
     else:
         raise ValueError(f"product {product} not recognized for supply curve plotting")
 
-    y_merged = (
-        df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
-    )
+    y_merged = df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
     y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
 
     plt.plot(
@@ -132,7 +132,7 @@ def create_supply_curve():
             label="20% final energy demand",
         )
 
-    elif product in ["steel", "eaf", "hbi"]:
+    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
         steel_demand = get_steel_demand(snakemake.wildcards["region"])
         plt.axvline(x=steel_demand.values[0], linestyle=":", label="local steel demand")
 
@@ -172,7 +172,7 @@ if __name__ == "__main__":
             "product_unit": "MWh",
             "ylim": (0, 100),
         }
-    elif product in ["steel", "eaf", "hbi"]:
+    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
         columns = {
             "demand factor": "demand factor [%]",
             "demand": "demand [t]",
@@ -183,5 +183,7 @@ if __name__ == "__main__":
             "product_unit": "t",
             "ylim": (0, 900),
         }
+    else:
+        raise ValueError(f"product {product} not recognized for supply curve plotting")
 
     create_supply_curve()
