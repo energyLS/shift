@@ -123,11 +123,12 @@ rule model_trade:
         demand = "../data/un_enerdata_demand_2050_final.csv",
         steel_demand = "../resources/steel_production_clustered.csv",
         iron_ore = "../resources/ironore_production_clustered.csv",
-        grid_potential = "../data/grid_potential_custom.csv"
+        grid_potential = "../data/grid_potential_custom.csv",
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
         trade_plot_ironore = f"../results/{trade_scenarios.wildcard_pattern}/map_ironore.pdf",
+        trade_plot_hbi = f"../results/{trade_scenarios.wildcard_pattern}/map_hbi.pdf",
         trade_plot_steel = f"../results/{trade_scenarios.wildcard_pattern}/map_steel.pdf",
     script:
         "scripts/model_trade.py"

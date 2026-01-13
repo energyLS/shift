@@ -47,10 +47,13 @@ plot:
     hydrogen:
       bus_size: 1.0e-8
       link_width: 1.0e-9
-    steel:
+    iron_ore:
       bus_size: 1.0e-7
       link_width: 1.5e-8
-    iron_ore:
+    hbi:
+      bus_size: 1.0e-7
+      link_width: 1.5e-8
+    steel:
       bus_size: 1.0e-7
       link_width: 1.5e-8
   colors:
@@ -67,6 +70,9 @@ plot:
     iron_ore_supply: 'black'
     iron_ore_demand: 'lightsteelblue'
     iron_ore_link: "#6A000E"
+    hbi_demand: 'green'
+    hbi_supply: 'darkred'
+    hbi_link: 'firebrick'
 
 # Region definitions
 regions:

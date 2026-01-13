@@ -504,29 +504,28 @@ def plot_trade_network(
 
     fig = plt.figure(figsize=(10, 5))
 
-    # Calculate supply, demand, trade according to product
-    if product == "steel":
-        supply = (
-            n.statistics.supply(comps=["Link"], groupby=["bus", "carrier"])
-            .loc[:, :, "steel"]
-            .droplevel(0)
-        )
-        demand = n.loads.groupby("bus").p_set.sum()
-        trade = n.links[n.links.carrier == "shipping_steel"].p_nom_opt.astype(int)
-    elif product == "iron_ore":
-        supply = (
-            n.statistics.supply(comps=["Generator"], groupby=["bus", "carrier"])
-            .loc[:, :, "iron_ore"]
-            .droplevel(0)
-        )
-        demand = (
-            n.statistics.withdrawal(comps=["Link"], groupby=["bus", "carrier"])
-            .loc[:, :, "steel"]
-            .droplevel(0)
-        )
-        trade = n.links[n.links.carrier == "shipping_iron_ore"].p_nom_opt.astype(int)
-    else:
-        raise ValueError("Unsupported product for plotting.")
+    supply_carrier = {"steel": "steel", "iron_ore": "iron_ore", "hbi": "hbi"}.get(
+        product
+    )
+    supply_comp = {"steel": "Link", "iron_ore": "Generator", "hbi": "Link"}.get(product)
+    demand_carrier = {"steel": "steel", "iron_ore": "hbi", "hbi": "steel"}.get(product)
+    trade_carrier = {
+        "steel": "shipping_steel",
+        "iron_ore": "shipping_iron_ore",
+        "hbi": "shipping_hbi",
+    }.get(product)
+
+    supply = (
+        n.statistics.supply(comps=[supply_comp], groupby=["bus", "carrier"])
+        .loc[:, :, supply_carrier]
+        .droplevel(0)
+    )
+    demand = (
+        n.statistics.withdrawal(comps=["Link"], groupby=["bus", "carrier"])
+        .loc[:, :, demand_carrier]
+        .droplevel(0)
+    )
+    trade = n.links[n.links.carrier == trade_carrier].p_nom_opt.astype(int)
 
     # Plot demand
     n.plot.map(
@@ -676,17 +675,26 @@ if __name__ == "__main__":
     # saving results and calculating LCOH
     print("saving results as network+csv and pdf")
     save_trade_network(n)
-    # Plot steel map
-    plot_trade_network(
-        n,
-        product="steel",
-        alpha_supply=0.7,
-        output_path=snakemake.output.trade_plot_steel,
-    )
     # Plot iron ore map
     plot_trade_network(
         n,
         product="iron_ore",
         alpha_supply=0.5,
         output_path=snakemake.output.trade_plot_ironore,
+    )
+
+    # Plot iron ore map
+    plot_trade_network(
+        n,
+        product="hbi",
+        alpha_supply=0.5,
+        output_path=snakemake.output.trade_plot_hbi,
+    )
+
+    # Plot steel map
+    plot_trade_network(
+        n,
+        product="steel",
+        alpha_supply=0.7,
+        output_path=snakemake.output.trade_plot_steel,
     )
