@@ -27,7 +27,7 @@ grid_electricity:
 
 part_load:
   electrolysis: 0.0
-  direct reduction furnace: 0.3
+  direct reduction furnace: 0.9
   electric arc furnace: 0.0
   # add part load limitations by naming the carrier of links
 
@@ -103,3 +103,13 @@ colors:
   steel: 'grey'
   hot briquetted iron: 'darkred'
   hydrogen: 'magenta'
+  Battery: purple
+  Electricity: red
+  HBI: darkred
+  Photovoltaics: yellow
+  Wind energy: blue
+  battery inverter (charging): "#6A000E"
+  battery inverter (discharging): blue
+  direct reduction furnace: red
+  electric arc furnace: orange
+  electrolysis: magenta
