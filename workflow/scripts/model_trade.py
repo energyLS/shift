@@ -2,6 +2,7 @@ import pypsa
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+import cartopy.crs as ccrs
 
 plt.style.use("bmh")
 
@@ -502,8 +503,6 @@ def plot_trade_network(
     demand_color = colors.get(f"{product}_demand", "lightsteelblue")
     link_colors = colors.get(f"{product}_link", "gray")
 
-    fig = plt.figure(figsize=(10, 5))
-
     supply_carrier = {"steel": "steel", "iron_ore": "iron_ore", "hbi": "hbi"}.get(
         product
     )
@@ -527,8 +526,12 @@ def plot_trade_network(
     )
     trade = n.links[n.links.carrier == trade_carrier].p_nom_opt.astype(int)
 
+    fig = plt.figure(figsize=(10, 5))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
     # Plot demand
     n.plot.map(
+        ax=ax,
         bus_sizes=demand * plot_config["bus_size"],
         bus_colors=demand_color,
         bus_alpha=alpha_demand,
@@ -538,6 +541,7 @@ def plot_trade_network(
 
     # Plot supply
     n.plot.map(
+        ax=ax,
         bus_sizes=supply * plot_config["bus_size"],
         bus_colors=supply_color,
         bus_alpha=alpha_supply,
@@ -545,6 +549,9 @@ def plot_trade_network(
         branch_components=["Link"],
         link_colors=link_colors,
     )
+
+    ax.set_extent([-180, 180, -60, 85], crs=ccrs.PlateCarree())
+    # ax.set_global()
 
     # Legend
     legend_elements = [
