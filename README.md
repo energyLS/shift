@@ -42,6 +42,8 @@ Create the environment with `conda`:
 conda env create -f environment.yaml
 ```
 
+Navigate to the `workflow/notebooks` and run the notebooks `global-iron-ore.ipynb`, `global-steel-production.iypnb`, `prepare-iron-ore.ipynb`, and `prepare-steel.ipynb` for preparation. Those steps will be included in the main workflow in a future version.
+
 Run the trade model by navigating to the `workflow/` folder via `cd workflow` and then run
 
 ```sh
