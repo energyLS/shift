@@ -24,6 +24,14 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+def load_config(config):
+    with open(config, "r") as stream:
+        try:
+            config = yaml.safe_load(stream)
+        except yaml.YAMLError as exc:
+            print(exc)
+    return config
+
 
 def mock_snakemake(
     rulename,
