@@ -31,7 +31,7 @@ part_load:
   electric arc furnace: 0.0
   # add part load limitations by naming the carrier of links
 
-electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks analysis-steel.ipynb
+electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 pv_p_nom_max_cor: 0.1
 onwind_p_nom_max_cor: 0.1
@@ -114,8 +114,3 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
-  battery inverter (charging): "#6A000E"
-  battery inverter (discharging): blue
-  direct reduction furnace: red
-  electric arc furnace: orange
-  electrolysis: magenta
