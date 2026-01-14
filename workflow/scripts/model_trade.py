@@ -131,6 +131,7 @@ def building_model(
             "Load",
             region_name + "_" + final,
             bus=region_name + "_" + final,
+            carrier=final,
             p_set=load,
         )
 
@@ -507,24 +508,34 @@ def plot_trade_network(
         product
     )
     supply_comp = {"steel": "Link", "iron_ore": "Generator", "hbi": "Link"}.get(product)
-    demand_carrier = {"steel": "steel", "iron_ore": "hbi", "hbi": "steel"}.get(product)
+    demand_carrier = {"steel": "steel", "iron_ore": interone, "hbi": "steel"}.get(
+        product
+    )
+    demand_comp = {"steel": "Load", "iron_ore": "Link", "hbi": "Link"}.get(
+        product
+    )  # Except when hbi is the final product, then the compontent for hbi must be load
     trade_carrier = {
         "steel": "shipping_steel",
         "iron_ore": "shipping_iron_ore",
         "hbi": "shipping_hbi",
     }.get(product)
 
-    supply = (
-        n.statistics.supply(comps=[supply_comp], groupby=["bus", "carrier"])
-        .loc[:, :, supply_carrier]
-        .droplevel(0)
-    )
-    demand = (
-        n.statistics.withdrawal(comps=["Link"], groupby=["bus", "carrier"])
-        .loc[:, :, demand_carrier]
-        .droplevel(0)
-    )
-    trade = n.links[n.links.carrier == trade_carrier].p_nom_opt.astype(int)
+    if product in [interone, intertwo, final, "iron_ore"]:
+        supply = (
+            n.statistics.supply(comps=[supply_comp], groupby=["bus", "carrier"])
+            .loc[:, :, supply_carrier]
+            .droplevel(0)
+        )
+        demand = (
+            n.statistics.withdrawal(comps=[demand_comp], groupby=["bus", "carrier"])
+            .loc[:, :, demand_carrier]
+            .droplevel(0)
+        )
+        trade = n.links[n.links.carrier == trade_carrier].p_nom_opt.astype(int)
+    else:
+        supply = 0
+        demand = 0
+        trade = 0
 
     fig = plt.figure(figsize=(10, 5))
     ax = plt.axes(projection=ccrs.PlateCarree())
@@ -596,8 +607,8 @@ if __name__ == "__main__":
             transport_cost="steel_r_iron_r",
             cost_year="2030",
             demand=1,
-            interone="hbi",
-            intertwo="eaf-grid",
+            interone="steel",
+            intertwo="steel",
             final="steel",
         )
 
