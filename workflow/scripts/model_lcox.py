@@ -1,4 +1,3 @@
-from turtle import color
 import pypsa
 import pandas as pd
 import numpy as np
@@ -53,7 +52,7 @@ def rename_trace_carriers(n):
     }
     colors = snakemake.config["colors"]
 
-    n.madd(
+    n.add(
         "Carrier",
         carrier_rename_dict.values(),
         nice_name=[nice_names[carrier] for carrier in carrier_rename_dict.values()],
@@ -278,8 +277,10 @@ def save_lcox(solved_network):
     )
 
     try:
-        solved_network.objective
-    except:
+        obj = solved_network.objective
+        if obj is None:
+            raise AttributeError
+    except AttributeError:
         # if infeasible
         print("saving infeasible network")
         res.loc[res.shape[0]] = [
@@ -394,9 +395,9 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "model_lcox",
             cost_year="2030",
-            demand_factor=1,
-            region="South_South_America",
-            product="steel",
+            demand_factor=65,
+            region="Europe",
+            product="eaf",
         )
 
     # making dataframes from inputs
