@@ -55,7 +55,11 @@ def create_supply_curve():
     else:
         raise ValueError(f"product {product} not recognized for supply curve plotting")
 
-    local_load = float(df_local_demand["demand"] * df_local_demand["el_share"] / 100)
+    local_load = float(
+        df_local_demand["demand"].values[0]
+        * df_local_demand["el_share"].values[0]
+        / 100
+    )
 
     product_subtract = local_load * conversion_factor
 
@@ -67,7 +71,7 @@ def create_supply_curve():
     # # # ******************* SUBTRACTING LOCAL DEMAND ***********************
     # # remove local load from demand and drop all negative rows (generators that are only local)
     df_sub[columns["demand"]] = df_sub[columns["demand"]].subtract(product_subtract)
-    df_sub[columns["demand"]][df_sub[columns["demand"]] < 0] = 0
+    df_sub.loc[df_sub[columns["demand"]] < 0, columns["demand"]] = 0
     print("local el load has been subtracted from global supply")
 
     # saves the merged costs in a supply curve csv
