@@ -30,6 +30,7 @@ rule retrieve_cost_data:
     resources:
         mem_mb=1000,
     retries: 2
+    threads: 2
     script:
         "scripts/retrieve_cost_data.py"
 
@@ -42,6 +43,7 @@ rule retrieve_trace_steel:
         trace="../resources/trace/steel_{cost_year}.nc",
     resources:
         mem_mb=5000,
+    threads: 2
     run:
         copyfile(input[0], output[0])
 
@@ -58,6 +60,7 @@ if config["enable"].get("run_supply_chain", True):
         output:
             results="../resources/lcoh/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
             network="../resources/lcoh/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+        threads: 4
         script:
             "scripts/model_lcoh.py"
 
@@ -73,6 +76,9 @@ if config["enable"].get("run_supply_chain", True):
         output:
             results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
             network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+        threads: 4
+        resources:
+            mem_mb=8000,
         script:
             "scripts/model_lcox.py"
     
@@ -93,6 +99,7 @@ rule create_supply_curve:
     output:
         supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
         supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
+    threads: 2
     script:
         "scripts/create_supply_curve.py"
 
@@ -130,8 +137,10 @@ rule model_trade:
         trade_plot_ironore = f"../results/{trade_scenarios.wildcard_pattern}/map_ironore.pdf",
         trade_plot_hbi = f"../results/{trade_scenarios.wildcard_pattern}/map_hbi.pdf",
         trade_plot_steel = f"../results/{trade_scenarios.wildcard_pattern}/map_steel.pdf",
+    threads: 4
     script:
         "scripts/model_trade.py"
+
 
 
 
