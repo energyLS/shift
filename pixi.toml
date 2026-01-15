@@ -28,9 +28,13 @@ tqdm = ">=4.64"
 country_converter = ">=0.7"
 linopy = ">=0.3"
 gurobi = ">=12.0.3"
-gurobipy = "*" # Gurobi is required by some solver calls; version managed via gurobi channel/license
+# gurobipy = "*" # Gurobi is required by some solver calls; version managed via gurobi channel/license
 snakemake-executor-plugin-cluster-generic = ">=1.0.9"
 snakemake-executor-plugin-slurm = ">=1.9.2"
 snakemake-minimal = ">=9"
 snakemake-storage-plugin-http = ">=0.3"
 snakemake-storage-plugin-cached-http = ">=0.1.0"
+pycountry = ">=24.6.1"
+# Further requirements
+ipykernel = ">=7.0.0"
+coincbc = "*"
