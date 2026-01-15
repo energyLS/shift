@@ -94,6 +94,34 @@ regions:
   "Oceania": ["Australia", "New Zealand"]
 
 
+solver:
+    name: gurobi
+    options: gurobi-default
+
+solver_options:
+    highs-default:
+      # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
+      threads: 4
+      solver: "ipm"
+      run_crossover: "on"
+      small_matrix_value: 1e-6
+      large_matrix_value: 1e15
+      primal_feasibility_tolerance: 1e-6
+      dual_feasibility_tolerance: 1e-6
+      ipm_optimality_tolerance: 1e-6
+      parallel: "on"
+      random_seed: 123
+    gurobi-default:
+      threads: 4
+      method: 2 # barrier
+      crossover: 0
+      BarConvTol: 1.e-6
+      Seed: 123
+      AggFill: 0
+      PreDual: 0
+      GURO_PAR_BARDENSETHRESH: 200
+
+
 colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'red'
