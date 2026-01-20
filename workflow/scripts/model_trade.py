@@ -1,5 +1,7 @@
 import pypsa
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 import cartopy.crs as ccrs
@@ -607,8 +609,8 @@ if __name__ == "__main__":
             transport_cost="steel_r_iron_r",
             cost_year="2030",
             demand=1,
-            interone="steel",
-            intertwo="steel",
+            interone="hbi",
+            intertwo="eaf-grid",
             final="steel",
         )
 

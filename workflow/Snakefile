@@ -157,6 +157,10 @@ rule model_trade_all:
         trade_plot_steel=expand("../results/{scenarios}/map_steel.pdf", scenarios=trade_scenarios.instance_patterns),
 
 
+rule collect_figures:
+    input:
+        global_supply_curve = "../results/figures_general/global_supply_curve.pdf",
+
 
 ### Additional rules 
 
