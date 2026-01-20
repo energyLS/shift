@@ -1,5 +1,6 @@
 enable:
-  run_supply_chain: True # Enable for first run
+  run_supply_chain: False # Enable for first run
+  run_supply_curve: False # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -39,7 +40,7 @@ onwind_p_nom_max_cor: 0.1
 iron_ore:
   marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
-  potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
+  potential_allowance: 1.2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
 
 plot:
@@ -115,7 +116,7 @@ solver_options:
       threads: 4
       method: 2 # barrier
       crossover: 0
-      BarConvTol: 1.e-6
+      BarConvTol: 1.e-6 # 1.e-5?
       Seed: 123
       AggFill: 0
       PreDual: 0
