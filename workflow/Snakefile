@@ -85,23 +85,25 @@ if config["enable"].get("run_supply_chain", True):
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
 # stored as a single csv file per region. Note: the visiual plot includes iron ore costs, the csv without since it is added later in the workflow.
-rule create_supply_curve:
-    message:
-        "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
-    input:
-        lco_product_data = lambda wildcards: expand(
-            f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
-            demand_factor=config["demand_factors"],
-            allow_missing=True
-        ),
-        local_demand = "../data/un_enerdata_demand_2050_final.csv",
-        steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
-    output:
-        supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-        supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
-    threads: 2
-    script:
-        "scripts/create_supply_curve.py"
+
+if config["enable"].get("run_supply_curve", True):
+    rule create_supply_curve:
+        message:
+            "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
+        input:
+            lco_product_data = lambda wildcards: expand(
+                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
+                demand_factor=config["demand_factors"],
+                allow_missing=True
+            ),
+            local_demand = "../data/un_enerdata_demand_2050_final.csv",
+            steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
+        output:
+            supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+            supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
+        threads: 2
+        script:
+            "scripts/create_supply_curve.py"
 
 
 
@@ -114,6 +116,8 @@ rule create_all_supply_curves:
 
 
 rule model_trade:
+    params:
+        iron_ore_potential=config["iron_ore"]["potential_allowance"],
     input:
         supply_curves_interone = expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
