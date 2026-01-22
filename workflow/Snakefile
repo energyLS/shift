@@ -159,7 +159,7 @@ rule model_trade_all:
 
 rule collect_figures:
     input:
-        global_supply_curve = "../results/figures_general/global_supply_curve.pdf",
+        global_supply_curve = "../results/figures_general/global_supply_curve.pdf", #workflow/notebooks/analysis-coststructure.ipynb
 
 
 ### Additional rules 
