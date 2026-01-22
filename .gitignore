@@ -4,9 +4,13 @@
 *.log
 *.pdf
 *.png
+*.pyc
 .snakemake
 
 # Folders
 \data
 \resources
 \results
+# pixi environments
+.pixi/*
+!.pixi/config.toml

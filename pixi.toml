@@ -1,0 +1,40 @@
+[workspace]
+authors = ["energyls <leon1.schumm@oth-regensburg.de>"]
+channels = ["conda-forge", "bioconda", "gurobi"]
+name = "shift"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+
+
+python = ">=3.11,<3.14"
+pypsa = ">=0.25"
+pandas = ">=2.0"
+numpy = ">=1.24"
+matplotlib = ">=3.5"
+seaborn = ">=0.13"
+xarray = ">=2023.9"
+netcdf4 = ">=1.6"
+cartopy = ">=0.23"
+geopandas = ">=0.13"
+shapely = ">=2.0"
+pyproj = ">=3.0"
+pyyaml = ">=6.0"
+requests = ">=2.25"
+tqdm = ">=4.64"
+country_converter = ">=0.7"
+linopy = ">=0.3"
+gurobi = ">=12.0.3"
+# gurobipy = "*" # Gurobi is required by some solver calls; version managed via gurobi channel/license
+snakemake-executor-plugin-cluster-generic = ">=1.0.9"
+snakemake-executor-plugin-slurm = ">=1.9.2"
+snakemake-minimal = ">=9"
+snakemake-storage-plugin-http = ">=0.3"
+snakemake-storage-plugin-cached-http = ">=0.1.0"
+pycountry = ">=24.6.1"
+# Further requirements
+ipykernel = ">=7.0.0"
+coincbc = "*"

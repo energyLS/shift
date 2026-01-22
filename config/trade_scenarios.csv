@@ -1,7 +1,5 @@
-cost_year,transport_cost,demand,product
-2030,steel_z_iron_z,1,steel
-2030,steel_z_iron_r,1,steel
-2030,steel_r_iron_z,1,steel
-2030,steel_r_iron_r,1,steel
-2030,steel_rhigh_iron_z,1,steel
-2030,steel_rhigh_iron_r,1,steel
+cost_year,transport_cost,demand,interone,intertwo,final
+2030,steel_r_iron_r,1,steel,steel,steel
+2030,steel_r_iron_r,1,hbi,eaf,steel
+2030,steel_r_iron_r,1,hbi,eaf-grid,steel
+2030,steel_r_iron_r,1,hbi,hbi,hbi

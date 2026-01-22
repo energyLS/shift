@@ -1,4 +1,7 @@
 import pandas as pd
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
@@ -50,10 +53,16 @@ def create_supply_curve():
 
     if product == "hydrogen":
         conversion_factor = 0.75
-    elif product == "steel":
+    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
         conversion_factor = 1 / snakemake.config["electricity_steel_ratio"]
+    else:
+        raise ValueError(f"product {product} not recognized for supply curve plotting")
 
-    local_load = float(df_local_demand["demand"] * df_local_demand["el_share"] / 100)
+    local_load = float(
+        df_local_demand["demand"].values[0]
+        * df_local_demand["el_share"].values[0]
+        / 100
+    )
 
     product_subtract = local_load * conversion_factor
 
@@ -65,25 +74,27 @@ def create_supply_curve():
     # # # ******************* SUBTRACTING LOCAL DEMAND ***********************
     # # remove local load from demand and drop all negative rows (generators that are only local)
     df_sub[columns["demand"]] = df_sub[columns["demand"]].subtract(product_subtract)
-    df_sub[columns["demand"]][df_sub[columns["demand"]] < 0] = 0
+    df_sub.loc[df_sub[columns["demand"]] < 0, columns["demand"]] = 0
     print("local el load has been subtracted from global supply")
 
     # saves the merged costs in a supply curve csv
     df_sub.to_csv(snakemake.output.supply)
 
     # creates and saves supply curve plot
-    if product == "steel":
+    if product in ["steel", "hbi"]:
         iron_ore_total_cost = (
             snakemake.config["iron_ore"]["marginal_cost"]
             * snakemake.config["iron_ore"]["ore_to_steel_ratio"]
         )
-        y_merged = (
-            df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
-        )
-        y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+
+    elif product in ["hydrogen", "eaf", "eaf-grid"]:
+        iron_ore_total_cost = 0
+
     else:
-        y_merged = df_merged[columns["cost per unit"]].astype(float)
-        y_sub = df_sub[columns["cost per unit"]].astype(float)
+        raise ValueError(f"product {product} not recognized for supply curve plotting")
+
+    y_merged = df_merged[columns["cost per unit"]].astype(float) + iron_ore_total_cost
+    y_sub = df_sub[columns["cost per unit"]].astype(float) + iron_ore_total_cost
 
     plt.plot(
         df_merged[columns["demand"]].astype(int) / (1e6),
@@ -128,7 +139,7 @@ def create_supply_curve():
             label="20% final energy demand",
         )
 
-    elif product == "steel":
+    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
         steel_demand = get_steel_demand(snakemake.wildcards["region"])
         plt.axvline(x=steel_demand.values[0], linestyle=":", label="local steel demand")
 
@@ -168,16 +179,18 @@ if __name__ == "__main__":
             "product_unit": "MWh",
             "ylim": (0, 100),
         }
-    elif product == "steel":
+    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
         columns = {
             "demand factor": "demand factor [%]",
             "demand": "demand [t]",
             "load": "load [t/h]",
             "total cost": "cost [EUR]",
-            "cost per unit": "LCOS [EUR/t]",
+            "cost per unit": "LCOX [EUR/t]",
             "xlabel": "Demand in Mt",
             "product_unit": "t",
             "ylim": (0, 900),
         }
+    else:
+        raise ValueError(f"product {product} not recognized for supply curve plotting")
 
     create_supply_curve()

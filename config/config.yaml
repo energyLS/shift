@@ -1,9 +1,10 @@
 enable:
   run_supply_chain: False # Enable for first run
+  run_supply_curve: False # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
-demand_factors: [1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+demand_factors: [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
@@ -20,7 +21,18 @@ costs:
 
 interest_rate: 0.07
 
-electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks analysis-steel.ipynb
+grid_electricity:
+  marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
+  capital_cost: 0 # EUR/MW, guesstimate for average grid electricity cost in 2030
+  grid_potential_custom: true # Use custom grid potential for eaf-grid from data/grid_potential_custom.csv in Mt steel
+
+part_load:
+  electrolysis: 0.0
+  direct reduction furnace: 0.9
+  electric arc furnace: 0.0
+  # add part load limitations by naming the carrier of links
+
+electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 pv_p_nom_max_cor: 0.1
 onwind_p_nom_max_cor: 0.1
@@ -36,10 +48,13 @@ plot:
     hydrogen:
       bus_size: 1.0e-8
       link_width: 1.0e-9
-    steel:
+    iron_ore:
       bus_size: 1.0e-7
       link_width: 1.5e-8
-    iron_ore:
+    hbi:
+      bus_size: 1.0e-7
+      link_width: 1.5e-8
+    steel:
       bus_size: 1.0e-7
       link_width: 1.5e-8
   colors:
@@ -48,12 +63,17 @@ plot:
     hydrogen: 'magenta'
     iron_ore: 'brown'
     iron_ore_shipping: "#6A000E"
+    hbi: 'darkred'
+    hbi_shipping: 'firebrick'
     steel_supply: 'lightsteelblue'
     steel_demand: 'seagreen'
     steel_link: 'skyblue'
     iron_ore_supply: 'black'
     iron_ore_demand: 'lightsteelblue'
     iron_ore_link: "#6A000E"
+    hbi_demand: 'green'
+    hbi_supply: 'darkred'
+    hbi_link: 'firebrick'
 
 # Region definitions
 regions:
@@ -75,9 +95,51 @@ regions:
   "Oceania": ["Australia", "New Zealand"]
 
 
+solver:
+    name: gurobi
+    options: gurobi-default
+
+solver_options:
+    highs-default:
+      # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
+      threads: 4
+      solver: "ipm"
+      run_crossover: "on"
+      small_matrix_value: 1e-6
+      large_matrix_value: 1e15
+      primal_feasibility_tolerance: 1e-6
+      dual_feasibility_tolerance: 1e-6
+      ipm_optimality_tolerance: 1e-6
+      parallel: "on"
+      random_seed: 123
+    gurobi-default:
+      threads: 4
+      method: 2 # barrier
+      crossover: 0
+      BarConvTol: 1.e-6 # 1.e-5?
+      Seed: 123
+      AggFill: 0
+      PreDual: 0
+      GURO_PAR_BARDENSETHRESH: 200
+
+
 colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'red'
   electrolysis: 'magenta'
-  battery inverter (charging): 'lightblue'
-  battery inverter (discharging): 'blue'
+  battery inverter (charging): '#6A000E'
+  battery inverter (discharging): '#FF5733'
+  battery: 'purple'
+  wind: 'blue'
+  solar: 'yellow'
+  pv: 'yellow'
+  electricity: 'red'
+  iron ore: 'brown'
+  steel: 'grey'
+  hot briquetted iron: 'darkred'
+  hydrogen: 'magenta'
+  Battery: purple
+  Electricity: red
+  HBI: darkred
+  Photovoltaics: yellow
+  Wind energy: blue
