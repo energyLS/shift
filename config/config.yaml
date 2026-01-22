@@ -16,6 +16,13 @@ run:
   #   file: config/scenarios.yaml
   disable_progressbar: false
 
+design:
+  cost_penalty:
+    # North_West_Africa: 1.1 # Relative cost pentalty on all technlogies in this region. 1: no change
+    # Eurasia: 1.1
+    # South_America: 0.7
+    # Oceania: 0.8
+
 costs:
   version: v0.12.0
 

@@ -600,6 +600,23 @@ def plot_trade_network(
     return
 
 
+def apply_cost_penalty(n, cost_penalty):
+
+    # Add cost pentalty to all technologies of a certain region, excluding shipping
+
+    if cost_penalty:
+        for region in cost_penalty.keys():
+            n.links.loc[
+                n.links.bus0.str.contains(region)
+                & ~n.links.carrier.str.contains("shipping"),
+                "marginal_cost",
+            ] *= cost_penalty[region]
+    else:
+        print("No cost penalty applied")
+
+    return n
+
+
 if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
@@ -676,6 +693,9 @@ if __name__ == "__main__":
     print("building transportation links")
     create_links(transport_costs, trade_options)
 
+    cost_penalty = snakemake.config["design"]["cost_penalty"]
+    n = apply_cost_penalty(n, cost_penalty)
+
     # solving model
     print("solving model")
     n.optimize(
@@ -695,6 +715,7 @@ if __name__ == "__main__":
     # saving results and calculating LCOH
     print("saving results as network+csv and pdf")
     save_trade_network(n)
+
     # Plot iron ore map
     plot_trade_network(
         n,
