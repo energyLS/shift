@@ -129,7 +129,7 @@ rule model_trade:
         # supply_curves_final = expand(
         #     "../resources/supply_curves/cost_year~{cost_year}/{region}_{final}.csv",
         #     allow_missing=True, region=config["regions"]),
-        transport_costs = "../data/transport_costs/{transport_cost}.csv",
+        transport_costs = "../data/transport_costs/steel_r_iron_r.csv",
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
         demand = "../data/un_enerdata_demand_2050_final.csv",

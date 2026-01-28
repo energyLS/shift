@@ -124,9 +124,9 @@ def building_model(
         # defining the demand for the region
         load = demands.loc[demands["region"] == region_name].loc[:, "demand"].values[
             0
-        ] * float(snakemake.wildcards["demand"])
+        ] * 1 # float(snakemake.wildcards["demand"])
         print(
-            f"Load set via snakemake.wildcard to {float(snakemake.wildcards['demand'])*100}% of regional final energy demand."
+            f"Load set via snakemake.wildcard to 100% of regional final energy demand."
         )
 
         n.add(
