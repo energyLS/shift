@@ -1,6 +1,6 @@
 enable:
   run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
+  run_supply_curve: True # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -15,6 +15,27 @@ run:
   #   enable: false
   #   file: config/scenarios.yaml
   disable_progressbar: false
+
+scenario: # must be listed in config/trade_scenarios.csv in order to run
+  default:
+      modifiers:
+        cost_penalty:
+  penalty-nwa:
+    modifiers:
+      cost_penalty:
+        North_West_Africa: 1.1
+  penalty-ea:
+    modifiers:
+      cost_penalty:
+        Eurasia: 1.1
+  penalty-sa:
+    modifiers:
+      cost_penalty:
+        South_America: 0.7
+  penalty-oc:
+    modifiers:
+      cost_penalty:
+        Oceania: 0.8
 
 design:
   cost_penalty:
@@ -150,3 +171,19 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
+  Eurasia:              '#1B4F9C'  # deep blue
+  Europe:               '#F39C12'  # strong orange
+  Far_West_Europe:      '#2ECC71'  # vivid green
+  Middle_East:          '#C0392B'  # brick red
+  North_West_Africa:    '#7D3C98'  # dark purple
+  Subsaharan_Africa:    '#A04000'  # burnt sienna
+  North_America:        '#F1C40F'  # yellow (clearly distinct)
+  South_America:        '#16A085'  # teal
+  South_South_America:  '#EC7063'  # coral
+  Central_America:      '#27AE60'  # emerald (different from teal)
+  West_Asia:            '#2C3E50'  # blue-grey (almost navy)
+  East_Asia:            '#58D68D'  # light green (intentional contrast)
+  Pacific_Asia:         '#AF7AC5'  # lavender
+  East_East_Asia:       '#922B21'  # dark red
+  Oceania:              '#1F618D'  # steel blue
+

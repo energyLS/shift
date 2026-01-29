@@ -1,3 +1,6 @@
 cost_year,interone,intertwo,final,scenario
+2030,hbi,eaf-grid,steel,default
 2030,hbi,eaf-grid,steel,penalty-nwa
-2030,hbi,eaf-grid,steel,penalty-eur
+2030,hbi,eaf-grid,steel,penalty-ea
+2030,hbi,eaf-grid,steel,penalty-oc
+2030,hbi,eaf-grid,steel,penalty-sa
