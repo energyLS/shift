@@ -1,6 +1,7 @@
 import pandas as pd
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -79,6 +80,7 @@ def create_supply_curve():
 
     # saves the merged costs in a supply curve csv
     df_sub.to_csv(snakemake.output.supply)
+    df_merged.to_csv(snakemake.output.supply_nodemand)
 
     # creates and saves supply curve plot
     if product in ["steel", "hbi"]:
