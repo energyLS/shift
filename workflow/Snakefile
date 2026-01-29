@@ -100,6 +100,7 @@ if config["enable"].get("run_supply_curve", True):
             steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
         output:
             supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+            supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
             supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
         threads: 2
         script:
@@ -140,8 +141,11 @@ rule model_trade:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
         trade_plot_ironore = f"../results/{trade_scenarios.wildcard_pattern}/map_ironore.pdf",
+        trade_plot_ironore_png = f"../results/{trade_scenarios.wildcard_pattern}/map_ironore.png",
         trade_plot_hbi = f"../results/{trade_scenarios.wildcard_pattern}/map_hbi.pdf",
+        trade_plot_hbi_png = f"../results/{trade_scenarios.wildcard_pattern}/map_hbi.png",
         trade_plot_steel = f"../results/{trade_scenarios.wildcard_pattern}/map_steel.pdf",
+        trade_plot_steel_png = f"../results/{trade_scenarios.wildcard_pattern}/map_steel.png",
     threads: 4
     script:
         "scripts/model_trade.py"
@@ -160,7 +164,8 @@ rule model_trade_all:
 
 rule collect_figures:
     input:
-        global_supply_curve = "../results/figures_general/global_supply_curve.pdf", #workflow/notebooks/analysis-coststructure.ipynb
+        global_supply_curve = "../results/figures_general/{scenario}/global_supply_curve.pdf", #workflow/notebooks/analysis-coststructure.ipynb
+        global_supply_curve_png = "../results/figures_general/{scenario}/global_supply_curve.png", #workflow/notebooks/analysis-coststructure.ipynb
 
 
 ### Additional rules 
