@@ -166,6 +166,11 @@ rule collect_figures:
     input:
         global_supply_curve = "../results/figures_general/{scenario}/global_supply_curve.pdf", #workflow/notebooks/analysis-coststructure.ipynb
         global_supply_curve_png = "../results/figures_general/{scenario}/global_supply_curve.png", #workflow/notebooks/analysis-coststructure.ipynb
+        electricity_demand = "../results/figures_general/electricity_demand.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
+        electricity_demand_png = "../results/figures_general/electricity_demand.png", #workflow/notebooks/analysis-electricity-demand.ipynb
+        electricity_demand_steel = "../results/figures_general/electricity_demand_in_steel.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
+        electricity_demand_steel_png = "../results/figures_general/electricity_demand_in_steel.png", #workflow/notebooks/analysis-electricity-demand.ipynb
+
 
 
 ### Additional rules 
