@@ -313,11 +313,7 @@ def solve_network(n):
     options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
 
     print("solving model")
-    n.optimize(
-        n.snapshots,
-        solver_name=solver_name,
-        solver_options=options
-    )
+    n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
     # , "barHomogeneous":1, "FeasibilityTol": 1.e-5,
     print("network was solved succesfully")
 
@@ -393,7 +389,6 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "model_lcox",
             cost_year="2030",
-            demand_factor=1,
             region="Europe",
             product="hbi",
         )
