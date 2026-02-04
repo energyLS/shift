@@ -153,7 +153,7 @@ solver_options:
 
 colors:
   electric arc furnace: 'orange'
-  direct reduction furnace: 'red'
+  direct reduction furnace: 'grey'
   electrolysis: 'magenta'
   battery inverter (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
