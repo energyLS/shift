@@ -170,6 +170,8 @@ rule collect_figures:
         electricity_demand_png = "../results/figures_general/electricity_demand.png", #workflow/notebooks/analysis-electricity-demand.ipynb
         electricity_demand_steel = "../results/figures_general/electricity_demand_in_steel.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
         electricity_demand_steel_png = "../results/figures_general/electricity_demand_in_steel.png", #workflow/notebooks/analysis-electricity-demand.ipynb
+        global_map_countries = "../results/figures_general/global_map_countries.pdf", #workflow/notebooks/plot_countries.ipynb
+        global_map_countries_png = "../results/figures_general/global_map_countries.png", #workflow/notebooks/plot_countries.ipynb
 
 
 
