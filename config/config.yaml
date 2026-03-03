@@ -1,10 +1,10 @@
 enable:
-  run_supply_chain: False # Enable for first run
+  run_supply_chain: True # Enable for first run
   run_supply_curve: True # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
-demand_factors: [0.001, 0.01, 0.1, 1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+demand_factors: [0.001, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.1, 1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
