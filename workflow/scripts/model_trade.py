@@ -494,7 +494,12 @@ def save_trade_network(solved_network):
 
 
 def plot_trade_network(
-    n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None, output_path_png=None
+    n,
+    product="steel",
+    alpha_supply=0.7,
+    alpha_demand=1,
+    output_path=None,
+    output_path_png=None,
 ):
     """
     Plot trade network using config-driven colors and sizes.
@@ -598,7 +603,9 @@ def plot_trade_network(
 
     if output_path:
         fig.savefig(output_path, format="pdf", bbox_inches="tight", pad_inches=0.1)
-        fig.savefig(output_path_png, format="png", bbox_inches="tight", pad_inches=0.1, dpi=300)
+        fig.savefig(
+            output_path_png, format="png", bbox_inches="tight", pad_inches=0.1, dpi=300
+        )
     return
 
 
@@ -622,6 +629,54 @@ def apply_cost_penalty(n, cost_penalty):
     return n
 
 
+def solve_network(n):
+
+    solver_name = snakemake.config["solver"]["name"]
+    options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
+    mga = snakemake.config["mga"]["activate"]
+
+    n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
+
+    if mga:
+
+        tsc = (
+            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+            .sum(axis=1)
+            .div(1e9)
+        )
+        optimal_cost = tsc.sum()
+
+        idx = n.links[
+            (n.links.carrier == "shipping_hbi")
+            & (n.links.bus0 == "North_West_Africa_hbi")
+            & (n.links.bus1 == "Europe_hbi")
+        ].index.values[0]
+
+        weights = {"Link": {"p_nom": {idx: 1}}}
+        slack = 0.02
+        sense = "min"
+        n.optimize.optimize_mga(
+            slack=slack,
+            weights=weights,
+            sense=sense,
+            solver_name=solver_name,
+            solver_options=options,
+        )
+
+        tsc = (
+            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+            .sum(axis=1)
+            .div(1e9)
+        )
+        mga_cost = tsc.sum()
+        print(f"Optimal cost: {optimal_cost:.2f} B€")
+        print(
+            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack):.2f} B€"
+        )
+
+    return n
+
+
 if __name__ == "__main__":
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
@@ -632,7 +687,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="penalty-sa",
+            scenario="default",
         )
 
     final = snakemake.wildcards["final"]
@@ -704,18 +759,7 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
-    n.optimize(
-        n.snapshots,
-        solver_name="gurobi",
-        solver_options={
-            "crossover": 0,
-            "method": 2,
-            "BarConvTol": 1.0e-5,
-            "FeasibilityTol": 1.0e-5,
-            "OptimalityTol": 1.0e-5,
-            "barHomogeneous": 1,
-        },
-    )
+    n = solve_network(n)
     print("network was solved")
 
     # saving results and calculating LCOH
