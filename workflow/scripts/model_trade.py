@@ -629,15 +629,16 @@ def apply_cost_penalty(n, cost_penalty):
     return n
 
 
-def solve_network(n):
+def solve_network(n, mga=None):
 
     solver_name = snakemake.config["solver"]["name"]
     options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
-    mga = snakemake.config["mga"]["activate"]
 
     n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
 
-    if mga:
+    if mga == None:
+        pass
+    else:
 
         tsc = (
             pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
@@ -753,13 +754,23 @@ if __name__ == "__main__":
     print("building transportation links")
     create_links(transport_costs, trade_options)
 
+    # Cost penalty
     cost_penalty = snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"]
     print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
     n = apply_cost_penalty(n, cost_penalty)
 
+    # MGA
+
+    if "mga" not in snakemake.config["scenario"][scenario]["modifiers"].keys():
+        mga = None
+        print("MGA not activated")
+    else:
+        mga = snakemake.config["scenario"][scenario]["modifiers"]["mga"]
+        print(f"MGA activated with slack {mga['slack']} and weights {mga['weights']}")
+
     # solving model
     print("solving model")
-    n = solve_network(n)
+    n = solve_network(n, mga=mga)
     print("network was solved")
 
     # saving results and calculating LCOH
