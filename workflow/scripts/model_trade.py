@@ -647,15 +647,17 @@ def solve_network(n, mga=None):
         )
         optimal_cost = tsc.sum()
 
-        idx = n.links[
-            (n.links.carrier == "shipping_hbi")
-            & (n.links.bus0 == "North_West_Africa_hbi")
-            & (n.links.bus1 == "Europe_hbi")
-        ].index.values[0]
+        # idx = n.links[
+        #     (n.links.carrier == "shipping_hbi")
+        #     & (n.links.bus0 == "North_West_Africa_hbi")
+        #     & (n.links.bus1 == "Europe_hbi")
+        # ].index.values[0]
 
+        idx = mga["link_idx"]
         weights = {"Link": {"p_nom": {idx: 1}}}
-        slack = 0.02
-        sense = "min"
+        sense = mga["sense"]
+        slack = mga["slack"]
+
         n.optimize.optimize_mga(
             slack=slack,
             weights=weights,
@@ -766,7 +768,7 @@ if __name__ == "__main__":
         print("MGA not activated")
     else:
         mga = snakemake.config["scenario"][scenario]["modifiers"]["mga"]
-        print(f"MGA activated with slack {mga['slack']} and weights {mga['weights']}")
+        print(f"MGA activated with slack {mga['slack']} for link {mga['link_idx']}")
 
     # solving model
     print("solving model")
