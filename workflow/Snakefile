@@ -120,6 +120,7 @@ rule model_trade:
     params:
         iron_ore_potential=config["iron_ore"]["potential_allowance"],
         cost_penalty=config["design"]["cost_penalty"],
+        scenarios=config["scenario"],
     input:
         supply_curves_interone = expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
