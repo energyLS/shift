@@ -628,6 +628,20 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+def normalize_regions(regions, carrier):
+    """Ensure regions are lists and suffixed with _{carrier}."""
+    if regions is None:
+        return None
+    if isinstance(regions, str):
+        regions = [regions]
+
+    normalized = []
+    for r in regions:
+        if r.endswith(f"_{carrier}"):
+            normalized.append(r)
+        else:
+            normalized.append(f"{r}_{carrier}")
+    return normalized
 
 def solve_network(n, mga=None):
 
@@ -647,23 +661,22 @@ def solve_network(n, mga=None):
         )
         optimal_cost = tsc.sum()
 
-        # Select specific link
-        # idx = n.links[
-        #     (n.links.carrier == "shipping_hbi")
-        #     & (n.links.bus0 == "North_West_Africa_hbi")
-        #     & (n.links.bus1 == "Europe_hbi")
-        # ].index.values[0]
+        carrier = mga["carrier"]
+        exports = normalize_regions(mga["export"], carrier)
+        imports = normalize_regions(mga["import"], carrier)
 
-        # idx = mga["link_idx"]
-        # weights = {"Link": {"p_nom": {idx: 1}}}
+        # Select links in PyPSA
+        mask = n.links.carrier == f"shipping_{carrier}"
 
-        # Select a set of links
+        if exports is not None:
+            mask &= n.links.bus0.isin(exports)
 
-        idx = n.links[
-            (n.links.carrier == "shipping_hbi")
-            & (n.links.bus0 == "North_West_Africa_hbi")
-        ].index
+        if imports is not None:
+            mask &= n.links.bus1.isin(imports)
 
+        idx = n.links[mask].index
+
+        # Build MGA weights for all matched links
         weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
 
         sense = mga["sense"]
