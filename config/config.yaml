@@ -17,9 +17,6 @@ run:
   disable_progressbar: false
 
 
-mga:
-  activate: true
-
 scenario: # must be listed in config/trade_scenarios.csv in order to run
   default:
       modifiers:
