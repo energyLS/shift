@@ -1,10 +1,10 @@
 enable:
-  run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
+  run_supply_chain: True # Enable for first run
+  run_supply_curve: True # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
-demand_factors: [1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+demand_factors: [0.001, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.1, 1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
@@ -15,6 +15,34 @@ run:
   #   enable: false
   #   file: config/scenarios.yaml
   disable_progressbar: false
+
+scenario: # must be listed in config/trade_scenarios.csv in order to run
+  default:
+      modifiers:
+        cost_penalty:
+  penalty-nwa:
+    modifiers:
+      cost_penalty:
+        North_West_Africa: 1.1
+  penalty-ea:
+    modifiers:
+      cost_penalty:
+        Eurasia: 1.1
+  penalty-sa:
+    modifiers:
+      cost_penalty:
+        South_America: 0.7
+  penalty-oc:
+    modifiers:
+      cost_penalty:
+        Oceania: 0.8
+
+design:
+  cost_penalty:
+    # North_West_Africa: 1.1 # Relative cost pentalty on all technlogies in this region. 1: no change
+    # Eurasia: 1.1
+    # South_America: 0.7
+    # Oceania: 0.8
 
 costs:
   version: v0.12.0
@@ -77,11 +105,11 @@ plot:
 
 # Region definitions
 regions:
-  "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
+  "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "North Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
   "Far_West_Europe": ["France", "Greenland", "Iceland", "Ireland", "Portugal", "Spain", "United Kingdom"]
   "Middle_East": ["Bahrain", "Iran, Islamic Republic of", "Iraq","Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "United Arab Emirates",
    "Yemen"]
-  "North_West_Africa": ["Benin", "Burkina Faso", "Côte d’Ivoire", "Gambia", "Ghana", "Guinea", "Guinea-Bissau", "Liberia", "Nigeria", "Senegal", "Sierra Leone", "Togo + Algeria", "Chad", "Egypt", "Eritrea", "Libya", "Mali", "Mauritania", "Morocco", "Niger", "Sudan", "Tunisia", "Western Sahara"]
+  "North_West_Africa": ["Benin", "Burkina Faso", "Côte d'Ivoire", "Gambia", "Ghana", "Guinea", "Guinea-Bissau", "Liberia", "Nigeria", "Senegal", "Sierra Leone", "Togo + Algeria", "Chad", "Egypt", "Eritrea", "Libya", "Mali", "Mauritania", "Morocco", "Niger", "Sudan", "Tunisia", "Western Sahara"]
   "Subsaharan_Africa": ["Angola", "Botswana", "Burundi", "Cameroon", "Central African Republic", "Democratic Republic of the Congo", "Ethiopia", "Kenya", "Gabon", "Madagascar", "Malawi", "Mozambique", "Namibia", "Republic of the Congo", "Rwanda", "Somalia", "South Africa", "South Sudan", "Tanzania", "Uganda", "Zambia", "Zimbabwe"]
   "North_America": ["Canada", "United States"]
   "Eurasia": ["Armenia", "Azerbaijan", "Georgia", "Kazakhstan", Kyrgyzstan, "Tajikistan", "Turkmenistan", "Uzbekistan", "Russian Federation"]
@@ -125,7 +153,7 @@ solver_options:
 
 colors:
   electric arc furnace: 'orange'
-  direct reduction furnace: 'red'
+  direct reduction furnace: 'grey'
   electrolysis: 'magenta'
   battery inverter (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
@@ -143,3 +171,19 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
+  Eurasia:              '#1B4F9C'  # deep blue
+  Europe:               '#F39C12'  # strong orange
+  Far_West_Europe:      '#2ECC71'  # vivid green
+  Middle_East:          '#C0392B'  # brick red
+  North_West_Africa:    '#7D3C98'  # dark purple
+  Subsaharan_Africa:    '#A04000'  # burnt sienna
+  North_America:        '#F1C40F'  # yellow (clearly distinct)
+  South_America:        '#16A085'  # teal
+  South_South_America:  '#EC7063'  # coral
+  Central_America:      '#27AE60'  # emerald (different from teal)
+  West_Asia:            '#2C3E50'  # blue-grey (almost navy)
+  East_Asia:            '#58D68D'  # light green (intentional contrast)
+  Pacific_Asia:         '#AF7AC5'  # lavender
+  East_East_Asia:       '#922B21'  # dark red
+  Oceania:              '#1F618D'  # steel blue
+

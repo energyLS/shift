@@ -1,6 +1,7 @@
 import pypsa
 import pandas as pd
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
@@ -122,11 +123,11 @@ def building_model(
         )
 
         # defining the demand for the region
-        load = demands.loc[demands["region"] == region_name].loc[:, "demand"].values[
-            0
-        ] * float(snakemake.wildcards["demand"])
+        load = (
+            demands.loc[demands["region"] == region_name].loc[:, "demand"].values[0] * 1
+        )  # float(snakemake.wildcards["demand"])
         print(
-            f"Load set via snakemake.wildcard to {float(snakemake.wildcards['demand'])*100}% of regional final energy demand."
+            f"Load set via snakemake.wildcard to 100% of regional final energy demand."
         )
 
         n.add(
@@ -493,7 +494,7 @@ def save_trade_network(solved_network):
 
 
 def plot_trade_network(
-    n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None
+    n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None, output_path_png=None
 ):
     """
     Plot trade network using config-driven colors and sizes.
@@ -597,7 +598,28 @@ def plot_trade_network(
 
     if output_path:
         fig.savefig(output_path, format="pdf", bbox_inches="tight", pad_inches=0.1)
+        fig.savefig(output_path_png, format="png", bbox_inches="tight", pad_inches=0.1, dpi=300)
     return
+
+
+def apply_cost_penalty(n, cost_penalty):
+
+    # Add cost pentalty to all technologies of a certain region, excluding shipping
+
+    if cost_penalty:
+        for region in cost_penalty.keys():
+            n.links.loc[
+                (
+                    (n.links.bus1 == f"{region}_steel")
+                    | (n.links.bus1 == f"{region}_hbi")
+                )
+                & ~n.links.carrier.str.contains("shipping"),
+                "marginal_cost",
+            ] *= cost_penalty[region]
+    else:
+        print("No cost penalty applied")
+
+    return n
 
 
 if __name__ == "__main__":
@@ -606,17 +628,17 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "model_trade",
-            transport_cost="steel_r_iron_r",
             cost_year="2030",
-            demand=1,
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
+            scenario="penalty-sa",
         )
 
     final = snakemake.wildcards["final"]
     interone = snakemake.wildcards["interone"]
     intertwo = snakemake.wildcards["intertwo"]
+    scenario = snakemake.wildcards["scenario"]
 
     print(
         f"intermediate 1 ({interone}) and intermediate 2 ({intertwo}) to final product {final}"
@@ -676,6 +698,10 @@ if __name__ == "__main__":
     print("building transportation links")
     create_links(transport_costs, trade_options)
 
+    cost_penalty = snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"]
+    print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
+    n = apply_cost_penalty(n, cost_penalty)
+
     # solving model
     print("solving model")
     n.optimize(
@@ -695,12 +721,14 @@ if __name__ == "__main__":
     # saving results and calculating LCOH
     print("saving results as network+csv and pdf")
     save_trade_network(n)
+
     # Plot iron ore map
     plot_trade_network(
         n,
         product="iron_ore",
         alpha_supply=0.5,
         output_path=snakemake.output.trade_plot_ironore,
+        output_path_png=snakemake.output.trade_plot_ironore_png,
     )
 
     # Plot iron ore map
@@ -709,6 +737,7 @@ if __name__ == "__main__":
         product="hbi",
         alpha_supply=0.5,
         output_path=snakemake.output.trade_plot_hbi,
+        output_path_png=snakemake.output.trade_plot_hbi_png,
     )
 
     # Plot steel map
@@ -717,4 +746,5 @@ if __name__ == "__main__":
         product="steel",
         alpha_supply=0.7,
         output_path=snakemake.output.trade_plot_steel,
+        output_path_png=snakemake.output.trade_plot_steel_png,
     )

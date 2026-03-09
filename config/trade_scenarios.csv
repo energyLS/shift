@@ -1,5 +1,11 @@
-cost_year,transport_cost,demand,interone,intertwo,final
-2030,steel_r_iron_r,1,steel,steel,steel
-2030,steel_r_iron_r,1,hbi,eaf,steel
-2030,steel_r_iron_r,1,hbi,eaf-grid,steel
-2030,steel_r_iron_r,1,hbi,hbi,hbi
+cost_year,interone,intertwo,final,scenario
+2050,hbi,eaf-grid,steel,default
+2050,hbi,eaf-grid,steel,penalty-nwa
+2050,hbi,eaf-grid,steel,penalty-ea
+2050,hbi,eaf-grid,steel,penalty-oc
+2050,hbi,eaf-grid,steel,penalty-sa
+2030,hbi,eaf-grid,steel,default
+2030,hbi,eaf-grid,steel,penalty-nwa
+2030,hbi,eaf-grid,steel,penalty-ea
+2030,hbi,eaf-grid,steel,penalty-oc
+2030,hbi,eaf-grid,steel,penalty-sa
