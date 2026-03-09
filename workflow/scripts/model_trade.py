@@ -494,7 +494,12 @@ def save_trade_network(solved_network):
 
 
 def plot_trade_network(
-    n, product="steel", alpha_supply=0.7, alpha_demand=1, output_path=None, output_path_png=None
+    n,
+    product="steel",
+    alpha_supply=0.7,
+    alpha_demand=1,
+    output_path=None,
+    output_path_png=None,
 ):
     """
     Plot trade network using config-driven colors and sizes.
@@ -598,7 +603,9 @@ def plot_trade_network(
 
     if output_path:
         fig.savefig(output_path, format="pdf", bbox_inches="tight", pad_inches=0.1)
-        fig.savefig(output_path_png, format="png", bbox_inches="tight", pad_inches=0.1, dpi=300)
+        fig.savefig(
+            output_path_png, format="png", bbox_inches="tight", pad_inches=0.1, dpi=300
+        )
     return
 
 
@@ -621,6 +628,81 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+def normalize_regions(regions, carrier):
+    """Ensure regions are lists and suffixed with _{carrier}."""
+    if regions is None:
+        return None
+    if isinstance(regions, str):
+        regions = [regions]
+
+    normalized = []
+    for r in regions:
+        if r.endswith(f"_{carrier}"):
+            normalized.append(r)
+        else:
+            normalized.append(f"{r}_{carrier}")
+    return normalized
+
+def solve_network(n, mga=None):
+
+    solver_name = snakemake.config["solver"]["name"]
+    options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
+
+    n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
+
+    if mga == None:
+        pass
+    else:
+
+        tsc = (
+            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+            .sum(axis=1)
+            .div(1e9)
+        )
+        optimal_cost = tsc.sum()
+
+        carrier = mga["carrier"]
+        exports = normalize_regions(mga["export"], carrier)
+        imports = normalize_regions(mga["import"], carrier)
+
+        # Select links in PyPSA
+        mask = n.links.carrier == f"shipping_{carrier}"
+
+        if exports is not None:
+            mask &= n.links.bus0.isin(exports)
+
+        if imports is not None:
+            mask &= n.links.bus1.isin(imports)
+
+        idx = n.links[mask].index
+
+        # Build MGA weights for all matched links
+        weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
+
+        sense = mga["sense"]
+        slack = mga["slack"]
+
+        n.optimize.optimize_mga(
+            slack=slack,
+            weights=weights,
+            sense=sense,
+            solver_name=solver_name,
+            solver_options=options,
+        )
+
+        tsc = (
+            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+            .sum(axis=1)
+            .div(1e9)
+        )
+        mga_cost = tsc.sum()
+        print(f"Optimal cost: {optimal_cost:.2f} B€")
+        print(
+            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack):.2f} B€"
+        )
+
+    return n
+
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -632,7 +714,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="penalty-sa",
+            scenario="mga-nwa-iso",
         )
 
     final = snakemake.wildcards["final"]
@@ -698,24 +780,23 @@ if __name__ == "__main__":
     print("building transportation links")
     create_links(transport_costs, trade_options)
 
+    # Cost penalty
     cost_penalty = snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"]
     print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
     n = apply_cost_penalty(n, cost_penalty)
 
+    # MGA
+
+    if "mga" not in snakemake.config["scenario"][scenario]["modifiers"].keys():
+        mga = None
+        print("MGA not activated")
+    else:
+        mga = snakemake.config["scenario"][scenario]["modifiers"]["mga"]
+        print(f"MGA activated with slack {mga['slack']}")
+
     # solving model
     print("solving model")
-    n.optimize(
-        n.snapshots,
-        solver_name="gurobi",
-        solver_options={
-            "crossover": 0,
-            "method": 2,
-            "BarConvTol": 1.0e-5,
-            "FeasibilityTol": 1.0e-5,
-            "OptimalityTol": 1.0e-5,
-            "barHomogeneous": 1,
-        },
-    )
+    n = solve_network(n, mga=mga)
     print("network was solved")
 
     # saving results and calculating LCOH

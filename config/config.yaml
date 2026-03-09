@@ -1,6 +1,6 @@
 enable:
-  run_supply_chain: True # Enable for first run
-  run_supply_curve: True # Enable for first run
+  run_supply_chain: False # Enable for first run
+  run_supply_curve: False # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -15,6 +15,7 @@ run:
   #   enable: false
   #   file: config/scenarios.yaml
   disable_progressbar: false
+
 
 scenario: # must be listed in config/trade_scenarios.csv in order to run
   default:
@@ -36,6 +37,27 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
     modifiers:
       cost_penalty:
         Oceania: 0.8
+  mga-eur-nwa-2:
+    modifiers:
+      cost_penalty:
+      mga:
+        slack: 0.002
+        sense: "min"
+        # link_idx: "shipping hbi North_West_Africa-Europe"
+        carrier: "hbi"
+        export: "North_West_Africa_hbi"
+        import: "Europe"
+  mga-nwa-iso:
+    modifiers:
+      cost_penalty:
+      mga:
+        slack: 0.01
+        sense: "min"
+        carrier: "hbi"
+        export: "North_West_Africa_hbi"
+        import: None
+
+
 
 design:
   cost_penalty:
