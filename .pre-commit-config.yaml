@@ -4,8 +4,7 @@ repos:
     hooks:
       - id: ruff
         args: ["--fix"]
-        # This will run ruff in the current repository root (default)
-        # and fix formatting issues automatically.
+        files: "\\.py$" # This will run ruff on Python source files only and fix formatting issues automatically.
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0
