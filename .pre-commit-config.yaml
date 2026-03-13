@@ -1,0 +1,22 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.0.261
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        # This will run ruff in the current repository root (default)
+        # and fix formatting issues automatically.
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=auto"]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-yaml
+        exclude: ^conda/meta.yaml$
+      - id: check-json
+      - id: check-xml
