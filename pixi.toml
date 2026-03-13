@@ -1,40 +1,111 @@
 [workspace]
 authors = ["energyls <leon1.schumm@oth-regensburg.de>"]
-channels = ["conda-forge", "bioconda", "gurobi"]
+channels = ["conda-forge", "bioconda"]
 name = "shift"
-platforms = ["linux-64"]
+description = "Techno-economic optimization of global iron and steel supply chains under decarbonization"
+platforms = ["linux-64", "win-64"]
 version = "0.1.0"
 
 [tasks]
 
 [dependencies]
+# Core Python
+python = ">=3.10"
 
+# Inhouse packages - energy system modeling
+pypsa = ">=0.32.1"
+atlite = ">=0.3"
+linopy = ">=0.4.4"
+powerplantmatching = ">=0.5.15"
 
-python = ">=3.11,<3.14"
-pypsa = ">=0.25"
-pandas = ">=2.0"
-numpy = ">=1.24"
-matplotlib = ">=3.5"
-seaborn = ">=0.13"
-xarray = ">=2023.9"
-netcdf4 = ">=1.6"
-cartopy = ">=0.23"
-geopandas = ">=0.13"
-shapely = ">=2.0"
-pyproj = ">=3.0"
-pyyaml = ">=6.0"
-requests = ">=2.25"
-tqdm = ">=4.64"
-country_converter = ">=0.7"
-linopy = ">=0.3"
-gurobi = ">=12.0.3"
-# gurobipy = "*" # Gurobi is required by some solver calls; version managed via gurobi channel/license
-snakemake-executor-plugin-cluster-generic = ">=1.0.9"
-snakemake-executor-plugin-slurm = ">=1.9.2"
+# Workflow orchestration
 snakemake-minimal = ">=9"
 snakemake-storage-plugin-http = ">=0.3"
-snakemake-storage-plugin-cached-http = ">=0.1.0"
-pycountry = ">=24.6.1"
-# Further requirements
-ipykernel = ">=7.0.0"
-coincbc = "*"
+snakemake-executor-plugin-slurm = "*"
+snakemake-executor-plugin-cluster-generic = "*"
+
+# Data processing and I/O
+dask = "*"
+pandas = ">=2.1"
+numpy = "*"
+xarray = ">=2024.03.0"
+pytables = "*"
+netcdf4 = "*"
+libgdal-netcdf = "*"
+lxml = "*"
+xlrd = "*"
+openpyxl = "*"
+
+# Geospatial and mapping
+geopandas = ">=1"
+rioxarray = "*"
+cartopy = "*"
+rasterio = "*"
+fiona = "*"
+shapely = ">=2.0"
+proj = "*"
+descartes = "*"
+
+# Scientific computing
+scipy = "*"
+networkx = "*"
+seaborn = "*"
+matplotlib = "*"
+
+# Utilities
+pyyaml = "*"
+tqdm = "*"
+country_converter = "*"
+geopy = "*"
+pytz = "*"
+memory_profiler = "*"
+jpype1 = "*"
+pyxlsb = "*"
+graphviz = "*"
+geojson = "*"
+
+[pypi-dependencies]
+# pip-installable packages (always included)
+tsam = ">=2.3.1"
+entsoe-py = "*"
+pypsatopo = "*"
+
+[dependency-groups]
+# Optional dependency sets usable with features/environments
+test = [
+    "pytest",
+    "pytest-cov",
+]
+docs = [
+    "sphinx",
+]
+gurobi = [
+    "gurobipy",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "docs" },
+    { include-group = "solvers" },
+    "ruff",
+    "pre-commit",
+    "pylint",
+    "jupyter",
+    "ipython",
+]
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+test = { solve-group = "default", features = ["test"] }
+docs = { solve-group = "default", features = ["docs"] }
+dev = { solve-group = "default", features = ["dev"] }
+
+[tool.ruff]
+# Ruff linter configuration
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]  # Basic style, logical and import checks
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
