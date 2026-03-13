@@ -1,6 +1,5 @@
 import pypsa
 import pandas as pd
-import numpy as np
 
 # import matplotlib.pyplot as plt
 # from pyomo.environ import Constraint
@@ -59,7 +58,7 @@ def building_model(ds, dw, dc, load, h_cost):
     battery_cost = calc_cap_cost(dc, "battery storage", interest_rate)
 
     # hydrogen cost can either be 0 or real cost
-    if h_cost == False:
+    if h_cost is False:
         hydrogen_storage_cost = 0
     else:
         hydrogen_storage_cost = calc_cap_cost(
@@ -178,7 +177,7 @@ def save_lcoh(solved_network):
 
     try:
         solved_network.objective
-    except:
+    except Exception:
         # if infeasible
         print("saving infeasible network")
         res.loc[res.shape[0]] = [

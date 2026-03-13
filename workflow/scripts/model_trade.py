@@ -127,7 +127,7 @@ def building_model(
             demands.loc[demands["region"] == region_name].loc[:, "demand"].values[0] * 1
         )  # float(snakemake.wildcards["demand"])
         print(
-            f"Load set via snakemake.wildcard to 100% of regional final energy demand."
+            "Load set via snakemake.wildcard to 100% of regional final energy demand."
         )
 
         n.add(
@@ -650,7 +650,7 @@ def solve_network(n, mga=None):
 
     n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
 
-    if mga == None:
+    if mga is None:
         pass
     else:
 

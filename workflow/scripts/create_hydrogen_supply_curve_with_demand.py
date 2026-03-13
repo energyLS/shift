@@ -1,6 +1,11 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# Note: This script is intended to be executed via Snakemake.
+# The `snakemake` object will be injected by the workflow.
+# Ruff still needs a definition to avoid F821 in linting.
+snakemake = None  # noqa: F821
+
 
 def create_supply_curve_with_demand():
     # input: "resources/lcoh/{region}/results_{demand_factor}.csv",
@@ -15,7 +20,7 @@ def create_supply_curve_with_demand():
         ]["demand"]
     )
     # final_green is wrong, this is final_el
-    final_green = (
+    (
         final_demand
         * float(
             final_demand_data.loc[

@@ -173,17 +173,13 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
         raise ValueError("product not recognized, choose steel, hbi, eaf, eaf-grid")
 
     # hydrogen cost can either be 0 or real cost. Real cost is the default of the imported network
-    if h_cost == False:
+    if not h_cost:
         n.stores.at[
             "hydrogen storage tank type 1 including compressor (exp)", "capital_cost"
         ] = 0
-    else:
-        pass
 
-    if iron_ore_cost == False:
+    if not iron_ore_cost:
         n.generators.at["iron ore DRI-ready (exp)", "marginal_cost"] = 0
-    else:
-        pass
 
     # Remove trace shipping components
     n = remove_shipping_importer_components(n)
