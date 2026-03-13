@@ -69,40 +69,33 @@ geojson = "*"
 tsam = ">=2.3.1"
 entsoe-py = "*"
 pypsatopo = "*"
+gurobipy = "*"
 
-[dependency-groups]
-# Optional dependency sets usable with features/environments
-test = [
-    "pytest",
-    "pytest-cov",
-]
-docs = [
-    "sphinx",
-]
-gurobi = [
-    "gurobipy",
-]
-dev = [
-    { include-group = "test" },
-    { include-group = "docs" },
-    { include-group = "solvers" },
-    "ruff",
-    "pre-commit",
-    "pylint",
-    "jupyter",
-    "ipython",
-]
+[feature.test.dependencies]
+pytest = "*"
+pytest-cov = "*"
 
-[tool.pixi.environments]
-default = { solve-group = "default" }
-test = { solve-group = "default", features = ["test"] }
-docs = { solve-group = "default", features = ["docs"] }
-dev = { solve-group = "default", features = ["dev"] }
+[feature.docs.dependencies]
+sphinx = "*"
+
+[feature.dev.dependencies]
+ruff = "*"
+pre-commit = "*"
+pylint = "*"
+jupyter = "*"
+ipython = "*"
+
+[environments]
+default = { features = [], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
+dev = { features = ["dev", "test", "docs"], solve-group = "default" }
 
 [tool.ruff]
 # Ruff linter configuration
 line-length = 88
 target-version = "py310"
+exclude = ["**/*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]  # Basic style, logical and import checks
