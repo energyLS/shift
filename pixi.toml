@@ -84,6 +84,7 @@ pre-commit = "*"
 pylint = "*"
 jupyter = "*"
 ipython = "*"
+nbqa = "*"
 
 [environments]
 default = { features = [], solve-group = "default" }
