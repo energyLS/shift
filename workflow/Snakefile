@@ -54,7 +54,7 @@ rule prepare_steel_demand:
         steel_demand = '../data/demand/ip_market__fabrication.csv',
         bus_locations = "../data/bus_locations.csv",
     output:
-        steel_demand = '../resources/steel_demand_clustered_{cost_year}.csv'
+        steel_demand = '../resources/steel_demand_clustered_{cost_year}.csv',
     resources:
         mem_mb=5000,
     threads: 2
@@ -112,7 +112,7 @@ if config["enable"].get("run_supply_curve", True):
                 allow_missing=True
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
-            steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
+            steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         output:
             supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
             supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
@@ -150,7 +150,7 @@ rule model_trade:
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
         demand = "../data/un_enerdata_demand_2050_final.csv",
-        steel_demand = "../resources/steel_production_clustered.csv",
+        steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore = "../resources/ironore_production_clustered.csv",
         grid_potential = "../data/grid_potential_custom.csv",
     output:
