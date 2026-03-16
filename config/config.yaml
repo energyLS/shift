@@ -55,7 +55,7 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         sense: "min"
         carrier: "hbi"
         export: "North_West_Africa_hbi"
-        import: None
+        import:
 
 
 
