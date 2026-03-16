@@ -48,6 +48,21 @@ rule retrieve_trace_steel:
         copyfile(input[0], output[0])
 
 
+
+rule prepare_steel_demand:
+    input:
+        steel_demand = '../data/demand/ip_market__fabrication.csv',
+        bus_locations = "../data/bus_locations.csv",
+    output:
+        steel_demand = '../resources/steel_demand_clustered_{cost_year}.csv',
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        "notebooks/prepare-steel-demand.ipynb"
+
+
+
 if config["enable"].get("run_supply_chain", True):
     # Individual model calculating the LCoH for up to 60% of maximum potential as demand
     # Stores the resulting LCoH in a csv file
@@ -97,7 +112,7 @@ if config["enable"].get("run_supply_curve", True):
                 allow_missing=True
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
-            steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
+            steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         output:
             supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
             supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
@@ -135,7 +150,7 @@ rule model_trade:
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
         demand = "../data/un_enerdata_demand_2050_final.csv",
-        steel_demand = "../resources/steel_production_clustered.csv",
+        steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore = "../resources/ironore_production_clustered.csv",
         grid_potential = "../data/grid_potential_custom.csv",
     output:
@@ -165,8 +180,8 @@ rule model_trade_all:
 
 rule collect_figures:
     input:
-        global_supply_curve = "../results/figures_general/{scenario}/global_supply_curve.pdf", #workflow/notebooks/analysis-coststructure.ipynb
-        global_supply_curve_png = "../results/figures_general/{scenario}/global_supply_curve.png", #workflow/notebooks/analysis-coststructure.ipynb
+        global_supply_curve = "../results/figures_general/{scenario}/global_supply_curve_{sort}_demand_{demand}.pdf", #workflow/notebooks/analysis-coststructure.ipynb
+        global_supply_curve_png = "../results/figures_general/{scenario}/global_supply_curve_{sort}_demand_{demand}.png", #workflow/notebooks/analysis-coststructure.ipynb
         electricity_demand = "../results/figures_general/electricity_demand.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
         electricity_demand_png = "../results/figures_general/electricity_demand.png", #workflow/notebooks/analysis-electricity-demand.ipynb
         electricity_demand_steel = "../results/figures_general/electricity_demand_in_steel.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
