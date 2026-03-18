@@ -12,6 +12,7 @@
 \data
 \resources
 \results
+!/data/wacc-global.csv
 # pixi environments
 .pixi/*
 !.pixi/config.toml
