@@ -48,6 +48,17 @@ rule retrieve_trace_steel:
         copyfile(input[0], output[0])
 
 
+rule prepare_wacc:
+    input:
+        wacc = "../data/wacc-global.csv",
+        bus_locations = "../data/bus_locations.csv",
+    output:
+        wacc = "../resources/wacc-clustered.csv"
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        "notebooks/prepare-wacc.ipynb"
 
 rule prepare_steel_demand:
     input:
