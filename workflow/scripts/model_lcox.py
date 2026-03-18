@@ -391,6 +391,7 @@ if __name__ == "__main__":
             cost_year="2030",
             region="Europe",
             product="hbi",
+            demand_factor=10,
         )
 
     # making dataframes from inputs
