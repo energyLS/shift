@@ -628,6 +628,21 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+
+def apply_wacc_simple(n, wacc):
+
+    # Add cost pentalty to all technologies of a certain region, excluding shipping
+
+    for region in wacc.keys():
+        n.links.loc[
+            ((n.links.bus1 == f"{region}_steel") | (n.links.bus1 == f"{region}_hbi"))
+            & ~n.links.carrier.str.contains("shipping"),
+            "marginal_cost",
+        ] *= cost_penalty[region]
+
+    return n
+
+
 def normalize_regions(regions, carrier):
     """Ensure regions are lists and suffixed with _{carrier}."""
     if regions is None:
@@ -642,6 +657,7 @@ def normalize_regions(regions, carrier):
         else:
             normalized.append(f"{r}_{carrier}")
     return normalized
+
 
 def solve_network(n, mga=None):
 
@@ -710,7 +726,7 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "model_trade",
-            cost_year="2030",
+            cost_year="2050",
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
@@ -784,6 +800,12 @@ if __name__ == "__main__":
     cost_penalty = snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"]
     print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
     n = apply_cost_penalty(n, cost_penalty)
+
+    # Country specific wacc adjustment (simplified)
+    # Only if activated in config: TODO
+    wacc = snakemake.input["wacc"]
+    print(f"applying region specific wacc (simplified)")
+    n = apply_wacc_simple(n, wacc)
 
     # MGA
 
