@@ -632,13 +632,18 @@ def apply_cost_penalty(n, cost_penalty):
 def apply_wacc_simple(n, wacc):
 
     # Add cost pentalty to all technologies of a certain region, excluding shipping
+    wacc.set_index("region", inplace=True)
+    base_interest_rate = snakemake.params.interest_rate
 
-    for region in wacc.keys():
+    for region in wacc.index:
+
+        capital_cost_adj = wacc.loc[region].values[0] / base_interest_rate
+
         n.links.loc[
             ((n.links.bus1 == f"{region}_steel") | (n.links.bus1 == f"{region}_hbi"))
             & ~n.links.carrier.str.contains("shipping"),
             "marginal_cost",
-        ] *= cost_penalty[region]
+        ] *= capital_cost_adj
 
     return n
 
@@ -754,6 +759,7 @@ if __name__ == "__main__":
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
     iron_ore = pd.read_csv(snakemake.input.iron_ore, header=0)
     regions = snakemake.config["regions"]
+    wacc = pd.read_csv(snakemake.input.wacc, header=0)
 
     # limit regions
     trade_options = trade_options[
@@ -802,10 +808,11 @@ if __name__ == "__main__":
     n = apply_cost_penalty(n, cost_penalty)
 
     # Country specific wacc adjustment (simplified)
-    # Only if activated in config: TODO
-    wacc = snakemake.input["wacc"]
-    print(f"applying region specific wacc (simplified)")
-    n = apply_wacc_simple(n, wacc)
+    if snakemake.params.region_specific_wacc:
+        print(f"applying region specific wacc (simplified)")
+        n = apply_wacc_simple(n, wacc)
+    else:
+        pass
 
     # MGA
 
