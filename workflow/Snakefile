@@ -147,6 +147,8 @@ rule model_trade:
         iron_ore_potential=config["iron_ore"]["potential_allowance"],
         cost_penalty=config["design"]["cost_penalty"],
         scenarios=config["scenario"],
+        interest_rate=config["interest_rate"],
+        region_specific_wacc=config["region-specific-wacc"],
     input:
         supply_curves_interone = expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
@@ -164,6 +166,7 @@ rule model_trade:
         steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore = "../resources/ironore_production_clustered.csv",
         grid_potential = "../data/grid_potential_custom.csv",
+        wacc = "../resources/wacc-clustered.csv",
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
