@@ -4,7 +4,7 @@ enable:
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
-demand_factors: [0.001, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.1, 1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+demand_factors: [0.01, 0.1, 10, 50] 
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
@@ -16,48 +16,14 @@ run:
   #   file: config/scenarios.yaml
   disable_progressbar: false
 
+# Region definitions
+regions:
+  "Test_1": ["Netherlands"]
+  "Test_2": ["Portugal"]
+  "Test_3": ["Ireland"]
 
 scenario: # must be listed in config/trade_scenarios.csv in order to run
   default:
-      modifiers:
-        cost_penalty:
-  penalty-nwa:
-    modifiers:
-      cost_penalty:
-        North_West_Africa: 1.1
-  penalty-ea:
-    modifiers:
-      cost_penalty:
-        Eurasia: 1.1
-  penalty-sa:
-    modifiers:
-      cost_penalty:
-        South_America: 0.7
-  penalty-oc:
-    modifiers:
-      cost_penalty:
-        Oceania: 0.8
-  mga-eur-nwa-2:
-    modifiers:
-      cost_penalty:
-      mga:
-        slack: 0.002
-        sense: "min"
-        # link_idx: "shipping hbi North_West_Africa-Europe"
-        carrier: "hbi"
-        export: "North_West_Africa_hbi"
-        import: "Europe"
-  mga-nwa-iso:
-    modifiers:
-      cost_penalty:
-      mga:
-        slack: 0.01
-        sense: "min"
-        carrier: "hbi"
-        export: "North_West_Africa_hbi"
-        import: None
-
-
 
 design:
   cost_penalty:
@@ -70,11 +36,6 @@ costs:
   version: v0.12.0
 
 interest_rate: 0.07
-
-grid_electricity:
-  marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
-  capital_cost: 0 # EUR/MW, guesstimate for average grid electricity cost in 2030
-  grid_potential_custom: true # Use custom grid potential for eaf-grid from data/grid_potential_custom.csv in Mt steel
 
 part_load:
   electrolysis: 0.0
@@ -107,6 +68,7 @@ plot:
     steel:
       bus_size: 1.0e-7
       link_width: 1.5e-8
+
   colors:
     steel: 'grey'
     steel_shipping: 'darkgrey'
@@ -124,26 +86,6 @@ plot:
     hbi_demand: 'green'
     hbi_supply: 'darkred'
     hbi_link: 'firebrick'
-
-# Region definitions
-regions:
-  "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "North Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
-  "Far_West_Europe": ["France", "Greenland", "Iceland", "Ireland", "Portugal", "Spain", "United Kingdom"]
-  "Middle_East": ["Bahrain", "Iran, Islamic Republic of", "Iraq","Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "United Arab Emirates",
-   "Yemen"]
-  "North_West_Africa": ["Benin", "Burkina Faso", "Côte d'Ivoire", "Gambia", "Ghana", "Guinea", "Guinea-Bissau", "Liberia", "Nigeria", "Senegal", "Sierra Leone", "Togo + Algeria", "Chad", "Egypt", "Eritrea", "Libya", "Mali", "Mauritania", "Morocco", "Niger", "Sudan", "Tunisia", "Western Sahara"]
-  "Subsaharan_Africa": ["Angola", "Botswana", "Burundi", "Cameroon", "Central African Republic", "Democratic Republic of the Congo", "Ethiopia", "Kenya", "Gabon", "Madagascar", "Malawi", "Mozambique", "Namibia", "Republic of the Congo", "Rwanda", "Somalia", "South Africa", "South Sudan", "Tanzania", "Uganda", "Zambia", "Zimbabwe"]
-  "North_America": ["Canada", "United States"]
-  "Eurasia": ["Armenia", "Azerbaijan", "Georgia", "Kazakhstan", Kyrgyzstan, "Tajikistan", "Turkmenistan", "Uzbekistan", "Russian Federation"]
-  "South_America": ["Bolivia", "Brazil", "Colombia", "Ecuador", "Equatorial French Guiana", "Guyana", "Paraguay", "Peru", "Suriname","Venezuela"]
-  "South_South_America": ["Argentina", "Chile", "Uruguay"]
-  "Central_America": ["Costa Rica", El Salvador, "Guatemala", "Honduras", "Mexico", "Nicaragua", "Panama"]
-  "West_Asia": ["Afghanistan", "Bangladesh", "Bhutan", "India", "Nepal", "Pakistan", "Sri Lanka"]
-  "East_Asia": ["China", "Hong Kong", "Mongolia", "Taiwan"]
-  "Pacific_Asia": ["Brunei", "Cambodia", "Indonesia", "Laos", "Malaysia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam"]
-  "East_East_Asia": ["Japan", "South Korea"]
-  "Oceania": ["Australia", "New Zealand"]
-
 
 solver:
     name: gurobi
