@@ -15,7 +15,9 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def download_tech_database(version: str, output_path: str, disable_progress: bool = False) -> None:
+def download_tech_database(
+    version: str, output_path: str, disable_progress: bool = False
+) -> None:
     """Download PyPSA technology-data from GitHub. Supports standard versions or custom paths."""
     from _helpers import progress_retrieve
 
@@ -58,7 +60,9 @@ def get_tech_param(
         return tech_params.loc[param_name]
     except KeyError:
         if default is not None:
-            logger.warning(f"Parameter '{param_name}' not found, using default: {default}")
+            logger.warning(
+                f"Parameter '{param_name}' not found, using default: {default}"
+            )
             return default
         raise
 

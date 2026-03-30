@@ -9,6 +9,29 @@ from shutil import copyfile, move
 # HTTP = HTTPRemoteProvider()
 sys.path.append("./scripts")
 
+# ============================================================================
+# FILE DELETION STRATEGY (Development vs Production)
+# ============================================================================
+# During development: ALL outputs are kept for validation, debugging, and
+# iterative refinement.
+#
+# Post-development cleanup (marked with [DELETION FLAG]):
+#   - steel_skeleton_{cost_year}.nc          [~500 KB]: Fast to regenerate (<1 min)
+#   - network_{1,10,50}.nc per region        [~50-100 MB]: Intermediate solver states, for debugging
+#   - {region}_{product}_nodemand.csv        [~10 KB]: Reference copy of supply curve before local demand subtraction
+#
+# ALWAYS KEEP:
+#   - results_{1,10,50}.csv per region       [~50 KB]: Expensive to regenerate (~20 min)
+#   - {region}_{product}.csv                 [~10 KB]: Final supply curves→model_trade input
+#   - {region}_{product}.pdf                 [~200 KB]: Low cost, high validation value
+#   - base_{cost_year}_{region}_{product}.nc [~10-20 MB]: Good checkpoint, medium regen cost
+#
+# Once finalized, add a cleanup rule that:
+#   1. Checks if all expected outputs exist
+#   2. Deletes flagged files only after final rule completes
+#   3. Preserves audit trail in .audit_{} JSON files
+# ============================================================================
+
 # Read scenario definitions to construct wildcard and instance patterns from them
 trade_scenarios = Paramspace(pd.read_csv("../config/trade_scenarios.csv", dtype=str))
 
@@ -32,7 +55,7 @@ rule retrieve_cost_data:
     retries: 2
     threads: 2
     script:
-        "scripts/retrieve_cost_data.py"
+        "scripts/tech_database.py"
 
 
 # Prepare the trace file prior to running the model
@@ -46,6 +69,66 @@ rule retrieve_trace_steel:
     threads: 2
     run:
         copyfile(input[0], output[0])
+
+
+# Build steel supply chain technology skeleton
+rule build_steel_skeleton:
+    input:
+        costs="../resources/technology_data/costs_{cost_year}.csv",
+    output:
+        # [DELETION FLAG] Post-development: can regenerate in <1 min if needed
+        # Keep during development for checkpoint validation
+        skeleton="../resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
+    resources:
+        mem_mb=2000,
+    threads: 1
+    script:
+        "scripts/build_x_supply_chain.py"
+
+
+# Prepare regional PyPSA network with renewable generators and product-specific cutoff
+rule prepare_regional_network:
+    """
+    Prepare regional PyPSA network with renewable generators and supply chain configuration.
+    
+    One-time setup per region × product combination:
+    - Load skeleton supply chain network (technology-agnostic)
+    - Add renewable generators for region (filtered by ISO3)
+    - Apply product-specific supply chain cutoff (h2/hbi/steel)
+    
+    Key Efficiency Gain:
+    - All renewable processing happens ONCE per region
+    - Output ("base_network") reused for all demand_factors in calculate_lcox
+    - Eliminates redundant loading/filtering in calculate_lcox
+    """
+    
+    message:
+        "Preparing regional network for {wildcards.region} → {wildcards.product} "
+        "(cost_year={wildcards.cost_year})"
+    
+    input:
+        skeleton="../resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
+        clusters_timeseries="../data/renewable_clusters.nc",
+        costs="../resources/technology_data/costs_{cost_year}.csv"
+    
+    output:
+        # KEEP: Good checkpoint, medium regen cost (~2-3 min per region)
+        base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
+        audit="../resources/networks/.audit_{cost_year}_{region}_{product}.json"
+    
+    params:
+        config=config
+    
+    threads: 2
+    
+    resources:
+        mem_mb=4000
+    
+    log:
+        "../logs/prepare_regional_network_{cost_year}_{region}_{product}.log"
+    
+    script:
+        "scripts/prepare_regional_network.py"
 
 
 if config["enable"].get("run_supply_chain", True):
@@ -64,15 +147,14 @@ if config["enable"].get("run_supply_chain", True):
         script:
             "scripts/model_lcoh.py"
 
-    rule model_lcox:
+    rule calculate_regional_lcox:
         message:
-            "Calculating the LCoX of {wildcards.product} for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum product potential."
-        params:
-            interest_rate=config["interest_rate"],
+            "Calculating LCoX for {wildcards.product} in region {wildcards.region} "
+            "(demand_factor={wildcards.demand_factor}%)."
         input:
-            supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
-            costs = "../resources/technology_data/costs_{cost_year}.csv",
-            trace = "../resources/trace/steel_{cost_year}.nc"
+            base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
+            steel_demand="../resources/steel_production_clustered.csv",
+            local_demand="../data/un_enerdata_demand_2050_final.csv"
         output:
             results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
             network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
@@ -80,7 +162,7 @@ if config["enable"].get("run_supply_chain", True):
         resources:
             mem_mb=8000,
         script:
-            "scripts/model_lcox.py"
+            "scripts/calculate_lcox.py"
     
 
 # Read all the individual LCoH values for one region and combine them into a supply curve
@@ -89,18 +171,22 @@ if config["enable"].get("run_supply_chain", True):
 if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         message:
-            "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
+            "Combining LCo{wildcards.product[0]} results (all demand factors) to create supply curve for {wildcards.region}."
         input:
+            # Reference results from calculate_regional_lcox (uses demand_factor as 1, 10, 50 format)
             lco_product_data = lambda wildcards: expand(
                 f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
-                demand_factor=config["demand_factors"],
-                allow_missing=True
+                demand_factor=[int(d*100) for d in config["demand_factors"]]
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
-            steel_demand = "../resources/steel_production_clustered.csv", # TODO fully integrate in workflow
+            steel_demand = "../resources/steel_production_clustered.csv",
         output:
+            # KEEP: Final supply curve input to model_trade (required)
             supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
+            # [DELETION FLAG] Post-development: supply_nodemand CSVs are reference copies for comparison only
+            # Keep during development for validation/debugging
             supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
+            # KEEP: PDF plots low disk cost, high validation value
             supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
         threads: 2
         script:

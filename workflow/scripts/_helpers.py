@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+
 def load_config(config):
     with open(config, "r") as stream:
         try:

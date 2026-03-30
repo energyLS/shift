@@ -1,6 +1,6 @@
 enable:
-  run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
+  run_supply_chain: True # Enable for first run
+  run_supply_curve: True # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -16,11 +16,11 @@ run:
   #   file: config/scenarios.yaml
   disable_progressbar: false
 
-# Region definitions
+# Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
-  "Test_1": ["Netherlands"]
-  "Test_2": ["Portugal"]
-  "Test_3": ["Ireland"]
+  "Test_1": ["NLD"]
+  "Test_2": ["PRT"]
+  "Test_3": ["IRL"]
 
 scenario: # must be listed in config/trade_scenarios.csv in order to run
   default:
@@ -33,9 +33,13 @@ design:
     # Oceania: 0.8
 
 costs:
-  version: v0.12.0
+  version: v0.14.0
 
-interest_rate: 0.07
+interest_rate: 
+  default: 0.07
+  "Test_1": 0.05
+  "Test_2": 0.06
+  
 
 part_load:
   electrolysis: 0.0

@@ -125,7 +125,6 @@ def create_supply_curve():
     )
 
     if product == "hydrogen":
-
         final_demand = get_final_demand(snakemake.wildcards["region"])
         plt.axvline(
             x=final_demand.values[0] / (1e6), linestyle="-", label="final energy demand"
@@ -158,7 +157,6 @@ def create_supply_curve():
 
 
 if __name__ == "__main__":
-
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 

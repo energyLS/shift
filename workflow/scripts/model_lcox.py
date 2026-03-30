@@ -185,12 +185,10 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
     n = remove_shipping_importer_components(n)
 
     if product == "steel":
-
         # p_set unit in MW
         n.add("Load", "load", bus="steel (exp)", carrier="steel", p_set=load)
 
     elif product == "hbi":
-
         # Remove steel components from the network
         n.remove(
             "Link",
@@ -209,7 +207,6 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
         )
 
     elif product in ["eaf", "eaf-grid"]:
-
         # Remove components up to hbi and leave eaf/steel components
         n.remove(
             "Link",
@@ -354,7 +351,7 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
     load = max_load * (float(snakemake.wildcards["demand_factor"]) / 100)
 
     print(
-        f"max load hydrogen, (solar+onwind corrected)/{snakemake.config["electricity_steel_ratio"]}: {max_load:.1f}"
+        f"max load hydrogen, (solar+onwind corrected)/{snakemake.config['electricity_steel_ratio']}: {max_load:.1f}"
     )
     print(f"load steel with demand factor: {load:.1f}")
 
@@ -363,22 +360,18 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
 
 def adjust_part_load(n):
 
-    print(f"adjusting part-load limits for {snakemake.config["part_load"].keys()}")
+    print(f"adjusting part-load limits for {snakemake.config['part_load'].keys()}")
 
     for carrier in snakemake.config["part_load"].keys():
-
         n.links.loc[
             n.links.carrier == carrier,
             "p_min_pu",
-        ] = snakemake.config[
-            "part_load"
-        ][carrier]
+        ] = snakemake.config["part_load"][carrier]
 
     return n
 
 
 if __name__ == "__main__":
-
     if "snakemake" not in globals():
         from _helpers import mock_snakemake
 
