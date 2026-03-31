@@ -111,6 +111,16 @@ def building_model(
             * snakemake.config["iron_ore"]["potential_allowance"]
         )  # Limit in t_ore
 
+        # Get iron ore cost: regional or uniform
+        if regionalise == "grade-dependent":
+            iron_ore_cost = iron_ore.loc[iron_ore["region"] == region_name][
+                "IronOreEur/t_ironore"
+            ].values[0]
+        elif regionalise == "uniform":
+            iron_ore_cost = snakemake.config["iron_ore"]["marginal_cost"]
+        else:
+            ValueError("Invalid option for iron ore regionalisation. Choose 'grade-dependent' or 'uniform'.")
+
         n.add(
             "Generator",
             "{}_ore".format(region_name),
@@ -118,7 +128,7 @@ def building_model(
             carrier="iron_ore",
             p_nom_extendable=True,
             p_nom_max=iron_ore_limit,  # t_ore
-            marginal_cost=snakemake.config["iron_ore"]["marginal_cost"],  # EUR/t_ore
+            marginal_cost=iron_ore_cost,  # EUR/t_ore
             capital_cost=1 / 1000,  # to prevent optimisation shenanigans
         )
 
@@ -710,11 +720,11 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "model_trade",
-            cost_year="2030",
+            cost_year="2050",
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="mga-nwa-iso",
+            scenario="default",
         )
 
     final = snakemake.wildcards["final"]
@@ -748,6 +758,9 @@ if __name__ == "__main__":
         bus_locations["region_name"].isin(regions)
     ].reset_index(drop=True)
     iron_ore = iron_ore[iron_ore["region"].isin(regions)].reset_index(drop=True)
+
+    # Get iron ore cost option: grade-dependent (regional) or uniform
+    regionalise = snakemake.config["iron_ore"]["regionalise"]
 
     if final == "steel":
 
