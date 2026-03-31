@@ -16,6 +16,8 @@ run:
   #   file: config/scenarios.yaml
   disable_progressbar: false
 
+trade:
+  diversity_factor: 1 # "False" or Max constraint in float for one single hbi supplier in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supplier, etc.
 
 scenario: # must be listed in config/trade_scenarios.csv in order to run
   default:
