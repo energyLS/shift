@@ -76,6 +76,18 @@ rule retrieve_iron_ore:
         "notebooks/global-iron-ore.ipynb"
 
 
+rule prepare_iron_ore:
+    input:
+        iron_ore = "../resources/ironore-production.csv",
+        bus_locations = "../data/bus_locations.csv",
+    output:
+        iron_ore = "../resources/ironore_production_clustered.csv",
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        "notebooks/prepare-iron-ore.ipynb"
+
 
 rule prepare_steel_demand:
     input:
