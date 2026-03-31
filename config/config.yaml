@@ -89,7 +89,8 @@ pv_p_nom_max_cor: 0.1
 onwind_p_nom_max_cor: 0.1
 
 iron_ore:
-  marginal_cost: "grade-dependent" #97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
+  regionalise: "grade-dependent" #"uniform" or "grade-dependent"
+  marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
