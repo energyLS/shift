@@ -68,6 +68,7 @@ design:
 
 costs:
   version: v0.12.0
+  eur_usd: 1.15 # 1 Euro equals 1.15 USD
 
 interest_rate: 0.07
 
