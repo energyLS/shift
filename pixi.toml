@@ -94,7 +94,7 @@ dev = { features = ["dev", "test", "docs"], solve-group = "default" }
 
 [tool.ruff]
 # Ruff linter configuration
-line-length = 88
+line-length = 120
 target-version = "py310"
 exclude = ["**/*.ipynb"]
 
