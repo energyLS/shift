@@ -3,8 +3,11 @@ enable:
   run_supply_curve: True # Enable for first run
 
 
-# Different demand factors of maximum hydrogen potential as demand in [%]
-demand_factors: [0.01, 0.1, 10, 50] 
+# Absolute steel demand levels (Mt/year) for supply curve sweep
+# For each level, PyPSA minimizes cost with fixed renewable capacity
+# Values represent different production scales
+steel_demand_levels: [10, 50, 100]  # Mt/year
+compute_iis: false  # Set to false to skip expensive IIS computation for infeasible models
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
@@ -36,7 +39,7 @@ costs:
   version: v0.14.0
 
 interest_rate: 
-  default: 0.07
+  default: 0.05
   "Test_1": 0.05
   "Test_2": 0.06
   
@@ -92,9 +95,8 @@ plot:
     hbi_link: 'firebrick'
 
 solver:
-    name: gurobi
-    options: gurobi-default
-
+  name: gurobi
+  options: gurobi-default
 solver_options:
     highs-default:
       # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
@@ -154,4 +156,3 @@ colors:
   Pacific_Asia:         '#AF7AC5'  # lavender
   East_East_Asia:       '#922B21'  # dark red
   Oceania:              '#1F618D'  # steel blue
-

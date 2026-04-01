@@ -1,9 +1,8 @@
 import pandas as pd
-
 import matplotlib
+import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 
 
 def get_steel_demand(region):
@@ -31,7 +30,8 @@ def create_supply_curve():
     all_files = snakemake.input.lco_product_data
     print("files to merge:", all_files)
 
-    df_from_each_file = (pd.read_csv(f, sep=",", index_col=0) for f in all_files)
+    # load input lco csvs as regular data frames (demand is a column, not index)
+    df_from_each_file = (pd.read_csv(f, sep=",") for f in all_files)
     df_merged = pd.concat(df_from_each_file, ignore_index=True)
     df_sub = df_merged.copy()
     print("merged file has been created")
@@ -171,10 +171,10 @@ if __name__ == "__main__":
     if product == "hydrogen":
         columns = {
             "demand factor": "demand factor [%]",
-            "demand": "demand [MWh]",
+            "demand": "demand [t]",
             "load": "load [MW]",
             "total cost": "cost [EUR]",
-            "cost per unit": "LCOH [EUR/MWh]",
+            "cost per unit": "lcox [EUR/MWh]",
             "xlabel": "Demand in TWh",
             "product_unit": "MWh",
             "ylim": (0, 100),
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             "demand": "demand [t]",
             "load": "load [t/h]",
             "total cost": "cost [EUR]",
-            "cost per unit": "LCOX [EUR/t]",
+            "cost per unit": "lcox [EUR/t]",
             "xlabel": "Demand in Mt",
             "product_unit": "t",
             "ylim": (0, 900),

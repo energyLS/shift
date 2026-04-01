@@ -1,106 +1,73 @@
 """
-Calculate regional Levelized Cost of X (LCOX) for multiple demand factors.
+Calculate regional Levelized Cost of X (LCOX) for a single steel demand level.
 
-Optimized workflow (single network load, multiple constraint applications):
-  1. Load base_network ONCE (renewables + product already configured)
-  2. Load product-specific demands
-  3. For each demand_factor in config:
-     a. Copy network (in memory)
-     b. Apply renewable constraint (demand_factor-specific)
-     c. Add final loads
-     d. Solve optimization
-     e. Extract LCOX and save results_{demand_factor}.csv
-     f. Export solved network_{demand_factor}.nc
+Workflow (single fraction per invocation):
+  1. Load base_network (renewables + product already configured)
+  2. Load product-specific demands and scale by fraction
+  3. Apply renewable constraint (highest-CF blocked for local demand)
+  4. Add final loads based on scaled demand
+  5. Solve optimization
+  6. Extract LCOX and save results_{fraction}.csv
+  7. Export solved network_{fraction}.nc
 
-Efficiency: Load base_network once, loop through constraints (not N separate calls)
+Parallelization: Each fraction is a separate Snakemake job, enabling parallel execution.
 
 Inputs (from Snakemake):
   - base_network: PyPSA network with renewables, prepared per region (netCDF)
   - steel_demand: Regional steel demand [Mt/year] (CSV)
-  - local_demand: Regional local electricity demand [TWh/year] (CSV)
+  - local_demand: Regional local electricity demand [MWh/year] (CSV)
 
-Outputs (generated for each demand_factor):
-  - results_{demand_factor}.csv: LCOX point
-  - network_{demand_factor}.nc: Optimized network
+Outputs (generated for each fraction):
+  - results_{fraction}.csv: LCOX point for that demand level
+  - network_{fraction}.nc: Optimized network
 """
 
 import logging
+import os
 from pathlib import Path
 import pypsa
 import pandas as pd
 import numpy as np
 
+# ============================================================================
+# LOGGING SETUP
+# ============================================================================
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# ============================================================================
-# NETWORK FIX (pandas/xarray compatibility)
-# ============================================================================
+# Create logs directory if it doesn't exist
+log_dir = Path("../logs")
+log_dir.mkdir(parents=True, exist_ok=True)
 
-
-def load_network_with_string_fix(filepath):
-    """Load PyPSA network and convert ArrowStringArray to object dtype.
-
-    PyPSA 1.1.2 + xarray 2026.2.0 conflict: Force object dtype on string columns.
-    """
-    network = pypsa.Network(filepath)
-    network.name = f"Loaded-{Path(filepath).stem}"
-
-    # Convert ArrowStringArray to object dtype for all component dataframes
-    for component_name in [
-        "buses",
-        "generators",
-        "links",
-        "stores",
-        "lines",
-        "transformers",
-    ]:
-        df = getattr(network, component_name, None)
-        if df is not None and not df.empty:
-            for col in df.select_dtypes(include=["string"]).columns:
-                df[col] = df[col].astype("object")
-            if hasattr(df.index, "dtype") and df.index.dtype.name == "string":
-                df.index = df.index.astype("object")
-
-    return network
-
+# Add file handler (writes to ../logs/calculate_lcox.log)
+file_handler = logging.FileHandler(log_dir / "calculate_lcox.log")
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
 
 # ============================================================================
 # DEMAND LOADING
 # ============================================================================
 
 
-def load_demands_for_region(region, product, config):
-    """Load product-specific demands for region.
+def load_demands_for_region(region, config):
+    """Load local electricity demand for region.
 
     Returns dict with:
-      - steel_demand_mt: Mt/year
-      - steel_demand_mwh_per_h: MWh/h average
-      - local_el_demand_mwh: TWh/year (if available for constraint calculation)
+      - local_el_demand_mwh: MWh/year (for renewable constraint calculation)
+    
+    Note: steel_demand_mt is passed directly from Snakemake params, not loaded from file
     """
-    # Load steel production demand (if applicable for this product)
-    if product in ["steel", "hbi", "eaf", "eaf-grid"]:
-        try:
-            steel_df = pd.read_csv(snakemake.input.steel_demand)
-            # Find row matching region (case-insensitive)
-            region_mask = steel_df["region"].str.lower() == region.lower()
-            if not region_mask.any():
-                raise ValueError(f"Region '{region}' not found in steel demand data")
-            steel_demand_mt = steel_df[region_mask]["SteelProductionMt"].values[0]
-        except Exception as e:
-            logger.warning(f"Could not load steel demand for {region}: {e}")
-            steel_demand_mt = 0
-    else:
-        steel_demand_mt = 0
-
     # Load local electricity demand (for renewable constraint calculation)
     try:
         local_df = pd.read_csv(snakemake.input.local_demand)
         region_mask = local_df["region"].str.lower() == region.lower()
         if region_mask.any():
-            local_el_demand_mwh = local_df[region_mask]["demand"].values[
-                0
-            ]  # Already in MWh
+            total_energy_mwh = local_df[region_mask]["demand"].values[0]  # MWh final energy
+            el_share = local_df[region_mask]["el_share"].values[0] / 100  # Convert % to fraction
+            local_el_demand_mwh = total_energy_mwh * el_share  # Apply electricity share
         else:
             logger.warning(f"Region '{region}' not found in local demand data")
             local_el_demand_mwh = 0
@@ -108,15 +75,7 @@ def load_demands_for_region(region, product, config):
         logger.warning(f"Could not load local demand for {region}: {e}")
         local_el_demand_mwh = 0
 
-    # Convert Mt/year to MWh/h (using regional electricity requirement)
-    # For steel: 5.25 MWh/t (from config)
-    electricity_per_steel_t = config.get("electricity_steel_ratio", 5.25)
-    steel_demand_mwh = steel_demand_mt * electricity_per_steel_t
-    steel_demand_mwh_per_h = steel_demand_mwh / 8760  # Annual → hourly average
-
     return {
-        "steel_demand_mt": steel_demand_mt,
-        "steel_demand_mwh_per_h": steel_demand_mwh_per_h,
         "local_el_demand_mwh": local_el_demand_mwh,
     }
 
@@ -126,24 +85,21 @@ def load_demands_for_region(region, product, config):
 # ============================================================================
 
 
-def apply_renewable_constraint(network, demand_factor, local_el_demand_mwh, config):
-    """Constrain electrolyzer capacity based on demand_factor.
-
-    NEW: Prioritize highest-CF renewables for local demand (least waste).
+def apply_renewable_constraint(network, local_el_demand_mwh, config):
+    """Block highest-CF renewables for local demand (priority mechanism).
 
     Logic:
-      1. Get all renewable generators with their timestep-averaged CF
-      2. Sort by average CF (descending) - highest first
+      1. Get all renewable generators with their average CF
+      2. Sort by average CF (descending) - highest quality first
       3. Accumulate capacity from highest CF until >= local_demand
       4. Block these generators for local demand (set p_nom_max=0)
-      5. Calculate remaining capacity available for steel
-      6. Apply demand_factor to remaining capacity
-      7. Constrain electrolyzer p_nom_max to this value
+      5. Remaining renewables available for steel production
+      
+    The load determines electrolyzer operation; no capacity constraint applied.
 
     Returns: audit dict with capacity breakdown and blocked generators
     """
     # Get all renewable generators (identified by name pattern "renewable_*")
-    # All generators produce electricity, so we filter by naming convention
     renewable_gens = network.generators[
         network.generators.index.str.startswith("renewable_")
     ]
@@ -202,11 +158,10 @@ def apply_renewable_constraint(network, demand_factor, local_el_demand_mwh, conf
     )
 
     # ====== STEP 3: Block highest-CF generators for local demand ======
-    # Convert annual local demand to hourly average [MWh/year] → [MW]
-    local_el_demand_mwh / 8760  # Hourly average power needed
 
     capacity_accumulated = 0  # Track cumulative capacity factor contribution
     generators_for_local = []
+    
 
     for gen_info in gen_cf_data:
         if capacity_accumulated >= local_el_demand_mwh:
@@ -263,24 +218,11 @@ def apply_renewable_constraint(network, demand_factor, local_el_demand_mwh, conf
         f"Remaining renewable capacity for steel: {total_remaining_capacity:.1f} MW"
     )
 
-    # ====== STEP 5: Apply demand_factor constraint ======
-    available_for_steel = total_remaining_capacity * (demand_factor / 100.0)
-
-    # ====== STEP 6: Constrain electrolyzer ======
-    if "electrolyzer" in network.links.index:
-        network.links.at["electrolyzer", "p_nom_max"] = available_for_steel
-        logger.info(
-            f"Constrained electrolyzer p_nom_max to {available_for_steel:.1f} MW "
-            f"(demand_factor={demand_factor}%)"
-        )
-    else:
-        logger.warning("Electrolyzer not found in network links")
-
     return {
         "total_renewable_capacity_mw": total_renewable_capacity,
         "capacity_for_local_demand_mw": capacity_accumulated
         / 8760,  # Convert back to MW
-        "capacity_available_for_steel_mw": available_for_steel,
+        "capacity_available_for_steel_mw": total_remaining_capacity,
         "generators_blocked_for_local_demand": [
             g["gen_name"] for g in generators_for_local
         ],
@@ -294,114 +236,277 @@ def apply_renewable_constraint(network, demand_factor, local_el_demand_mwh, conf
 
 
 def add_loads_to_network(network, product, demands):
-    """Store cumulative annual demand for flexible constraint injection.
+    """Add hourly Load components for fixed product demand.
 
-    Rather than adding hourly Load components (which force rigid patterns),
-    we store annual demand and inject it as a constraint during solve().
-    This allows the network to decide flexibly WHEN to produce.
+    Converts annual demand to hourly load: hourly_load = annual_demand / 8760
+    This represents a constant hourly demand throughout the year.
     """
 
     if product == "steel":
         bus_name = "steel"
-        annual_steel_t = demands["steel_demand_mt"] * 1000
-        annual_demand_units = annual_steel_t
-        unit_str = "t"
+        # Steel is measured in t/year, convert to t/h (hourly)
+        hourly_demand_t = demands["steel_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        unit_str = "t/h"
 
     elif product == "hbi":
         bus_name = "hbi"
-        annual_hbi_t = demands["steel_demand_mt"] * 1000
-        annual_demand_units = annual_hbi_t
-        unit_str = "t"
+        # HBI is measured in t/year, convert to t/h (hourly)
+        hourly_demand_t = demands["steel_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        unit_str = "t/h"
 
     elif product == "h2":
         bus_name = "hydrogen"
-        annual_demand_units = demands["steel_demand_mwh_per_h"] * 8760
-        unit_str = "MWh"
+        # H2 is measured in MWh/year, convert to MW (hourly average)
+        hourly_demand_mwh = demands["steel_demand_mwh_per_h"]  # Already hourly average
+        unit_str = "MW"
 
     elif product in ["eaf", "eaf-grid"]:
         bus_name = "steel"
-        annual_steel_t = demands["steel_demand_mt"] * 1000
-        annual_demand_units = annual_steel_t
-        unit_str = "t"
+        # Steel is measured in t/year, convert to t/h (hourly)
+        hourly_demand_t = demands["steel_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        unit_str = "t/h"
 
     else:
         raise ValueError(f"Product '{product}' not recognized")
 
     if bus_name not in network.buses.index:
         raise ValueError(f"Bus '{bus_name}' not found in network")
+    
+    # Add constant hourly load to the bus
+    load_name = f"{product}_demand"
+    if product == "h2":
+        p_set = hourly_demand_mwh
+    else:
+        p_set = hourly_demand_t
 
-    # Store as network parameter for constraint injection in solve()
-    network.annual_demand = {
-        "product": product,
-        "bus": bus_name,
-        "total_units": annual_demand_units,
-        "unit": unit_str,
-    }
+    network.add(
+        "Load",
+        load_name,
+        bus=bus_name,
+        p_set=p_set,  # Constant hourly demand
+    )
+
+    # For steel/HBI: set HBI storage initial energy to 24 hours of hourly load
+    if product.lower() in ["steel", "hbi"]:
+        if "hbi_storage" in network.stores.index:
+            hbi_e_initial = 24 * hourly_demand_t  # 24 hours of buffer
+            network.stores.at["hbi_storage", "e_initial"] = hbi_e_initial
+            logger.info(f"Set HBI storage e_initial to {hbi_e_initial:.2f} t (24h buffer for {hourly_demand_t:.4f} t/h demand)")
 
     logger.info(
-        f"Stored cumulative {product} demand: {annual_demand_units:.1f} {unit_str}/year (flexible timing)"
+        f"Added hourly load for {product}: {load_name} = {p_set:.4f} {unit_str} (constant all hours)"
     )
 
 
-# ============================================================================
-# SOLVER
-# ============================================================================
+def inspect_network(network, product):
+    """Print network structure for debugging infeasibility."""
+    logger.info("\n" + "="*80)
+    logger.info("NETWORK INSPECTION - Connectivity & Status")
+    logger.info("="*80)
+    
+    logger.info(f"Buses ({len(network.buses)}): {list(network.buses.index)}")
+    logger.info(f"\nLoads ({len(network.loads)}):")
+    for load_name, load_row in network.loads.iterrows():
+        logger.info(f"  {load_name:30s} -> bus={load_row['bus']:15s} p_set={load_row['p_set']:.1f}")
+    
+    logger.info(f"\nLinks ({len(network.links)}):")
+    for link_name, link_row in network.links.iterrows():
+        logger.info(f"  {link_name:15s}: {link_row['bus0']:12s} -> {link_row['bus1']:12s}  p_nom_ext={link_row['p_nom_extendable']} p_nom_max={link_row['p_nom_max']:.0e}")
+    
+    logger.info(f"\nStores ({len(network.stores)}):")
+    for store_name, store_row in network.stores.iterrows():
+        logger.info(f"  {store_name:20s} -> {store_row['bus']:15s}")
+    
+    # Check isolated buses
+    all_buses = set(network.buses.index)
+    connected = set(network.generators['bus'].unique()) | set(network.links['bus0'].unique()) | set(network.links['bus1'].unique()) | set(network.loads['bus'].unique()) | set(network.stores['bus'].unique())
+    isolated = all_buses - connected
+    if isolated:
+        logger.warning(f"⚠ Isolated buses: {isolated}")
+    logger.info("="*80 + "\n")
+
+
+def _convert_arrow_strings(network):
+    """Convert ArrowStringArray columns/indices to regular object dtype.
+    
+    Workaround for PyPSA incompatibility with pandas ArrowStringArray.
+    Uses PyPSA's component structure to properly access all dataframes.
+    Based on: https://github.com/PyPSA/PyPSA/issues/1585
+    """
+    for c in network.components:
+        df = c.static
+        if not df.empty:
+            # Convert index if it's ArrowStringArray
+            if isinstance(df.index.values, pd.arrays.ArrowStringArray):
+                c.static.index = pd.Index(df.index.astype(object))
+            # Convert columns if they're ArrowStringArray
+            for col in df.columns:
+                if isinstance(df[col].values, pd.arrays.ArrowStringArray):
+                    c.static[col] = df[col].astype(object)
+        # Convert time-varying data
+        for key in c.dynamic:
+            dyn_df = c.dynamic[key]
+            if isinstance(dyn_df, pd.DataFrame) and not dyn_df.empty:
+                # Convert column index if it's ArrowStringArray
+                if isinstance(dyn_df.columns.values, pd.arrays.ArrowStringArray):
+                    c.dynamic[key].columns = pd.Index(dyn_df.columns.astype(object))
+
+
+def _convert_bool_attrs_to_int(network):
+    """Convert boolean attributes to integers for netCDF4 compatibility.
+    
+    netCDF4 does not support boolean types for attributes.
+    Convert True -> 1, False -> 0.
+    """
+    # PyPSA uses either .attrs or internal _attrs depending on version
+    attr_container = None
+    if hasattr(network, 'attrs'):
+        attr_container = network.attrs
+    elif hasattr(network, '_attrs'):
+        attr_container = network._attrs
+
+    if attr_container is None:
+        logger.warning("Network object has no attribute container for attrs")
+        return
+
+    for key, value in list(attr_container.items()):
+        if isinstance(value, (bool, np.bool_)):
+            attr_container[key] = int(value)
+
+
+def _compute_infeasibility_diagnostics(network, output_dir):
+    """Compute infeasibility diagnostics for an infeasible network and write IIS if available."""
+
+    # Attempt to run linopy infeasibility diagnostics
+    if hasattr(network.model, 'compute_infeasibilities'):
+        try:
+            infeasible_labels = network.model.compute_infeasibilities()
+            logger.info(f"Linopy compute_infeasibilities() returned {len(infeasible_labels)} entries")
+        except Exception as e:
+            logger.warning(f"Could not compute linopy infeasibilities: {e}")
+            infeasible_labels = None
+    else:
+        logger.warning("Network model does not support compute_infeasibilities()")
+        infeasible_labels = None
+
+    # Write IIS from backend Gurobi model if available
+    gurobi_model = None
+    if hasattr(network.model, 'backend') and hasattr(network.model.backend, 'model'):
+        gurobi_model = network.model.backend.model
+
+    if gurobi_model is not None:
+        try:
+            if hasattr(gurobi_model, 'computeIIS'):
+                try:
+                    gurobi_model.computeIIS()
+                    logger.info("Gurobi IIS computed")
+                except Exception as iis_err:
+                    logger.warning(f"Could not compute IIS on Gurobi model: {iis_err}")
+
+            model_ilp_path = os.path.join(output_dir, f"infeasibility_{network.name}.ilp")
+            gurobi_model.write(model_ilp_path)
+            logger.info(f"IIS .ilp written to: {model_ilp_path}")
+
+            for c in gurobi_model.getConstrs():
+                if c.IISConstr:
+                    logger.info(f"IIS constraint: {c.ConstrName}")
+            for v in gurobi_model.getVars():
+                if v.IISLB or v.IISUB:
+                    logger.info(f"IIS var: {v.VarName} IISLB={v.IISLB} IISUB={v.IISUB}")
+        except Exception as ilp_err:
+            logger.warning(f"Could not write IIS .ilp: {ilp_err}")
+    else:
+        logger.warning("Gurobi backend model not available for IIS .ilp write")
+
+    # Write text infeasibility report if available
+    if infeasible_labels:
+        if hasattr(network.model, 'format_infeasibilities'):
+            try:
+                infeas_report = network.model.format_infeasibilities()
+            except Exception as e:
+                infeas_report = f"format_infeasibilities failed: {e}"
+        elif hasattr(network.model, 'print_infeasibilities'):
+            try:
+                import io
+                import sys
+                _buf = io.StringIO()
+                _old_stdout = sys.stdout
+                sys.stdout = _buf
+                network.model.print_infeasibilities()
+                sys.stdout = _old_stdout
+                infeas_report = _buf.getvalue()
+            except Exception as pi_err:
+                sys.stdout = _old_stdout
+                logger.warning(f"Could not run print_infeasibilities(): {pi_err}")
+                infeas_report = "Infeasible constraints identified, but could not capture output of print_infeasibilities()."
+        else:
+            infeas_report = "Infeasible constraints identified, but format_infeasibilities() and print_infeasibilities() are unavailable."
+
+        infeas_path = os.path.join(output_dir, f"infeasibilities_{network.name}.txt")
+        with open(infeas_path, 'w', encoding='utf-8') as f:
+            f.write(f"Infeasible constraints for network {network.name}:\n")
+            f.write("=" * 80 + "\n\n")
+            f.write(infeas_report)
+        logger.info(f"Infeasibility report written to: {infeas_path}")
+    else:
+        logger.warning("Model is infeasible but no specific constraints identified")
 
 
 def solve_network(network, config):
-    """Solve the PyPSA optimization with cumulative annual demand constraint.
+    """Solve the PyPSA optimization with hourly fixed demand.
 
-    The constraint enforces: sum of production over all hours >= annual_demand
-    This allows the network to decide flexibly WHEN to produce (not fixed hourly).
+    The network has hourly Load components with constant p_set.
+    Solver minimizes cost to satisfy these fixed hourly demands.
     """
+    # Convert arrow strings to regular strings before optimization
+    _convert_arrow_strings(network)
+    
     solver_name = config.get("solver", {}).get("name", "glpk")
     solver_options = config.get("solver_options", {}).get(
         config.get("solver", {}).get("options", "default"), {}
     )
 
     logger.info(f"Solving network with {solver_name}...")
+    logger.info(f"Solver options: {solver_options}")
+    
+    # Add output logging for Gurobi to see what's happening
+    if solver_name.lower() == "gurobi" and "OutputFlag" not in solver_options:
+        solver_options = {**solver_options, "OutputFlag": 1}  # Enable Gurobi output
 
-    # Define constraint injection function (called after model building)
-    def add_annual_constraint(network, snapshots):
-        if not hasattr(network, "annual_demand"):
-            return
-
-        demand_info = network.annual_demand
-        bus_name = demand_info["bus"]
-        annual_demand = demand_info["total_units"]
-
-        # Find generators connected to demand bus
-        gens_on_bus = network.generators[network.generators["bus"] == bus_name].index
-
-        if len(gens_on_bus) == 0:
-            logger.warning(f"No generators on bus '{bus_name}' for annual constraint")
-            return
-
-        # Access PyPSA's linopy model variables
-        p_var = network.model["Generator-p"]  # Shape: (snapshot, generator)
-
-        # Sum generator output over all snapshots
-        total_output = p_var.loc[:, gens_on_bus].sum()
-
-        # Add constraint: total output >= annual demand
-        network.model.add_constraints(
-            total_output >= annual_demand, name=f"AnnualDemand_{bus_name}"
+    # Solve without constraint injection (hourly loads already in network)
+    try:     
+        status = network.optimize(
+            network.snapshots,
+            solver_name=solver_name,
+            solver_options=solver_options,
+            multi_investment_periods=False,
         )
 
-        logger.info(
-            f"✓ Constraint added: {bus_name} annual output >= {annual_demand:.0f} {demand_info['unit']}"
-        )
-
-    # Solve with constraint injection
-    network.optimize(
-        network.snapshots,
-        solver_name=solver_name,
-        solver_options=solver_options,
-        multi_investment_periods=False,
-        extra_functionality=add_annual_constraint,
-    )
-
-    logger.info("Network solved successfully")
+        logger.info(f"Optimization status: {status}")
+        
+        if status != 0:
+            logger.warning(f"Non-optimal status ({status})")
+            if network.objective is not None:
+                logger.info(f"  Objective value: {network.objective}")
+            else:
+                logger.warning("  Objective is None (no feasible solution found)")
+                logger.warning("Model is infeasible - check network structure and constraints")
+                
+                # Use linopy's built-in infeasibility diagnostics
+                if solver_name.lower() == "gurobi" and snakemake.params.compute_iis:
+                    try:
+                        output_dir = os.path.dirname(snakemake.output.network)
+                        _compute_infeasibility_diagnostics(
+                            network=network,
+                            output_dir=output_dir,
+                        )
+                    except Exception as iis_e:
+                        logger.warning(f"Could not compute infeasibilities: {iis_e}")
+                elif solver_name.lower() == "gurobi":
+                    logger.info("compute_iis flag false, skipping IIS diagnostics")
+    except Exception as e:
+        logger.error(f"Solver exception: {e}")
+        raise
 
     return network
 
@@ -411,23 +516,28 @@ def solve_network(network, config):
 # ============================================================================
 
 
-def extract_lcox(network, product, demands, renewable_constraint_info, demand_factor):
+def extract_lcox(network, product, demands):
     """Extract LCOX from optimized network.
 
-    Returns DataFrame with one row containing all results + audit columns.
+    Returns DataFrame with product-specific columns for supply curve.
     """
+    # Define product-specific column names
+    if product.lower() in ["steel", "hbi"]:
+        load_col = "load [t/h]"
+        cost_col = "lcox [EUR/t]"
+    elif product.lower() in ["h2"]:
+        load_col = "load [MW]"
+        cost_col = "lcox [EUR/MWh]"
+    else:
+        load_col = "load [per h]"
+        cost_col = "lcox [EUR/unit]"
+    
     results_df = pd.DataFrame(
         columns=[
-            "demand_factor [%]",
-            "demand [{}]".format("t" if product != "h2" else "MWh"),
-            "load [per h]",
+            "demand [t]",
+            load_col,
             "cost [EUR]",
-            "lcox [EUR/unit]",
-            "renewable_capacity_total_mw",
-            "renewable_capacity_for_local_mw",
-            "renewable_capacity_for_steel_mw",
-            "num_generators_blocked",
-            "status",
+            cost_col,
         ]
     )
 
@@ -436,70 +546,30 @@ def extract_lcox(network, product, demands, renewable_constraint_info, demand_fa
         if obj_value is None or np.isnan(obj_value):
             raise ValueError("Optimization failed to return valid objective")
 
-        demand_annual = (
-            demands["steel_demand_mt"]
-            if product != "h2"
-            else demands["steel_demand_mwh_per_h"] * 8760
-        )
-        lcox = obj_value / demand_annual if demand_annual > 0 else np.inf
+        demand_annual_t = demands["steel_demand_mt"] * 1000  # Mt → t
+        hourly_load_t = demand_annual_t / 8760
+        lcox = obj_value / demand_annual_t if demand_annual_t > 0 else np.inf
 
         results_df.loc[0] = [
-            int(demand_factor * 100),  # Convert to percent
-            demand_annual,
-            demands["steel_demand_mwh_per_h"],
+            demand_annual_t,
+            hourly_load_t,
             obj_value,
             lcox,
-            renewable_constraint_info["total_renewable_capacity_mw"],
-            renewable_constraint_info["capacity_for_local_demand_mw"],
-            renewable_constraint_info["capacity_available_for_steel_mw"],
-            renewable_constraint_info.get("num_generators_blocked", 0),
-            "feasible",
         ]
-        logger.info(f"LCOX calculated: {lcox:.2f} EUR/unit")
-        logger.info(
-            f"  Generators blocked for local demand: {renewable_constraint_info.get('num_generators_blocked', 0)}"
-        )
+        logger.info(f"LCOX calculated: {lcox:.2f} {cost_col.split('[')[1].split(']')[0]}")
 
     except Exception as e:
         logger.error(f"Optimization infeasible or failed: {e}")
-        demand_annual = (
-            demands["steel_demand_mt"]
-            if product != "h2"
-            else demands["steel_demand_mwh_per_h"] * 8760
-        )
+        demand_annual_t = demands["steel_demand_mt"] * 1000
+        hourly_load_t = demand_annual_t / 8760
         results_df.loc[0] = [
-            int(demand_factor * 100),  # Convert to percent
-            demand_annual,
-            demands["steel_demand_mwh_per_h"],
+            demand_annual_t,
+            hourly_load_t,
             np.nan,
             np.nan,
-            renewable_constraint_info["total_renewable_capacity_mw"],
-            renewable_constraint_info["capacity_for_local_demand_mw"],
-            renewable_constraint_info.get("capacity_available_for_steel_mw", 0),
-            renewable_constraint_info.get("num_generators_blocked", 0),
-            "infeasible",
         ]
 
     return results_df
-
-
-# ============================================================================
-# ADJUSTMENT (LEGACY - KEPT FOR COMPATIBILITY)
-# ============================================================================
-
-
-def adjust_part_load(network, config):
-    """Adjust part-load limits for links based on config."""
-    part_load = config.get("part_load", {})
-    if not part_load:
-        return
-
-    for carrier, min_pu in part_load.items():
-        mask = network.links["carrier"] == carrier
-        if mask.any():
-            network.links.loc[mask, "p_min_pu"] = min_pu
-            logger.debug(f"Set part-load limit for {carrier}: p_min_pu={min_pu}")
-
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -514,107 +584,132 @@ if __name__ == "__main__":
 
     # ==================== SETUP ====================
     logger.info("=" * 70)
+    # Get the specific demand level for THIS invocation (passed by Snakemake)
+    steel_demand_mt = float(snakemake.params.steel_demand_mt)
     logger.info(
         f"LCOX Calculation: region={snakemake.wildcards.region}, "
-        f"product={snakemake.wildcards.product}"
+        f"product={snakemake.wildcards.product}, "
+        f"steel_demand={steel_demand_mt} Mt/year."
     )
     logger.info("=" * 70)
 
-    # Load pre-prepared base network ONCE (key efficiency gain)
+    # Load pre-prepared base network once
     logger.info("Loading base network...")
-    base_network = load_network_with_string_fix(snakemake.input.base_network)
+    base_network = pypsa.Network(snakemake.input.base_network)
     logger.info(
         f"Network loaded: {len(base_network.buses)} buses, "
         f"{len(base_network.generators)} generators, {len(base_network.links)} links"
     )
 
-    # Load demands for this region and product
+    # Load local electricity demand for this region
     logger.info("Loading demands...")
     demands = load_demands_for_region(
         region=snakemake.wildcards.region,
-        product=snakemake.wildcards.product,
         config=snakemake.config,
     )
-    logger.info(f"Steel demand: {demands['steel_demand_mt']:.1f} Mt/year")
+    
     logger.info(
         f"Local electricity demand: {demands['local_el_demand_mwh']:.1f} MWh/year"
     )
 
-    # ==================== SINGLE DEMAND FACTOR PROCESSING ====================
-    # Get demand_factor from Snakemake wildcard (in percent: 1, 10, 50, etc.)
-    demand_factor_percent = int(snakemake.wildcards.demand_factor)
-    demand_factor = (
-        demand_factor_percent / 100.0
-    )  # Convert to decimal (0.01, 0.1, 0.5, etc.)
-
-    logger.info(f"\n{'=' * 70}")
-    logger.info(f"Processing demand_factor={demand_factor_percent}% ({demand_factor})")
-    logger.info(f"{'=' * 70}")
-
-    # Create a copy of base network for this constraint scenario
+    # ==================== PROCESS SINGLE DEMAND LEVEL ====================
+    electricity_per_steel_t = snakemake.config.get("electricity_steel_ratio", 5.25)
+    
+    logger.info(f"Processing: {steel_demand_mt} Mt/year")
+    
+    # ==================== NETWORK SETUP ====================
+    # Create a copy of base network
     network = base_network.copy()
-    network.name = f"LCOX-{snakemake.wildcards.region}-{snakemake.wildcards.product}-DF{demand_factor_percent}%"
+    network.name = f"LCOX-{snakemake.wildcards.region}-{snakemake.wildcards.product}-{steel_demand_mt}"
 
     # Preserve discount_rate from base network (needed for cost annuitization)
     network.discount_rate = base_network.discount_rate
 
-    # Apply renewable constraint based on demand_factor
-    logger.info(
-        f"Applying renewable constraint (demand_factor={demand_factor_percent}%)..."
-    )
+    # Calculate electricity needed for this demand level
+    scaled_steel_demand_mwh_per_h = steel_demand_mt * electricity_per_steel_t / 8760
+    
+    logger.info(f"Steel demand: {steel_demand_mt:.1f} Mt/year")
+    logger.info(f"Electricity required: {scaled_steel_demand_mwh_per_h * 8760:.1f} MWh/year")
+
+    # Create scaled demands dict for this demand level
+    scaled_demands = demands.copy()
+    scaled_demands['steel_demand_mt'] = steel_demand_mt
+    scaled_demands['steel_demand_mwh_per_h'] = scaled_steel_demand_mwh_per_h
+
+    # Block highest-CF renewables for local demand (priority mechanism)
+    logger.info("Applying renewable priority constraint...")
     constraint_info = apply_renewable_constraint(
         network=network,
-        demand_factor=demand_factor,
         local_el_demand_mwh=demands["local_el_demand_mwh"],
         config=snakemake.config,
     )
 
-    logger.info(
-        f"  Total renewable capacity: {constraint_info['total_renewable_capacity_mw']:.1f} MW"
-    )
-    logger.info(
-        f"  Capacity for local demand: {constraint_info['capacity_for_local_demand_mw']:.1f} MW"
-    )
-    logger.info(
-        f"  Capacity available for steel: {constraint_info['capacity_available_for_steel_mw']:.1f} MW"
-    )
-
-    # Add loads to network
-    logger.info("Adding loads to network...")
+    # Add hourly load for steel output
+    # (This also sets HBI storage e_initial inside add_loads_to_network)
+    logger.info("Adding hourly load to network...")
     add_loads_to_network(
-        network=network, product=snakemake.wildcards.product, demands=demands
+        network=network, product=snakemake.wildcards.product, demands=scaled_demands
     )
 
-    # Adjust part-load (if configured)
-    if snakemake.config.get("part_load"):
-        adjust_part_load(network, snakemake.config)
+    # Debug: Print network structure
+    logger.info("\n--- Network Structure for Demand Level {:.1f} Mt/year ---".format(steel_demand_mt))
+    logger.info(f"Buses: {list(network.buses.index)}")
+    logger.info(f"Generators: {len(network.generators)} total")
+    for gen in network.generators.index:
+        p_max = network.generators.at[gen, 'p_nom_max']
+        logger.info(f"  {gen}: p_nom_max={p_max:.1f} MW")
+    logger.info(f"Links: {list(network.links.index)}")
+    for link in network.links.index:
+        p_nominal = network.links.at[link, 'p_nom']
+        logger.info(f"  {link}: p_nom={p_nominal:.1f} MW")
+    logger.info(f"Stores: {list(network.stores.index)}")
+    logger.info(f"Loads: {list(network.loads.index)}")
 
-    # Solve this constraint scenario
-    solve_network(network, snakemake.config)
+    # Solve
+    logger.info("Optimizing network...")
+    if snakemake.config.get("debug_network_inspection", False):
+        inspect_network(network, snakemake.wildcards.product)  # Debug inspection
+    try:
+        solve_network(network, snakemake.config)
+        optimization_status = "optimal" if network.objective is not None and not np.isnan(network.objective) else "infeasible"
+    except Exception as e:
+        logger.warning(f"Solver error for steel demand {steel_demand_mt} Mt/year: {e}")
+        optimization_status = "error"
+
+    if optimization_status != "optimal":
+        logger.warning(f"Optimization {optimization_status} for steel demand {steel_demand_mt} Mt/year - returning NaN values")
 
     # Extract LCOX results
     logger.info("Extracting results...")
     results_df = extract_lcox(
         network=network,
         product=snakemake.wildcards.product,
-        demands=demands,
-        renewable_constraint_info=constraint_info,
-        demand_factor=demand_factor,
+        demands=scaled_demands,
     )
-
-    # ==================== SAVE RESULTS ====================
-    logger.info("=" * 70)
+    
+    # Save results for this demand level
+    result_file = snakemake.output.results
+    network_file = snakemake.output.network
+    
     logger.info("Saving results...")
+    results_df.to_csv(result_file, index=False)
+    logger.info(f"Results saved: {result_file}")
+    
+    # Save network only if optimization succeeded
+    if optimization_status == "optimal":
+        try:
+            _convert_bool_attrs_to_int(network)
+            network.export_to_netcdf(network_file)
+            logger.info(f"Network saved: {network_file}")
+        except Exception as e:
+            logger.warning(f"Could not save network: {e}")
+    else:
+        logger.warning(f"Skipping network export due to solver status: {optimization_status}")
+    
     logger.info("=" * 70)
-
-    # Save CSV result
-    results_df.to_csv(snakemake.output.results, index=False)
-    logger.info(f"Results saved: {snakemake.output.results}")
-
-    # Save network
-    network.export_to_netcdf(snakemake.output.network)
-    logger.info(f"Network saved: {snakemake.output.network}")
-
-    logger.info("=" * 70)
-    logger.info(f"LCOX calculation complete for demand_factor={demand_factor_percent}%")
+    
+    if optimization_status == "optimal":
+        logger.info("Demand level completed successfully!")
+    else:
+        logger.warning(f"Demand level completed with solver status: {optimization_status}")
     logger.info("=" * 70)

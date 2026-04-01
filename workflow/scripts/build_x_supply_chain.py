@@ -98,6 +98,7 @@ def _add_conversion_chain(
         lifetime=td.get_tech_param(elec_params, "lifetime", 40.0),
         fom_cost=elec_inv_cost * (td.get_tech_param(elec_params, "FOM", 2.8) / 100),
         p_nom_extendable=True,
+        p_nom_max=np.inf,
         p_min_pu=config.get("elec_p_min_pu", 0.10),
     )
 
@@ -119,6 +120,7 @@ def _add_conversion_chain(
         lifetime=td.get_tech_param(dri_params, "lifetime", 40.0),
         fom_cost=dri_inv_cost * (td.get_tech_param(dri_params, "FOM", 11.3) / 100),
         p_nom_extendable=True,
+        p_nom_max=np.inf,
         p_min_pu=config.get("dri_p_min_pu", 0.15),
     )
 
@@ -138,6 +140,7 @@ def _add_conversion_chain(
         lifetime=td.get_tech_param(eaf_params, "lifetime", 40.0),
         fom_cost=eaf_inv_cost * (td.get_tech_param(eaf_params, "FOM", 30.0) / 100),
         p_nom_extendable=True,
+        p_nom_max=np.inf,
         p_min_pu=config.get("eaf_p_min_pu", 0.20),
     )
 
@@ -161,6 +164,8 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         lifetime=td.get_tech_param(h2_params, "lifetime", 100.0),
         fom_cost=h2_inv_cost * (td.get_tech_param(h2_params, "FOM", 0.0) / 100),
         standing_loss=TECH_ASSUMPTIONS["h2_standing_loss"],
+        e_initial=config.get("h2_storage_e_initial", 0.5),  # Start at 50% capacity
+        e_cyclic=True,  # End state must equal start state
     )
 
     # Battery Storage: Power (inverter for charger/discharger) + Energy (store)
@@ -178,6 +183,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         lifetime=td.get_tech_param(batt_inv_params, "lifetime", 10.0),
         fom_cost=batt_inv_cost * (td.get_tech_param(batt_inv_params, "FOM", 0.9) / 100),
         p_nom_extendable=True,
+        p_nom_max=np.inf,
     )
 
     network.add(
@@ -190,6 +196,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         lifetime=td.get_tech_param(batt_inv_params, "lifetime", 10.0),
         fom_cost=batt_inv_cost * (td.get_tech_param(batt_inv_params, "FOM", 0.9) / 100),
         p_nom_extendable=True,
+        p_nom_max=np.inf,
     )
 
     batt_store_cost = (
@@ -204,6 +211,21 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         lifetime=td.get_tech_param(batt_store_params, "lifetime", 30.0),
         fom_cost=batt_store_cost * 0.0,
         standing_loss=TECH_ASSUMPTIONS["batt_standing_loss"],
+        e_initial=config.get("battery_e_initial", 0.5),  # Start at 50% capacity
+        e_cyclic=True,  # End state must equal start state
+    )
+
+
+    network.add(
+        "Store",
+        "hbi_storage",
+        bus="hbi",
+        e_nom_extendable=True,
+        overnight_cost=0.0,  # Just a pile - no cost
+        lifetime=1.0,  
+        fom_cost=0.0,  # No maintenance cost
+        discount_rate=0.0,  # No cost, discount rate doesn't matter but required by PyPSA
+        standing_loss=0.0,  # HBI storage doesn't lose energy
     )
 
 

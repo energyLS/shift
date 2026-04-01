@@ -132,32 +132,21 @@ rule prepare_regional_network:
 
 
 if config["enable"].get("run_supply_chain", True):
-    # Individual model calculating the LCoH for up to 60% of maximum potential as demand
-    # Stores the resulting LCoH in a csv file
-    rule model_lcoh:
-        message:
-            "Calculating LCoH for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum hydrogen potential."
-        input:
-            supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
-            costs = "../resources/technology_data/costs_{cost_year}.csv"
-        output:
-            results="../resources/lcoh/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            network="../resources/lcoh/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
-        threads: 4
-        script:
-            "scripts/model_lcoh.py"
-
     rule calculate_regional_lcox:
         message:
             "Calculating LCoX for {wildcards.product} in region {wildcards.region} "
-            "(demand_factor={wildcards.demand_factor}%)."
+            "(steel_demand={wildcards.steel_demand_mt} Mt/year)."
+        params:
+            steel_demand_mt="{steel_demand_mt}",
+            compute_iis=config.get("compute_iis", False),
         input:
             base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
-            steel_demand="../resources/steel_production_clustered.csv",
             local_demand="../data/un_enerdata_demand_2050_final.csv"
         output:
-            results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+            results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{steel_demand_mt}.csv",
+            network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{steel_demand_mt}.nc",
+        wildcard_constraints:
+            steel_demand_mt=r"\d+"
         threads: 4
         resources:
             mem_mb=8000,
@@ -165,18 +154,18 @@ if config["enable"].get("run_supply_chain", True):
             "scripts/calculate_lcox.py"
     
 
-# Read all the individual LCoH values for one region and combine them into a supply curve
-# stored as a single csv file per region. Note: the visiual plot includes iron ore costs, the csv without since it is added later in the workflow.
+# Read all the individual LCoX values for one region and combine them into a supply curve
+# stored as a single csv file per region. Note: the visual plot includes iron ore costs, the csv without since it is added later in the workflow.
 
 if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         message:
-            "Combining LCo{wildcards.product[0]} results (all demand factors) to create supply curve for {wildcards.region}."
+            "Combining LCo{wildcards.product[0]} results (all steel demand levels) to create supply curve for {wildcards.region}."
         input:
-            # Reference results from calculate_regional_lcox (uses demand_factor as 1, 10, 50 format)
+            # Reference results from calculate_regional_lcox (uses steel_demand_mt from config)
             lco_product_data = lambda wildcards: expand(
-                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
-                demand_factor=[int(d*100) for d in config["demand_factors"]]
+                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{steel_demand_mt}}.csv",
+                steel_demand_mt=config.get("steel_demand_levels", [10, 50, 100, 200])
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
             steel_demand = "../resources/steel_production_clustered.csv",
@@ -265,30 +254,6 @@ rule collect_figures:
         value_chain_comparison_png = "../results/figures_general/value_chain_comparison.png", #workflow/notebooks/analyse-steel-hbi-split.ipynb
         hourly_analysis = "../results/figures_general/hourly_analysis.pdf", #workflow/notebooks/analysis-hourly.ipynb
         hourly_analysis_png = "../results/figures_general/hourly_analysis.png", #workflow/notebooks/analysis-hourly.ipynb
-
-
-### Additional rules 
-
-rule create_hydrogen_supply_curve_with_demand:
-    message:
-        "Combining individual LCoH results to create a supply curve for region {wildcards.region} with demand lines."
-    input:
-        lcoh_data = expand(
-            "../resources/lcoh/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            demand_factor=config["demand_factors"],
-            allow_missing=True,
-        ),
-        final_demand_data = "../data/un_enerdata_demand_2050_final.csv"
-    output:
-        supply_curve="../resources/supply_curves_subtracted_with_demand/cost_year~{cost_year}/{region}_hydrogen.pdf"
-    script:
-        "scripts/create_hydrogen_supply_curve_with_demand.py"
-rule create_all_supply_curves_with_demand:
-    input:
-        expand(
-            "../resources/supply_curves_subtracted_with_demand/cost_year~{cost_year}/{region}_hydrogen.pdf", cost_year=[2030,2050], region=config["regions"], allow_missing=True
-            )
-            
 
 # rule model_trade_singlestage:
 #     input:

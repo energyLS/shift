@@ -184,12 +184,10 @@ def add_renewable_generators(
         db_tech_name = tech_database_map.get(technology, technology)
         tech_params = td.get_tech(tech_costs, db_tech_name)
 
-        capital_cost = (
-            td.get_tech_param(tech_params, "investment", 0) * 1000
-        )  # EUR/kW → EUR/MW
+        overnight_cost = (td.get_tech_param(tech_params, "investment", 0) * 1000)  # EUR/kW → EUR/MW
         lifetime = td.get_tech_param(tech_params, "lifetime", 20)
         fom_pct = td.get_tech_param(tech_params, "FOM", 0)
-        fom_cost = capital_cost * (fom_pct / 100) if capital_cost > 0 else 0
+        fom_cost = overnight_cost * (fom_pct / 100) if overnight_cost > 0 else 0
 
         gen_name = f"renewable_{cluster_id}"
 
@@ -205,16 +203,15 @@ def add_renewable_generators(
             p_nom=0,  # Start with no capacity; optimization will decide
             p_nom_max=p_nom_max,  # Upper ceiling from cluster data (MW)
             p_max_pu=cf_ts,  # Hourly capacity factor from cluster data (0-1)
-            capital_cost=capital_cost,
+            overnight_cost=overnight_cost,
             discount_rate=discount_rate,
-            marginal_cost=0,
             lifetime=lifetime,
-            fom=fom_cost,
+            fom_cost=fom_cost,
         )
 
         logger.debug(
             f"Added generator {gen_name}: p_nom_max={p_nom_max:.1f} MW, "
-            f"capital_cost={capital_cost:.1f} EUR/MW"
+            f"overnight_cost={overnight_cost:.1f} EUR/MW"
         )
 
     logger.info(f"Added {len(clusters)} renewable generators to network")
@@ -246,7 +243,7 @@ def _apply_discount_rate_to_components(
 
     # Apply to generators
     for gen_name, gen_row in network.generators.iterrows():
-        has_cost = pd.notna(gen_row.get("capital_cost")) and gen_row["capital_cost"] > 0
+        has_cost = pd.notna(gen_row.get("overnight_cost")) and gen_row["overnight_cost"] > 0
         if has_cost:
             network.generators.at[gen_name, "discount_rate"] = discount_rate
 
