@@ -80,8 +80,8 @@ def _add_conversion_chain(
     network: pypsa.Network, tech_costs: pd.Series, config: dict
 ) -> None:
     """Add energy conversion pathway: Electricity → H2 → HBI → Steel.
-
-    Note: Costs are added but discount_rate is NOT set here (applied regionally in prepare_regional_network).
+    Note: Costs are added but discount_rate is NOT set here.
+    It is applied regionally in prepare_regional_network.
     """
 
     # Electrolyzer: Electricity → H2
@@ -148,7 +148,8 @@ def _add_conversion_chain(
 def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) -> None:
     """Add H2 and battery storage systems.
 
-    Note: Costs are added but discount_rate is NOT set here (applied regionally in prepare_regional_network).
+    Note: Costs are added but discount_rate is NOT set here.
+    It is applied regionally in prepare_regional_network.
     """
 
     # H2 Storage (underground cavern)
@@ -215,14 +216,13 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         e_cyclic=True,  # End state must equal start state
     )
 
-
     network.add(
         "Store",
         "hbi_storage",
         bus="hbi",
         e_nom_extendable=True,
         overnight_cost=0.0,  # Just a pile - no cost
-        lifetime=1.0,  
+        lifetime=1.0,
         fom_cost=0.0,  # No maintenance cost
         discount_rate=0.0,  # No cost, discount rate doesn't matter but required by PyPSA
         standing_loss=0.0,  # HBI storage doesn't lose energy
@@ -240,7 +240,7 @@ def _add_resources(network: pypsa.Network, config: dict) -> None:
     )
 
 
-def build_network(config: dict, tech_costs_path: str) -> pypsa.Network:
+def build_network(config: dict, tech_costs_path: str, year: int) -> pypsa.Network:
     """Build PyPSA steel supply chain skeleton (region-agnostic).
 
     The skeleton contains:
@@ -251,10 +251,7 @@ def build_network(config: dict, tech_costs_path: str) -> pypsa.Network:
     This design allows the same skeleton to be used across regions with different discount rates.
     """
 
-    # Setup
-    year = config.get("cost_year", 2030)
     network = pypsa.Network()
-    network.name = f"Skeleton-Steel-Supply-Chain-{year}"
     network.set_snapshots(pd.date_range(f"{year}-01-01", periods=8760, freq="h"))
     # NOTE: discount_rate is NOT set here (region-agnostic)
     tech_costs = td.load_tech_costs(tech_costs_path)
@@ -286,7 +283,7 @@ if __name__ == "__main__":
         tech_costs_path = "../resources/technology_data/costs_2030.csv"
         output_path = "test_steel_network.nc"
 
-    network = build_network(config, tech_costs_path)
-    network.name = f"Skeleton-Exported-{config.get('cost_year', 2030)}"
+    year = getattr(snakemake.wildcards, "cost_year", 2050)  # noqa: F821
+    network = build_network(config, tech_costs_path, year)
     network.export_to_netcdf(output_path)
     logger.info(f"Network exported to {output_path}")
