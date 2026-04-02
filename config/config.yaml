@@ -17,7 +17,8 @@ run:
   disable_progressbar: false
 
 trade:
-  diversity_factor: 1 # "False" or Max constraint in float for one single hbi supplier in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supplier, etc.
+  diversity_factor: False # "False" or float as max constraint for one single hbi supply route in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supply route, etc.
+  # Note: The diversity factor constraints the trade route, not the producer itself. (Import from exporter route R <= diversity_factor * demand of importer I.). As a result, if the trade passes through one region, it is limited based on the demand of this particular region * diversity_factor. Therefore the trade routes in a scenario with a diversity_factor of 100% may differ to a scenario where diversity_factor=False.
 
 scenario: # must be listed in config/trade_scenarios.csv in order to run
   default:
