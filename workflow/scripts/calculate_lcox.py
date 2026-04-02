@@ -43,7 +43,7 @@ log_dir.mkdir(parents=True, exist_ok=True)
 # Add file handler (writes to ../logs/calculate_lcox.log)
 file_handler = logging.FileHandler(log_dir / "calculate_lcox.log")
 file_handler.setLevel(logging.DEBUG)
-file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 file_handler.setFormatter(file_formatter)
 logger.addHandler(file_handler)
 
@@ -57,7 +57,7 @@ def load_demands_for_region(region, config):
 
     Returns dict with:
       - local_el_demand_mwh: MWh/year (for renewable constraint calculation)
-    
+
     Note: steel_demand_mt is passed directly from Snakemake params, not loaded from file
     """
     # Load local electricity demand (for renewable constraint calculation)
@@ -65,8 +65,12 @@ def load_demands_for_region(region, config):
         local_df = pd.read_csv(snakemake.input.local_demand)
         region_mask = local_df["region"].str.lower() == region.lower()
         if region_mask.any():
-            total_energy_mwh = local_df[region_mask]["demand"].values[0]  # MWh final energy
-            el_share = local_df[region_mask]["el_share"].values[0] / 100  # Convert % to fraction
+            total_energy_mwh = local_df[region_mask]["demand"].values[
+                0
+            ]  # MWh final energy
+            el_share = (
+                local_df[region_mask]["el_share"].values[0] / 100
+            )  # Convert % to fraction
             local_el_demand_mwh = total_energy_mwh * el_share  # Apply electricity share
         else:
             logger.warning(f"Region '{region}' not found in local demand data")
@@ -94,7 +98,7 @@ def apply_renewable_constraint(network, local_el_demand_mwh, config):
       3. Accumulate capacity from highest CF until >= local_demand
       4. Block these generators for local demand (set p_nom_max=0)
       5. Remaining renewables available for steel production
-      
+
     The load determines electrolyzer operation; no capacity constraint applied.
 
     Returns: audit dict with capacity breakdown and blocked generators
@@ -161,7 +165,6 @@ def apply_renewable_constraint(network, local_el_demand_mwh, config):
 
     capacity_accumulated = 0  # Track cumulative capacity factor contribution
     generators_for_local = []
-    
 
     for gen_info in gen_cf_data:
         if capacity_accumulated >= local_el_demand_mwh:
@@ -271,7 +274,7 @@ def add_loads_to_network(network, product, demands):
 
     if bus_name not in network.buses.index:
         raise ValueError(f"Bus '{bus_name}' not found in network")
-    
+
     # Add constant hourly load to the bus
     load_name = f"{product}_demand"
     if product == "h2":
@@ -291,7 +294,9 @@ def add_loads_to_network(network, product, demands):
         if "hbi_storage" in network.stores.index:
             hbi_e_initial = 24 * hourly_demand_t  # 24 hours of buffer
             network.stores.at["hbi_storage", "e_initial"] = hbi_e_initial
-            logger.info(f"Set HBI storage e_initial to {hbi_e_initial:.2f} t (24h buffer for {hourly_demand_t:.4f} t/h demand)")
+            logger.info(
+                f"Set HBI storage e_initial to {hbi_e_initial:.2f} t (24h buffer for {hourly_demand_t:.4f} t/h demand)"
+            )
 
     logger.info(
         f"Added hourly load for {product}: {load_name} = {p_set:.4f} {unit_str} (constant all hours)"
@@ -300,35 +305,45 @@ def add_loads_to_network(network, product, demands):
 
 def inspect_network(network, product):
     """Print network structure for debugging infeasibility."""
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("NETWORK INSPECTION - Connectivity & Status")
-    logger.info("="*80)
-    
+    logger.info("=" * 80)
+
     logger.info(f"Buses ({len(network.buses)}): {list(network.buses.index)}")
     logger.info(f"\nLoads ({len(network.loads)}):")
     for load_name, load_row in network.loads.iterrows():
-        logger.info(f"  {load_name:30s} -> bus={load_row['bus']:15s} p_set={load_row['p_set']:.1f}")
-    
+        logger.info(
+            f"  {load_name:30s} -> bus={load_row['bus']:15s} p_set={load_row['p_set']:.1f}"
+        )
+
     logger.info(f"\nLinks ({len(network.links)}):")
     for link_name, link_row in network.links.iterrows():
-        logger.info(f"  {link_name:15s}: {link_row['bus0']:12s} -> {link_row['bus1']:12s}  p_nom_ext={link_row['p_nom_extendable']} p_nom_max={link_row['p_nom_max']:.0e}")
-    
+        logger.info(
+            f"  {link_name:15s}: {link_row['bus0']:12s} -> {link_row['bus1']:12s}  p_nom_ext={link_row['p_nom_extendable']} p_nom_max={link_row['p_nom_max']:.0e}"
+        )
+
     logger.info(f"\nStores ({len(network.stores)}):")
     for store_name, store_row in network.stores.iterrows():
         logger.info(f"  {store_name:20s} -> {store_row['bus']:15s}")
-    
+
     # Check isolated buses
     all_buses = set(network.buses.index)
-    connected = set(network.generators['bus'].unique()) | set(network.links['bus0'].unique()) | set(network.links['bus1'].unique()) | set(network.loads['bus'].unique()) | set(network.stores['bus'].unique())
+    connected = (
+        set(network.generators["bus"].unique())
+        | set(network.links["bus0"].unique())
+        | set(network.links["bus1"].unique())
+        | set(network.loads["bus"].unique())
+        | set(network.stores["bus"].unique())
+    )
     isolated = all_buses - connected
     if isolated:
         logger.warning(f"⚠ Isolated buses: {isolated}")
-    logger.info("="*80 + "\n")
+    logger.info("=" * 80 + "\n")
 
 
 def _convert_arrow_strings(network):
     """Convert ArrowStringArray columns/indices to regular object dtype.
-    
+
     Workaround for PyPSA incompatibility with pandas ArrowStringArray.
     Uses PyPSA's component structure to properly access all dataframes.
     Based on: https://github.com/PyPSA/PyPSA/issues/1585
@@ -354,15 +369,15 @@ def _convert_arrow_strings(network):
 
 def _convert_bool_attrs_to_int(network):
     """Convert boolean attributes to integers for netCDF4 compatibility.
-    
+
     netCDF4 does not support boolean types for attributes.
     Convert True -> 1, False -> 0.
     """
     # PyPSA uses either .attrs or internal _attrs depending on version
     attr_container = None
-    if hasattr(network, 'attrs'):
+    if hasattr(network, "attrs"):
         attr_container = network.attrs
-    elif hasattr(network, '_attrs'):
+    elif hasattr(network, "_attrs"):
         attr_container = network._attrs
 
     if attr_container is None:
@@ -378,10 +393,12 @@ def _compute_infeasibility_diagnostics(network, output_dir):
     """Compute infeasibility diagnostics for an infeasible network and write IIS if available."""
 
     # Attempt to run linopy infeasibility diagnostics
-    if hasattr(network.model, 'compute_infeasibilities'):
+    if hasattr(network.model, "compute_infeasibilities"):
         try:
             infeasible_labels = network.model.compute_infeasibilities()
-            logger.info(f"Linopy compute_infeasibilities() returned {len(infeasible_labels)} entries")
+            logger.info(
+                f"Linopy compute_infeasibilities() returned {len(infeasible_labels)} entries"
+            )
         except Exception as e:
             logger.warning(f"Could not compute linopy infeasibilities: {e}")
             infeasible_labels = None
@@ -391,19 +408,21 @@ def _compute_infeasibility_diagnostics(network, output_dir):
 
     # Write IIS from backend Gurobi model if available
     gurobi_model = None
-    if hasattr(network.model, 'backend') and hasattr(network.model.backend, 'model'):
+    if hasattr(network.model, "backend") and hasattr(network.model.backend, "model"):
         gurobi_model = network.model.backend.model
 
     if gurobi_model is not None:
         try:
-            if hasattr(gurobi_model, 'computeIIS'):
+            if hasattr(gurobi_model, "computeIIS"):
                 try:
                     gurobi_model.computeIIS()
                     logger.info("Gurobi IIS computed")
                 except Exception as iis_err:
                     logger.warning(f"Could not compute IIS on Gurobi model: {iis_err}")
 
-            model_ilp_path = os.path.join(output_dir, f"infeasibility_{network.name}.ilp")
+            model_ilp_path = os.path.join(
+                output_dir, f"infeasibility_{network.name}.ilp"
+            )
             gurobi_model.write(model_ilp_path)
             logger.info(f"IIS .ilp written to: {model_ilp_path}")
 
@@ -420,15 +439,16 @@ def _compute_infeasibility_diagnostics(network, output_dir):
 
     # Write text infeasibility report if available
     if infeasible_labels:
-        if hasattr(network.model, 'format_infeasibilities'):
+        if hasattr(network.model, "format_infeasibilities"):
             try:
                 infeas_report = network.model.format_infeasibilities()
             except Exception as e:
                 infeas_report = f"format_infeasibilities failed: {e}"
-        elif hasattr(network.model, 'print_infeasibilities'):
+        elif hasattr(network.model, "print_infeasibilities"):
             try:
                 import io
                 import sys
+
                 _buf = io.StringIO()
                 _old_stdout = sys.stdout
                 sys.stdout = _buf
@@ -443,7 +463,7 @@ def _compute_infeasibility_diagnostics(network, output_dir):
             infeas_report = "Infeasible constraints identified, but format_infeasibilities() and print_infeasibilities() are unavailable."
 
         infeas_path = os.path.join(output_dir, f"infeasibilities_{network.name}.txt")
-        with open(infeas_path, 'w', encoding='utf-8') as f:
+        with open(infeas_path, "w", encoding="utf-8") as f:
             f.write(f"Infeasible constraints for network {network.name}:\n")
             f.write("=" * 80 + "\n\n")
             f.write(infeas_report)
@@ -460,7 +480,7 @@ def solve_network(network, config):
     """
     # Convert arrow strings to regular strings before optimization
     _convert_arrow_strings(network)
-    
+
     solver_name = config.get("solver", {}).get("name", "glpk")
     solver_options = config.get("solver_options", {}).get(
         config.get("solver", {}).get("options", "default"), {}
@@ -468,13 +488,13 @@ def solve_network(network, config):
 
     logger.info(f"Solving network with {solver_name}...")
     logger.info(f"Solver options: {solver_options}")
-    
+
     # Add output logging for Gurobi to see what's happening
     if solver_name.lower() == "gurobi" and "OutputFlag" not in solver_options:
         solver_options = {**solver_options, "OutputFlag": 1}  # Enable Gurobi output
 
     # Solve without constraint injection (hourly loads already in network)
-    try:     
+    try:
         status = network.optimize(
             network.snapshots,
             solver_name=solver_name,
@@ -483,15 +503,17 @@ def solve_network(network, config):
         )
 
         logger.info(f"Optimization status: {status}")
-        
+
         if status != 0:
             logger.warning(f"Non-optimal status ({status})")
             if network.objective is not None:
                 logger.info(f"  Objective value: {network.objective}")
             else:
                 logger.warning("  Objective is None (no feasible solution found)")
-                logger.warning("Model is infeasible - check network structure and constraints")
-                
+                logger.warning(
+                    "Model is infeasible - check network structure and constraints"
+                )
+
                 # Use linopy's built-in infeasibility diagnostics
                 if solver_name.lower() == "gurobi" and snakemake.params.compute_iis:
                     try:
@@ -531,7 +553,7 @@ def extract_lcox(network, product, demands):
     else:
         load_col = "load [per h]"
         cost_col = "lcox [EUR/unit]"
-    
+
     results_df = pd.DataFrame(
         columns=[
             "demand [t]",
@@ -556,7 +578,9 @@ def extract_lcox(network, product, demands):
             obj_value,
             lcox,
         ]
-        logger.info(f"LCOX calculated: {lcox:.2f} {cost_col.split('[')[1].split(']')[0]}")
+        logger.info(
+            f"LCOX calculated: {lcox:.2f} {cost_col.split('[')[1].split(']')[0]}"
+        )
 
     except Exception as e:
         logger.error(f"Optimization infeasible or failed: {e}")
@@ -570,6 +594,7 @@ def extract_lcox(network, product, demands):
         ]
 
     return results_df
+
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -607,16 +632,16 @@ if __name__ == "__main__":
         region=snakemake.wildcards.region,
         config=snakemake.config,
     )
-    
+
     logger.info(
         f"Local electricity demand: {demands['local_el_demand_mwh']:.1f} MWh/year"
     )
 
     # ==================== PROCESS SINGLE DEMAND LEVEL ====================
     electricity_per_steel_t = snakemake.config.get("electricity_steel_ratio", 5.25)
-    
+
     logger.info(f"Processing: {steel_demand_mt} Mt/year")
-    
+
     # ==================== NETWORK SETUP ====================
     # Create a copy of base network
     network = base_network.copy()
@@ -627,14 +652,16 @@ if __name__ == "__main__":
 
     # Calculate electricity needed for this demand level
     scaled_steel_demand_mwh_per_h = steel_demand_mt * electricity_per_steel_t / 8760
-    
+
     logger.info(f"Steel demand: {steel_demand_mt:.1f} Mt/year")
-    logger.info(f"Electricity required: {scaled_steel_demand_mwh_per_h * 8760:.1f} MWh/year")
+    logger.info(
+        f"Electricity required: {scaled_steel_demand_mwh_per_h * 8760:.1f} MWh/year"
+    )
 
     # Create scaled demands dict for this demand level
     scaled_demands = demands.copy()
-    scaled_demands['steel_demand_mt'] = steel_demand_mt
-    scaled_demands['steel_demand_mwh_per_h'] = scaled_steel_demand_mwh_per_h
+    scaled_demands["steel_demand_mt"] = steel_demand_mt
+    scaled_demands["steel_demand_mwh_per_h"] = scaled_steel_demand_mwh_per_h
 
     # Block highest-CF renewables for local demand (priority mechanism)
     logger.info("Applying renewable priority constraint...")
@@ -652,15 +679,19 @@ if __name__ == "__main__":
     )
 
     # Debug: Print network structure
-    logger.info("\n--- Network Structure for Demand Level {:.1f} Mt/year ---".format(steel_demand_mt))
+    logger.info(
+        "\n--- Network Structure for Demand Level {:.1f} Mt/year ---".format(
+            steel_demand_mt
+        )
+    )
     logger.info(f"Buses: {list(network.buses.index)}")
     logger.info(f"Generators: {len(network.generators)} total")
     for gen in network.generators.index:
-        p_max = network.generators.at[gen, 'p_nom_max']
+        p_max = network.generators.at[gen, "p_nom_max"]
         logger.info(f"  {gen}: p_nom_max={p_max:.1f} MW")
     logger.info(f"Links: {list(network.links.index)}")
     for link in network.links.index:
-        p_nominal = network.links.at[link, 'p_nom']
+        p_nominal = network.links.at[link, "p_nom"]
         logger.info(f"  {link}: p_nom={p_nominal:.1f} MW")
     logger.info(f"Stores: {list(network.stores.index)}")
     logger.info(f"Loads: {list(network.loads.index)}")
@@ -671,13 +702,19 @@ if __name__ == "__main__":
         inspect_network(network, snakemake.wildcards.product)  # Debug inspection
     try:
         solve_network(network, snakemake.config)
-        optimization_status = "optimal" if network.objective is not None and not np.isnan(network.objective) else "infeasible"
+        optimization_status = (
+            "optimal"
+            if network.objective is not None and not np.isnan(network.objective)
+            else "infeasible"
+        )
     except Exception as e:
         logger.warning(f"Solver error for steel demand {steel_demand_mt} Mt/year: {e}")
         optimization_status = "error"
 
     if optimization_status != "optimal":
-        logger.warning(f"Optimization {optimization_status} for steel demand {steel_demand_mt} Mt/year - returning NaN values")
+        logger.warning(
+            f"Optimization {optimization_status} for steel demand {steel_demand_mt} Mt/year - returning NaN values"
+        )
 
     # Extract LCOX results
     logger.info("Extracting results...")
@@ -686,15 +723,15 @@ if __name__ == "__main__":
         product=snakemake.wildcards.product,
         demands=scaled_demands,
     )
-    
+
     # Save results for this demand level
     result_file = snakemake.output.results
     network_file = snakemake.output.network
-    
+
     logger.info("Saving results...")
     results_df.to_csv(result_file, index=False)
     logger.info(f"Results saved: {result_file}")
-    
+
     # Save network only if optimization succeeded
     if optimization_status == "optimal":
         try:
@@ -704,12 +741,16 @@ if __name__ == "__main__":
         except Exception as e:
             logger.warning(f"Could not save network: {e}")
     else:
-        logger.warning(f"Skipping network export due to solver status: {optimization_status}")
-    
+        logger.warning(
+            f"Skipping network export due to solver status: {optimization_status}"
+        )
+
     logger.info("=" * 70)
-    
+
     if optimization_status == "optimal":
         logger.info("Demand level completed successfully!")
     else:
-        logger.warning(f"Demand level completed with solver status: {optimization_status}")
+        logger.warning(
+            f"Demand level completed with solver status: {optimization_status}"
+        )
     logger.info("=" * 70)

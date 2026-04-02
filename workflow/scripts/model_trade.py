@@ -46,7 +46,6 @@ def building_model(
 
     # for each region we are creating a bus with all the potentials and load
     for r in range(0, len(supply_curves_interone)):
-
         # getting the supply curves for one region for different intermediates
         region_file_interone = supply_curves_interone[r]
         region_file_intertwo = supply_curves_intertwo[r]
@@ -168,9 +167,7 @@ def building_model(
                 )
 
             elif final != "hydrogen":
-
                 if interone == intertwo:
-
                     # Single link. bus0: iron ore, bus1: final product
                     # Add link for first intermediate ("interone")
                     n.add(
@@ -198,7 +195,6 @@ def building_model(
                     )
 
                 elif interone != intertwo:
-
                     # two links. First link: bus0=iron ore, bus1: interone, supply_curve: region_data_interone
                     # second link: bus0=interone, bus1=final product, supply_curve: region_data_intertwo (no ratios for efficiency and marginal cost needed here!)
 
@@ -628,6 +624,7 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+
 def normalize_regions(regions, carrier):
     """Ensure regions are lists and suffixed with _{carrier}."""
     if regions is None:
@@ -643,6 +640,7 @@ def normalize_regions(regions, carrier):
             normalized.append(f"{r}_{carrier}")
     return normalized
 
+
 def solve_network(n, mga=None):
 
     solver_name = snakemake.config["solver"]["name"]
@@ -653,7 +651,6 @@ def solve_network(n, mga=None):
     if mga is None:
         pass
     else:
-
         tsc = (
             pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
             .sum(axis=1)
@@ -698,7 +695,7 @@ def solve_network(n, mga=None):
         mga_cost = tsc.sum()
         print(f"Optimal cost: {optimal_cost:.2f} B€")
         print(
-            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack):.2f} B€"
+            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost * (1 + slack):.2f} B€"
         )
 
     return n
@@ -750,14 +747,12 @@ if __name__ == "__main__":
     iron_ore = iron_ore[iron_ore["region"].isin(regions)].reset_index(drop=True)
 
     if final == "steel":
-
         demands = pd.read_csv(snakemake.input.steel_demand, header=0)
         demands.rename(columns={"SteelProductionMt": "demand"}, inplace=True)
         demands["demand"] = demands["demand"] * 1e6  # Mt to t
         unit = "t"
 
     elif final == "hydrogen":
-
         demands = pd.read_csv(snakemake.input.demand, header=0)
         unit = "MWh"
 

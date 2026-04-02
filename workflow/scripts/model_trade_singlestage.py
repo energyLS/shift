@@ -21,7 +21,6 @@ def building_model(supply_curves, demands, bus_location, product):
 
     # for each region we are creating a bus with all the potentials and load
     for r in range(0, len(supply_curves)):
-
         # getting the supply curve for one region
         region_file = supply_curves[r]
         region_data = pd.read_csv(region_file, header=0)
@@ -49,7 +48,7 @@ def building_model(supply_curves, demands, bus_location, product):
             snakemake.wildcards["demand"]
         )
         print(
-            f"Load set via snakemake.wildcard to {float(snakemake.wildcards['demand'])*100}% of regional final energy demand."
+            f"Load set via snakemake.wildcard to {float(snakemake.wildcards['demand']) * 100}% of regional final energy demand."
         )
 
         network.add(
@@ -315,7 +314,6 @@ if __name__ == "__main__":
     supply_curves = snakemake.input.supply_curves
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
     if product == "steel":
-
         demands = pd.read_csv(snakemake.input.steel_demand, header=0)
         demands.rename(columns={"SteelProductionMt": "demand"}, inplace=True)
         demands["demand"] = demands["demand"] * 1e6  # Mt to t
@@ -323,7 +321,6 @@ if __name__ == "__main__":
         cost_descriptor = "LCOS"
 
     elif product == "hydrogen":
-
         demands = pd.read_csv(snakemake.input.demand, header=0)
         unit = "MWh"
         cost_descriptor = "LCOH"

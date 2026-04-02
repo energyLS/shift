@@ -184,7 +184,9 @@ def add_renewable_generators(
         db_tech_name = tech_database_map.get(technology, technology)
         tech_params = td.get_tech(tech_costs, db_tech_name)
 
-        overnight_cost = (td.get_tech_param(tech_params, "investment", 0) * 1000)  # EUR/kW → EUR/MW
+        overnight_cost = (
+            td.get_tech_param(tech_params, "investment", 0) * 1000
+        )  # EUR/kW → EUR/MW
         lifetime = td.get_tech_param(tech_params, "lifetime", 20)
         fom_pct = td.get_tech_param(tech_params, "FOM", 0)
         fom_cost = overnight_cost * (fom_pct / 100) if overnight_cost > 0 else 0
@@ -243,7 +245,9 @@ def _apply_discount_rate_to_components(
 
     # Apply to generators
     for gen_name, gen_row in network.generators.iterrows():
-        has_cost = pd.notna(gen_row.get("overnight_cost")) and gen_row["overnight_cost"] > 0
+        has_cost = (
+            pd.notna(gen_row.get("overnight_cost")) and gen_row["overnight_cost"] > 0
+        )
         if has_cost:
             network.generators.at[gen_name, "discount_rate"] = discount_rate
 
