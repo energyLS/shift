@@ -61,6 +61,19 @@ rule prepare_wacc:
         "notebooks/prepare-wacc.ipynb"
 
 
+rule prepare_political_stability:
+    input:
+        political_stability = "../data/political-stability/API_PV.PER.RNK_DS2_en_csv_v2_4585.csv",
+        bus_locations = "../data/bus_locations.csv",
+    output:
+        political_stability = "../resources/political_stability_clustered.csv"
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        "notebooks/prepare-political-stability.ipynb"
+
+
 rule retrieve_iron_ore:
     input:
         iron_ore_production = "../data/owid-iron-ore/iron-ore-crude-ore-production.csv",
