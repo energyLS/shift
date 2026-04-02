@@ -87,21 +87,7 @@ rule build_steel_skeleton:
 
 
 # Prepare regional PyPSA network with renewable generators and product-specific cutoff
-rule prepare_regional_network:
-    """
-    Prepare regional PyPSA network with renewable generators and supply chain configuration.
-    
-    One-time setup per region × product combination:
-    - Load skeleton supply chain network (technology-agnostic)
-    - Add renewable generators for region (filtered by ISO3)
-    - Apply product-specific supply chain cutoff (h2/hbi/steel)
-    
-    Key Efficiency Gain:
-    - All renewable processing happens ONCE per region
-    - Output ("base_network") reused for all demand_factors in calculate_lcox
-    - Eliminates redundant loading/filtering in calculate_lcox
-    """
-    
+rule prepare_regional_network: 
     message:
         "Preparing regional network for {wildcards.region} → {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
@@ -138,7 +124,7 @@ if config["enable"].get("run_supply_chain", True):
             "(steel_demand={wildcards.steel_demand_mt} Mt/year)."
         params:
             steel_demand_mt="{steel_demand_mt}",
-            compute_iis=config.get("compute_iis", False),
+            compute_iis=config.get("solver", {}).get("compute_iis", False),
         input:
             base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
             local_demand="../data/un_enerdata_demand_2050_final.csv"
@@ -165,12 +151,11 @@ if config["enable"].get("run_supply_curve", True):
             # Reference results from calculate_regional_lcox (uses steel_demand_mt from config)
             lco_product_data = lambda wildcards: expand(
                 f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{steel_demand_mt}}.csv",
-                steel_demand_mt=config.get("steel_demand_levels", [10, 50, 100, 200])
+                steel_demand_mt=config.get("steel_demand_levels")
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
             steel_demand = "../resources/steel_production_clustered.csv",
         output:
-            # KEEP: Final supply curve input to model_trade (required)
             supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
             # [DELETION FLAG] Post-development: supply_nodemand CSVs are reference copies for comparison only
             # Keep during development for validation/debugging

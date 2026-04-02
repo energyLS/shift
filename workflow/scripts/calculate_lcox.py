@@ -185,10 +185,12 @@ def apply_renewable_constraint(network, local_el_demand_mwh, config):
             # Use entire generator for local demand
             capacity_to_use = p_nom_max
             capacity_accumulated += annual_energy
+            new_p_nom_max = 0
         else:
             # Use partial generator to exactly meet local demand
             capacity_to_use = remaining_needed / (avg_cf * 8760)
             capacity_accumulated += remaining_needed
+            new_p_nom_max = p_nom_max - capacity_to_use
 
         generators_for_local.append(
             {
@@ -196,13 +198,20 @@ def apply_renewable_constraint(network, local_el_demand_mwh, config):
                 "avg_cf": avg_cf,
                 "capacity_blocked_mw": capacity_to_use,
                 "energy_provided_mwh": capacity_to_use * avg_cf * 8760,
+                "p_nom_max_before": p_nom_max,
+                "p_nom_max_after": new_p_nom_max,
             }
         )
 
-        # Block this generator: set p_nom_max=0 so optimizer can't use for steel
-        network.generators.at[gen_name, "p_nom_max"] = 0
+        # Update generator availability for steel
+        network.generators.at[gen_name, "p_nom_max"] = new_p_nom_max
+        blocked_msg = (
+            "fully blocked"
+            if new_p_nom_max == 0
+            else f"reduced to {new_p_nom_max:.2f} MW"
+        )
         logger.info(
-            f"  Blocked {gen_name:40s} (CF={avg_cf:.3f}, {capacity_to_use:7.1f} MW) → local demand"
+            f"  Blocked {gen_name:40s} (CF={avg_cf:.3f}, {capacity_to_use:7.1f} MW) → local demand, {blocked_msg}"
         )
 
     logger.info(
@@ -646,6 +655,21 @@ if __name__ == "__main__":
     # Create a copy of base network
     network = base_network.copy()
     network.name = f"LCOX-{snakemake.wildcards.region}-{snakemake.wildcards.product}-{steel_demand_mt}"
+
+    # Ensure snapshot year is set by upstream network preparation;
+    # do not override if already set.
+    if network.snapshots is None or len(network.snapshots) == 0:
+        cost_year = int(snakemake.wildcards.cost_year)
+        network.set_snapshots(
+            pd.date_range(f"{cost_year}-01-01", periods=8760, freq="h")
+        )
+        logger.info(
+            f"Set snapshots for cost_year={cost_year} (fallback in calculate_lcox)"
+        )
+    else:
+        logger.info(
+            f"Snapshots pre-set in network (len={len(network.snapshots)}), not overriding in calculate_lcox"
+        )
 
     # Preserve discount_rate from base network (needed for cost annuitization)
     network.discount_rate = base_network.discount_rate

@@ -272,18 +272,20 @@ def build_network(config: dict, tech_costs_path: str, year: int) -> pypsa.Networ
 
 
 if __name__ == "__main__":
-    # Handle Snakemake or direct invocation
-    try:
-        config = snakemake.config
-        tech_costs_path = snakemake.input.costs
-        output_path = snakemake.output[0]
-    except NameError:
-        # Fallback for testing (snakemake variable not available)
-        config = {"cost_year": 2030}
-        tech_costs_path = "../resources/technology_data/costs_2030.csv"
-        output_path = "test_steel_network.nc"
+    if "snakemake" not in globals():
+        raise RuntimeError(
+            "This script must be run via Snakemake with cost_year wildcard"
+        )
 
-    year = getattr(snakemake.wildcards, "cost_year", 2050)  # noqa: F821
+    config = snakemake.config  # noqa: F821
+    tech_costs_path = snakemake.input.costs  # noqa: F821
+    output_path = snakemake.output[0]  # noqa: F821
+
+    cost_year = 0
+    if cost_year is None:
+        raise ValueError("snakemake.wildcards.cost_year is required")
+
+    year = getattr(snakemake.wildcards, "cost_year", 0)  # noqa: F821
     network = build_network(config, tech_costs_path, year)
     network.export_to_netcdf(output_path)
     logger.info(f"Network exported to {output_path}")

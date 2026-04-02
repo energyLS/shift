@@ -201,7 +201,7 @@ def add_renewable_generators(
             gen_name,
             bus="electricity",
             carrier="electricity",
-            p_nom_extendable=False,
+            p_nom_extendable=True,
             p_nom=0,  # Start with no capacity; optimization will decide
             p_nom_max=p_nom_max,  # Upper ceiling from cluster data (MW)
             p_max_pu=cf_ts,  # Hourly capacity factor from cluster data (0-1)
@@ -229,7 +229,7 @@ def _apply_discount_rate_to_components(
     # Apply to links
     for link_name, link_row in network.links.iterrows():
         has_cost = (
-            pd.notna(link_row.get("overnight_cost")) and link_row["overnight_cost"] > 0
+            pd.notna(link_row.get("overnight_cost")) and link_row["overnight_cost"] >= 0
         )
         if has_cost:
             network.links.at[link_name, "discount_rate"] = discount_rate
@@ -246,7 +246,7 @@ def _apply_discount_rate_to_components(
     # Apply to generators
     for gen_name, gen_row in network.generators.iterrows():
         has_cost = (
-            pd.notna(gen_row.get("overnight_cost")) and gen_row["overnight_cost"] > 0
+            pd.notna(gen_row.get("overnight_cost")) and gen_row["overnight_cost"] >= 0
         )
         if has_cost:
             network.generators.at[gen_name, "discount_rate"] = discount_rate
@@ -374,6 +374,21 @@ def prepare_network(
         f"Skeleton loaded: {len(network.buses)} buses, "
         f"{len(network.links)} links, {len(network.stores)} stores"
     )
+
+    # Set snapshots here using wildcard year coming from Snakemake
+    cost_year = None
+    if "snakemake" in globals():
+        cost_year = getattr(snakemake.wildcards, "cost_year", None)
+
+    if cost_year is not None:
+        network.set_snapshots(
+            pd.date_range(f"{cost_year}-01-01", periods=8760, freq="h")
+        )
+        logger.info(f"Set snapshots for cost_year={cost_year} in prepare_network")
+    else:
+        raise ValueError(
+            "cost_year must be defined in snakemake wildcards for prepare_network"
+        )
 
     # Step 1b: Set interest rate (discount rate) for the network
     interest_rates = config.get("interest_rate", {})
