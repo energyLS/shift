@@ -638,6 +638,64 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+def apply_hbi_diversity_constraint(n, diversity_factor, demands):
+    """
+    Apply HBI import diversity constraint.
+    
+    Constrains each importer region to not import more than diversity_factor
+    from any single supplier. 
+    
+    E.g., diversity_factor=0.5 means each region can import at most 50% of its 
+    steel demand from any single HBI supplier.
+    
+    Parameters:
+    -----------
+    n : pypsa.Network
+        The network object
+    diversity_factor : float
+        Maximum share of HBI demand that can be supplied by a single supplier (0-1)
+    demands : pd.DataFrame
+        DataFrame with steel demands by region
+    """
+    
+    if diversity_factor is False:
+        print("HBI diversity constraint disabled")
+        return n
+    
+    if diversity_factor <= 0 or diversity_factor > 1:
+        raise ValueError("diversity_factor must be between 0 and 1")
+    
+    # Get all HBI shipping links
+    hbi_shipping_links = n.links[n.links.carrier == "shipping_hbi"]
+    
+    # Group by destination (bus1) to find all suppliers for each importer
+    for destination_bus, group in hbi_shipping_links.groupby("bus1"):
+        # Extract region name from bus (e.g., "Europe_hbi" -> "Europe")
+        if destination_bus.endswith("_hbi"):
+            region_name = destination_bus[:-4]
+        else:
+            region_name = destination_bus
+        
+        # Get the HBI demand for this region (equals steel demand in tonnes)
+        demand_tonnes = demands.loc[demands["region"] == region_name, "demand"].values
+        
+        if len(demand_tonnes) == 0:
+            print(f"Warning: No demand found for region {region_name}, skipping diversity constraint")
+            continue
+        
+        demand_tonnes = float(demand_tonnes[0])
+        
+        # Maximum import from single supplier = diversity_factor * demand
+        max_from_single_supplier = diversity_factor * demand_tonnes
+        
+        # Set p_nom_max for all links to this destination
+        for link_idx in group.index:
+            n.links.loc[link_idx, "p_nom_max"] = max_from_single_supplier
+        
+        print(f"HBI diversity constraint applied to {region_name}: max {diversity_factor*100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier")
+    
+    return n
+
 def normalize_regions(regions, carrier):
     """Ensure regions are lists and suffixed with _{carrier}."""
     if regions is None:
@@ -797,6 +855,14 @@ if __name__ == "__main__":
     cost_penalty = snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"]
     print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
     n = apply_cost_penalty(n, cost_penalty)
+
+    # HBI diversity constraint
+    diversity_factor = snakemake.config["trade"]["diversity_factor"]
+    if diversity_factor is not False:
+        print(f"applying HBI diversity constraint with factor {diversity_factor}")
+        n = apply_hbi_diversity_constraint(n, diversity_factor, demands)
+    else:
+        print("HBI diversity constraint disabled")
 
     # MGA
 
