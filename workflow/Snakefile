@@ -1,36 +1,9 @@
-from snakemake.remote.HTTP import RemoteProvider as HTTPRemoteProvider
 import sys
-from email import utils
 from snakemake.utils import Paramspace
 import pandas as pd
-from os.path import normpath, exists, isdir
-from shutil import copyfile, move
 
 # HTTP = HTTPRemoteProvider()
 sys.path.append("./scripts")
-
-# ============================================================================
-# FILE DELETION STRATEGY (Development vs Production)
-# ============================================================================
-# During development: ALL outputs are kept for validation, debugging, and
-# iterative refinement.
-#
-# Post-development cleanup (marked with [DELETION FLAG]):
-#   - steel_skeleton_{cost_year}.nc          [~500 KB]: Fast to regenerate (<1 min)
-#   - network_{1,10,50}.nc per region        [~50-100 MB]: Intermediate solver states, for debugging
-#   - {region}_{product}_nodemand.csv        [~10 KB]: Reference copy of supply curve before local demand subtraction
-#
-# ALWAYS KEEP:
-#   - results_{1,10,50}.csv per region       [~50 KB]: Expensive to regenerate (~20 min)
-#   - {region}_{product}.csv                 [~10 KB]: Final supply curves→model_trade input
-#   - {region}_{product}.pdf                 [~200 KB]: Low cost, high validation value
-#   - base_{cost_year}_{region}_{product}.nc [~10-20 MB]: Good checkpoint, medium regen cost
-#
-# Once finalized, add a cleanup rule that:
-#   1. Checks if all expected outputs exist
-#   2. Deletes flagged files only after final rule completes
-#   3. Preserves audit trail in .audit_{} JSON files
-# ============================================================================
 
 # Read scenario definitions to construct wildcard and instance patterns from them
 trade_scenarios = Paramspace(pd.read_csv("../config/trade_scenarios.csv", dtype=str))
@@ -38,12 +11,36 @@ trade_scenarios = Paramspace(pd.read_csv("../config/trade_scenarios.csv", dtype=
 
 configfile: "../config/config.yaml"
 
-# localrules: all
+# ----------------------------------------------------------------------------------
+# SECTION 0: Workflow metadata and execution hints
+# - origin: README workflow description
+# - scenario definitions loaded from ../config/trade_scenarios.csv
+# - config loaded from ../config/config.yaml
+# - This file orchestrates greenfield supply curve generation, interregional trade modelling, and figure collection.
+# ----------------------------------------------------------------------------------
 
 wildcard_constraints:
     country="[a-zA-Z]+",
     sweep="[a-zA-Z]+",
     rule="(0|[1-9][0-9]?|100)"
+
+# ----------------------------------------------------------------------------------
+# SECTION 1: Greenfield supply curve generation (PyPSA)
+# Description: produce region-specific levelized cost curves for steel via PyPSA.
+# Inputs:
+#   - ../data/renewable_clusters.nc (renewable capacity & timeseries)
+#   - ../resources/technology_data/costs_{cost_year}.csv (tech cost data)
+# Outputs:
+#   - ../resources/networks/base_{cost_year}_{region}_{product}.nc (prepped regional network)
+#   - ../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv (regional supply curve)
+# Config gate: config["enable"]["run_supply_chain"], config["enable"]["run_supply_curve"]
+# Script mapping:
+#   - scripts/tech_database.py
+#   - scripts/build_x_supply_chain.py
+#   - scripts/prepare_regional_network.py
+#   - scripts/calculate_lcox.py
+#   - scripts/create_supply_curve.py
+# ----------------------------------------------------------------------------------
 
 rule retrieve_cost_data:
     params:
@@ -56,20 +53,6 @@ rule retrieve_cost_data:
     threads: 2
     script:
         "scripts/tech_database.py"
-
-
-# Prepare the trace file prior to running the model
-rule retrieve_trace_steel:
-    input:
-        trace = "../../trace-fneum/trace/resources/networks/default/{cost_year}/shipping-steel/DE-DE/network.nc"
-    output:
-        trace="../resources/trace/steel_{cost_year}.nc",
-    resources:
-        mem_mb=5000,
-    threads: 2
-    run:
-        copyfile(input[0], output[0])
-
 
 # Build steel supply chain technology skeleton
 rule build_steel_skeleton:
@@ -166,8 +149,6 @@ if config["enable"].get("run_supply_curve", True):
         script:
             "scripts/create_supply_curve.py"
 
-
-
 rule create_all_supply_curves:
     input:
         expand(
@@ -175,6 +156,13 @@ rule create_all_supply_curves:
             cost_year=[2030,2050], region=config["regions"], product=["steel"], allow_missing=True
             ) #cost_year=[2030,2050], region=config["regions"], product=["steel", "hydrogen"]
 
+
+# ----------------------------------------------------------------------------------
+# SECTION 2: Interregional trade model
+# Description: build trade results and network maps for all scenarios from supply curves.
+# config/scenario-driven: uses trade_scenarios wildcard patterns from ../config/trade_scenarios.csv
+# including optional cost scenario params from `config["trade"]` + `config["design"]`.
+# ----------------------------------------------------------------------------------
 
 rule model_trade:
     params:
@@ -223,6 +211,12 @@ rule model_trade_all:
         trade_plot_steel=expand("../results/{scenarios}/map_steel.pdf", scenarios=trade_scenarios.instance_patterns),
 
 
+# ----------------------------------------------------------------------------------
+# SECTION 3: Results collection and figure outputs
+# Description: collect analysis figures (cost curves, maps, demand profiles) for presentation.
+# This is a final aggregation stage and depends on outputs from earlier modelling / notebooks.
+# ----------------------------------------------------------------------------------
+
 rule collect_figures:
     input:
         global_supply_curve = "../results/figures_general/{scenario}/global_supply_curve.pdf", #workflow/notebooks/analysis-coststructure.ipynb
@@ -267,3 +261,11 @@ rule collect_figures:
 
 #     notebook:
 #         "workflow/notebooks/input-cost-comp.ipynb"
+
+# ----------------------------------------------------------------------------------
+# RUNNING THE WORKFLOW (developer convenience)
+# Use e.g.:
+#   snakemake -s workflow/Snakefile -j 8 model_trade_all
+#   snakemake -s workflow/Snakefile -j 4 prepare_regional_network cost_year=2030 region=Europe product=steel
+#   snakemake -s workflow/Snakefile -j 4 create_supply_curve cost_year=2030 region=EU product=steel
+# ----------------------------------------------------------------------------------

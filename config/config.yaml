@@ -45,7 +45,7 @@ interest_rate:
 
 part_load:
   electrolysis: 0.0
-  direct reduction furnace: 0.9
+  direct reduction furnace: 0.0
   electric arc furnace: 0.0
   # add part load limitations by naming the carrier of links
 
@@ -74,7 +74,6 @@ plot:
     steel:
       bus_size: 1.0e-7
       link_width: 1.5e-8
-
 solver:
   name: gurobi
   options: gurobi-default
