@@ -1,6 +1,6 @@
 # SHIFT – Steel & Hydrogen Integrated Freight Trade
 
-This repository contains the **SHIFT model**, a spatially resolved techno-economic optimization of global iron and steel supply chains under decarbonization. It explores how hydrogen-based direct reduced iron (DRI) production and hot-briquetted iron (HBI) trade can shift value creation to regions with renewable energy, infrastructure, and capital availability.
+This repository contains the **SHIFT model**, a spatially resolved techno-economic optimization of global iron and steel supply chains under decarbonization. It explores how hydrogen-based direct reduced iron (DRI) production and hot-briquetted iron (HBI) trade can shift value creation to regions with renewable energy and capital availability.
 
 The model identifies cost-optimal configurations for mining, hydrogen production, DRI processing, and HBI trade, using a two-stage optimization pipeline and open energy system libraries.
 
@@ -17,11 +17,32 @@ Key features:
 
 ## Quick installation (PIXI)
 
+    Clone the repository:
+
 ```sh
-git clone https://github.com/energyLS/shift.git && cd shift
-python -m pip install --upgrade pip pixi
+git clone https://github.com/energyLS/shift.git
+cd shift
+```
+
+    Install dependencies with pixi:
+
+```sh
 pixi install
 ```
+
+    Activate the environment:
+
+```sh
+pixi shell
+```
+
+    (Optional) Install pre-commit hooks:
+
+```sh
+pre-commit install
+```
+
+
 
 For details, see https://pixi.prefix.dev/latest/ (or your local PIXI docs).
 

@@ -10,13 +10,12 @@ version = "0.1.0"
 
 [dependencies]
 # Core Python
-python = ">=3.10"
+python = ">=3.12"
 
 # Inhouse packages - energy system modeling
 pypsa = ">=0.32.1"
 atlite = ">=0.3"
 linopy = ">=0.4.4"
-powerplantmatching = ">=0.5.15"
 
 # Workflow orchestration
 snakemake-minimal = ">=9"
@@ -25,26 +24,14 @@ snakemake-executor-plugin-slurm = "*"
 snakemake-executor-plugin-cluster-generic = "*"
 
 # Data processing and I/O
-dask = "*"
 pandas = ">=2.1"
 numpy = "*"
 xarray = ">=2024.03.0"
-pytables = "*"
 netcdf4 = "*"
 libgdal-netcdf = "*"
-lxml = "*"
-xlrd = "*"
-openpyxl = "*"
 
 # Geospatial and mapping
 geopandas = ">=1"
-rioxarray = "*"
-cartopy = "*"
-rasterio = "*"
-fiona = "*"
-shapely = ">=2.0"
-proj = "*"
-descartes = "*"
 
 # Scientific computing
 scipy = "*"
@@ -55,28 +42,16 @@ matplotlib = "*"
 # Utilities
 pyyaml = "*"
 tqdm = "*"
-country_converter = "*"
 geopy = "*"
-pytz = "*"
-memory_profiler = "*"
-jpype1 = "*"
-pyxlsb = "*"
-graphviz = "*"
 geojson = "*"
 
 [pypi-dependencies]
 # pip-installable packages (always included)
-tsam = ">=2.3.1"
-entsoe-py = "*"
-pypsatopo = "*"
 gurobipy = "*"
 
 [feature.test.dependencies]
 pytest = "*"
 pytest-cov = "*"
-
-[feature.docs.dependencies]
-sphinx = "*"
 
 [feature.dev.dependencies]
 ruff = "*"
@@ -89,12 +64,11 @@ nbqa = "*"
 [environments]
 default = { features = [], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
-docs = { features = ["docs"], solve-group = "default" }
-dev = { features = ["dev", "test", "docs"], solve-group = "default" }
+dev = { features = ["dev", "test"], solve-group = "default" }
 
 [tool.ruff]
 # Ruff linter configuration
-line-length = 120
+line-length = 88
 target-version = "py310"
 exclude = ["**/*.ipynb"]
 

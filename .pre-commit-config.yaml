@@ -1,4 +1,4 @@
-exclude: "^LICENSES|^config/config\\.default\\.yaml$"
+exclude: "^LICENSES|^config/config\\.yaml$"
 
 ci:
   autoupdate_schedule: quarterly
