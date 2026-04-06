@@ -119,7 +119,9 @@ def building_model(
         elif regionalise == "uniform":
             iron_ore_cost = snakemake.config["iron_ore"]["marginal_cost"]
         else:
-            ValueError("Invalid option for iron ore regionalisation. Choose 'grade-dependent' or 'uniform'.")
+            ValueError(
+                "Invalid option for iron ore regionalisation. Choose 'grade-dependent' or 'uniform'."
+            )
 
         n.add(
             "Generator",
@@ -638,16 +640,17 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+
 def apply_hbi_diversity_constraint(n, diversity_factor, demands):
     """
     Apply HBI import diversity constraint.
-    
+
     Constrains each importer region to not import more than diversity_factor
-    from any single supplier. 
-    
-    E.g., diversity_factor=0.5 means each region can import at most 50% of its 
+    from any single supplier.
+
+    E.g., diversity_factor=0.5 means each region can import at most 50% of its
     steel demand from any single HBI supplier.
-    
+
     Parameters:
     -----------
     n : pypsa.Network
@@ -657,17 +660,17 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
     demands : pd.DataFrame
         DataFrame with steel demands by region
     """
-    
+
     if diversity_factor is False:
         print("HBI diversity constraint disabled")
         return n
-    
+
     if diversity_factor <= 0 or diversity_factor > 1:
         raise ValueError("diversity_factor must be between 0 and 1")
-    
+
     # Get all HBI shipping links
     hbi_shipping_links = n.links[n.links.carrier == "shipping_hbi"]
-    
+
     # Group by destination (bus1) to find all suppliers for each importer
     for destination_bus, group in hbi_shipping_links.groupby("bus1"):
         # Extract region name from bus (e.g., "Europe_hbi" -> "Europe")
@@ -675,26 +678,31 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
             region_name = destination_bus[:-4]
         else:
             region_name = destination_bus
-        
+
         # Get the HBI demand for this region (equals steel demand in tonnes)
         demand_tonnes = demands.loc[demands["region"] == region_name, "demand"].values
-        
+
         if len(demand_tonnes) == 0:
-            print(f"Warning: No demand found for region {region_name}, skipping diversity constraint")
+            print(
+                f"Warning: No demand found for region {region_name}, skipping diversity constraint"
+            )
             continue
-        
+
         demand_tonnes = float(demand_tonnes[0])
-        
+
         # Maximum import from single supplier = diversity_factor * demand
         max_from_single_supplier = diversity_factor * demand_tonnes
-        
+
         # Set p_nom_max for all links to this destination
         for link_idx in group.index:
             n.links.loc[link_idx, "p_nom_max"] = max_from_single_supplier
-        
-        print(f"HBI diversity constraint applied to {region_name}: max {diversity_factor*100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier")
-    
+
+        print(
+            f"HBI diversity constraint applied to {region_name}: max {diversity_factor*100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier"
+        )
+
     return n
+
 
 def normalize_regions(regions, carrier):
     """Ensure regions are lists and suffixed with _{carrier}."""
@@ -711,7 +719,71 @@ def normalize_regions(regions, carrier):
             normalized.append(f"{r}_{carrier}")
     return normalized
 
-def solve_network(n, mga=None):
+
+def resolve_mga_exporters_from_indicator(mga, indicators):
+    """
+    Resolve MGA (Modelling to generate Alternatives) exporters based on indicator thresholds.
+    
+    If mga config specifies an 'indicator' instead of explicit 'export' regions,
+    this function selects regions where the indicator is below the threshold_value.    Parameters:
+    -----------
+    mga : dict
+        MGA configuration containing:
+        - 'indicator': str, name of the indicator (e.g., 'stability')
+        - 'threshold_value': float, regions with indicator below this value are selected
+        - OR 'export': list of regions (manual specification takes precedence)
+    indicators : dict
+        Dictionary mapping indicator_name -> DataFrame with region as index
+
+    Returns:
+    --------
+    dict : Updated mga config with 'export' regions resolved
+    """
+
+    # If export is manually specified, use that
+    if "export" in mga and mga["export"] is not None:
+        return mga
+
+    # Otherwise, resolve from indicator
+    if "indicator" not in mga:
+        print("No indicator or export specified in MGA config")
+        return mga
+
+    indicator_name = mga["indicator"]
+    threshold = mga.get("threshold_value")
+
+    if indicator_name not in indicators:
+        raise ValueError(
+            f"Indicator '{indicator_name}' not found in available indicators: {list(indicators.keys())}"
+        )
+
+    if threshold is None:
+        raise ValueError(
+            f"threshold_value must be specified when using indicator '{indicator_name}'"
+        )
+
+    indicator_data = indicators[indicator_name]
+
+    # Select regions where indicator is below threshold
+    # indicator_data is a DataFrame with region as index and a single column
+    # Extract the actual values (first column)
+    if isinstance(indicator_data, pd.DataFrame):
+        values = indicator_data.iloc[:, 0]
+    else:
+        values = indicator_data
+
+    selected_regions = values[values < threshold].index.tolist()
+
+    print(f"Selected regions with {indicator_name} < {threshold}: {selected_regions}")
+    print(f"Values: {values[values < threshold].to_dict()}")
+
+    # Set export to the selected regions
+    mga["export"] = selected_regions
+
+    return mga
+
+
+def solve_network(n, mga=None, indicators=None):
 
     solver_name = snakemake.config["solver"]["name"]
     options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
@@ -721,6 +793,9 @@ def solve_network(n, mga=None):
     if mga == None:
         pass
     else:
+        # Resolve exporters from indicator if needed
+        if indicators:
+            mga = resolve_mga_exporters_from_indicator(mga, indicators)
 
         tsc = (
             pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
@@ -730,8 +805,8 @@ def solve_network(n, mga=None):
         optimal_cost = tsc.sum()
 
         carrier = mga["carrier"]
-        exports = normalize_regions(mga["export"], carrier)
-        imports = normalize_regions(mga["import"], carrier)
+        exports = normalize_regions(mga.get("export"), carrier)
+        imports = normalize_regions(mga.get("import"), carrier)
 
         # Select links in PyPSA
         mask = n.links.carrier == f"shipping_{carrier}"
@@ -782,7 +857,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="default",
+            scenario="mga-new-indicators",
         )
 
     final = snakemake.wildcards["final"]
@@ -864,8 +939,26 @@ if __name__ == "__main__":
     else:
         print("HBI diversity constraint disabled")
 
-    # MGA
+    # Load indicators for MGA (flexible architecture for future extensions)
+    indicators = {}
 
+    # Load political stability indicator if available
+    if hasattr(snakemake.input, "political_stability"):
+        try:
+            political_stability_data = pd.read_csv(
+                snakemake.input.political_stability, index_col=0
+            )
+            indicators["stability"] = political_stability_data
+            print(
+                f"Loaded political stability indicator with {len(political_stability_data)} regions"
+            )
+        except Exception as e:
+            print(f"Warning: Could not load political stability data: {e}")
+
+    # Future: Add more indicators here
+    # indicators['other_indicator'] = pd.read_csv(...)
+
+    # MGA
     if "mga" not in snakemake.config["scenario"][scenario]["modifiers"].keys():
         mga = None
         print("MGA not activated")
@@ -875,7 +968,7 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
-    n = solve_network(n, mga=mga)
+    n = solve_network(n, mga=mga, indicators=indicators if indicators else None)
     print("network was solved")
 
     # saving results and calculating LCOH
