@@ -500,9 +500,43 @@ def save_trade_network(solved_network):
     print("added bus_capacities to sol")
 
     sol.to_csv(snakemake.output.trade_result)
-    n.export_to_netcdf(snakemake.output.trade_network)
 
     return
+
+
+def save_network_collection(nc, output_path):
+    """
+    Save a NetworkCollection to netCDF format.
+
+    Each network in the collection is saved as a separate netCDF file with
+    the index/key appended to the filename.
+
+    Parameters:
+    -----------
+    nc : pypsa.NetworkCollection
+        The NetworkCollection to save
+    output_path : str
+        Base output path (e.g., "network.nc"). Will become "network_0.005.nc", etc.
+    """
+    import os
+
+    # Create output directory if it doesn't exist
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Split path into base and extension
+    base, ext = os.path.splitext(output_path)
+
+    print(f"Saving NetworkCollection with {len(nc.networks)} networks to {output_dir}")
+
+    # Save each network with its index/key in the filename
+    for key, network in nc.networks.items():
+        filename = f"{base}_{key}{ext}"
+        print(f"  Saving network with key '{key}' to {filename}")
+        network.export_to_netcdf(filename)
+
+    print(f"Saved {len(nc.networks)} networks to {output_dir}")
 
 
 def plot_trade_network(
@@ -723,7 +757,7 @@ def normalize_regions(regions, carrier):
 def resolve_mga_exporters_from_indicator(mga, indicators):
     """
     Resolve MGA (Modelling to generate Alternatives) exporters based on indicator thresholds.
-    
+
     If mga config specifies an 'indicator' instead of explicit 'export' regions,
     this function selects regions where the indicator is below the threshold_value.    Parameters:
     -----------
@@ -784,46 +818,120 @@ def resolve_mga_exporters_from_indicator(mga, indicators):
 
 
 def solve_network(n, mga=None, indicators=None):
+    """
+    Solve the network with optional MGA (Modelling to generate Alternatives).
+
+    If mga["slack"] is a scalar, returns a single solved Network.
+    If mga["slack"] is a list, returns a NetworkCollection with one network per slack value.
+
+    Parameters:
+    -----------
+    n : pypsa.Network
+        The network to solve
+    mga : dict, optional
+        MGA configuration with keys: carrier, slack (scalar or list), sense,
+        and optionally export, import, indicator, threshold_value
+    indicators : dict, optional
+        Dictionary of indicator DataFrames for indicator-based MGA
+
+    Returns:
+    --------
+    pypsa.Network or pypsa.NetworkCollection
+        Single network if single slack, collection if multiple slacks
+    """
 
     solver_name = snakemake.config["solver"]["name"]
     options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
 
+    # First optimize without MGA
     n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
 
     if mga == None:
-        pass
+        return n
+
+    # Resolve exporters from indicator if needed
+    if indicators:
+        mga = resolve_mga_exporters_from_indicator(mga, indicators)
+
+    tsc = (
+        pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+        .sum(axis=1)
+        .div(1e9)
+    )
+    optimal_cost = tsc.sum()
+
+    carrier = mga["carrier"]
+    exports = normalize_regions(mga.get("export"), carrier)
+    imports = normalize_regions(mga.get("import"), carrier)
+
+    # Select links in PyPSA
+    mask = n.links.carrier == f"shipping_{carrier}"
+
+    if exports is not None:
+        mask &= n.links.bus0.isin(exports)
+
+    if imports is not None:
+        mask &= n.links.bus1.isin(imports)
+
+    idx = n.links[mask].index
+
+    # Build MGA weights for all matched links
+    weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
+
+    sense = mga["sense"]
+    slack = mga["slack"]
+
+    # Handle both scalar and list slack values
+    if isinstance(slack, list):
+        # Multiple slacks: return NetworkCollection
+        print(f"MGA activated with multiple slacks: {slack}")
+        print(f"Optimal cost (no MGA): {optimal_cost:.2f} B€")
+
+        networks = {}
+        # Clear solver model attached to the solved network so it can be copied.
+        try:
+            if (
+                hasattr(n, "model")
+                and getattr(n.model, "solver_model", None) is not None
+            ):
+                n.model.solver_model = None
+        except Exception as e:
+            print(f"Warning clearing solver model before copying network: {e}")
+
+        for slack_value in slack:
+            print(f"\n--- Solving with slack = {slack_value} ---")
+
+            # Create a copy of the network for each slack
+            n_copy = n.copy()
+
+            # Run MGA optimization
+            n_copy.optimize.optimize_mga(
+                slack=slack_value,
+                weights=weights,
+                sense=sense,
+                solver_name=solver_name,
+                solver_options=options,
+            )
+
+            tsc = (
+                pd.concat([n_copy.statistics.capex(), n_copy.statistics.opex()], axis=1)
+                .sum(axis=1)
+                .div(1e9)
+            )
+            mga_cost = tsc.sum()
+            print(
+                f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack_value):.2f} B€"
+            )
+
+            # Store in dictionary with slack as key
+            networks[slack_value] = n_copy
+
+        # Create NetworkCollection
+        nc = pypsa.NetworkCollection(networks)
+        return nc
     else:
-        # Resolve exporters from indicator if needed
-        if indicators:
-            mga = resolve_mga_exporters_from_indicator(mga, indicators)
-
-        tsc = (
-            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
-            .sum(axis=1)
-            .div(1e9)
-        )
-        optimal_cost = tsc.sum()
-
-        carrier = mga["carrier"]
-        exports = normalize_regions(mga.get("export"), carrier)
-        imports = normalize_regions(mga.get("import"), carrier)
-
-        # Select links in PyPSA
-        mask = n.links.carrier == f"shipping_{carrier}"
-
-        if exports is not None:
-            mask &= n.links.bus0.isin(exports)
-
-        if imports is not None:
-            mask &= n.links.bus1.isin(imports)
-
-        idx = n.links[mask].index
-
-        # Build MGA weights for all matched links
-        weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
-
-        sense = mga["sense"]
-        slack = mga["slack"]
+        # Single slack: return single Network (existing behavior)
+        print(f"MGA activated with single slack: {slack}")
 
         n.optimize.optimize_mga(
             slack=slack,
@@ -844,7 +952,7 @@ def solve_network(n, mga=None, indicators=None):
             f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack):.2f} B€"
         )
 
-    return n
+        return n
 
 
 if __name__ == "__main__":
@@ -857,7 +965,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="mga-new-indicators",
+            scenario="mga-new-indicators-multiple",
         )
 
     final = snakemake.wildcards["final"]
@@ -968,36 +1076,99 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
-    n = solve_network(n, mga=mga, indicators=indicators if indicators else None)
+    result = solve_network(n, mga=mga, indicators=indicators if indicators else None)
     print("network was solved")
 
+    # Export result: handle both single Network and NetworkCollection
+    print("saving network to netCDF")
+    if isinstance(result, pypsa.NetworkCollection):
+        # Save each network in the collection with slack value in filename
+        save_network_collection(result, snakemake.output.trade_network)
+        # Select first network for CSV results
+        n_selected = result.networks[mga["slack"][0]]
+        slack_selected = list(result.networks.keys())[0]
+        print(f"Saved NetworkCollection; using slack={slack_selected} for CSV results")
+    else:
+        # Single network: save directly
+        result.export_to_netcdf(snakemake.output.trade_network)
+        n_selected = result
+        slack_selected = None
+        print("Saved single network to netCDF")
+
     # saving results and calculating LCOH
-    print("saving results as network+csv and pdf")
-    save_trade_network(n)
+    print("saving results as network+csv")
+    save_trade_network(n_selected)
 
-    # Plot iron ore map
-    plot_trade_network(
-        n,
-        product="iron_ore",
-        alpha_supply=0.5,
-        output_path=snakemake.output.trade_plot_ironore,
-        output_path_png=snakemake.output.trade_plot_ironore_png,
-    )
+    # Plot results: iterate through all networks in collection, or single network
+    print("saving plots")
 
-    # Plot iron ore map
-    plot_trade_network(
-        n,
-        product="hbi",
-        alpha_supply=0.5,
-        output_path=snakemake.output.trade_plot_hbi,
-        output_path_png=snakemake.output.trade_plot_hbi_png,
-    )
+    if isinstance(result, pypsa.NetworkCollection):
+        # Plot for each network in the collection
+        print(f"Plotting for {len(result.networks)} networks in collection")
+        for slack_key, network in result.networks.items():
+            print(f"\n  Plotting for slack={slack_key}")
 
-    # Plot steel map
-    plot_trade_network(
-        n,
-        product="steel",
-        alpha_supply=0.7,
-        output_path=snakemake.output.trade_plot_steel,
-        output_path_png=snakemake.output.trade_plot_steel_png,
-    )
+            # Modify output paths to include slack value
+            base_ironore = os.path.splitext(snakemake.output.trade_plot_ironore)[0]
+            base_ironore_png = os.path.splitext(
+                snakemake.output.trade_plot_ironore_png
+            )[0]
+            base_hbi = os.path.splitext(snakemake.output.trade_plot_hbi)[0]
+            base_hbi_png = os.path.splitext(snakemake.output.trade_plot_hbi_png)[0]
+            base_steel = os.path.splitext(snakemake.output.trade_plot_steel)[0]
+            base_steel_png = os.path.splitext(snakemake.output.trade_plot_steel_png)[0]
+
+            # Plot iron ore map
+            plot_trade_network(
+                network,
+                product="iron_ore",
+                alpha_supply=0.5,
+                output_path=f"{base_ironore}_{slack_key}.pdf",
+                output_path_png=f"{base_ironore_png}_{slack_key}.png",
+            )
+
+            # Plot HBI map
+            plot_trade_network(
+                network,
+                product="hbi",
+                alpha_supply=0.5,
+                output_path=f"{base_hbi}_{slack_key}.pdf",
+                output_path_png=f"{base_hbi_png}_{slack_key}.png",
+            )
+
+            # Plot steel map
+            plot_trade_network(
+                network,
+                product="steel",
+                alpha_supply=0.7,
+                output_path=f"{base_steel}_{slack_key}.pdf",
+                output_path_png=f"{base_steel_png}_{slack_key}.png",
+            )
+    else:
+        # Single network: plot once as before
+        # Plot iron ore map
+        plot_trade_network(
+            n_selected,
+            product="iron_ore",
+            alpha_supply=0.5,
+            output_path=snakemake.output.trade_plot_ironore,
+            output_path_png=snakemake.output.trade_plot_ironore_png,
+        )
+
+        # Plot HBI map
+        plot_trade_network(
+            n_selected,
+            product="hbi",
+            alpha_supply=0.5,
+            output_path=snakemake.output.trade_plot_hbi,
+            output_path_png=snakemake.output.trade_plot_hbi_png,
+        )
+
+        # Plot steel map
+        plot_trade_network(
+            n_selected,
+            product="steel",
+            alpha_supply=0.7,
+            output_path=snakemake.output.trade_plot_steel,
+            output_path_png=snakemake.output.trade_plot_steel_png,
+        )
