@@ -66,7 +66,15 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         carrier: "hbi"
         indicator: "stability"
         threshold_value: 30 # Regions with stability index below 30
-
+  mga-new-indicators-multiple:
+    modifiers:
+      cost_penalty:
+      mga:
+        slack: [0.005, 0.01, 0.015] #, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+        sense: "min"
+        carrier: "hbi"
+        indicator: "stability"
+        threshold_value: 30 # Regions with stability index below 30
 
 design:
   cost_penalty:
