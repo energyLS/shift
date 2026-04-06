@@ -46,9 +46,8 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
       mga:
         slack: 0.002
         sense: "min"
-        # link_idx: "shipping hbi North_West_Africa-Europe"
         carrier: "hbi"
-        export: "North_West_Africa_hbi"
+        export: "North_West_Africa"
         import: "Europe"
   mga-nwa-iso:
     modifiers:
@@ -57,9 +56,16 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         slack: 0.01
         sense: "min"
         carrier: "hbi"
-        export: "North_West_Africa_hbi"
-        import:
-
+        export: "North_West_Africa"
+  mga-new-indicators:
+    modifiers:
+      cost_penalty:
+      mga:
+        slack: 0.01
+        sense: "min"
+        carrier: "hbi"
+        indicator: "stability"
+        threshold_value: 30 # Regions with stability index below 30
 
 
 design:
