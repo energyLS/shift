@@ -50,6 +50,7 @@ dependencies:
 - graphviz
 - geojson
 - pyscipopt
+- searoute
 
 # GIS dependencies:
 - cartopy
