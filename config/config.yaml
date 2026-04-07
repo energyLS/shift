@@ -75,6 +75,15 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         carrier: "hbi"
         indicator: "stability"
         threshold_value: 30 # Regions with stability index below 30
+  mga-chokepoints:
+    modifiers:
+      cost_penalty:
+      mga:
+        slack: [0.01, 0.02, 0.03]
+        sense: "min"
+        carrier: "hbi"
+        indicator: "chokepoint"
+        threshold_value: ["babalmandab", "bosporus", "gibraltar", "suez", "panama", "ormuz", "northwest", "malacca", "sunda", "chili", "south_africa"]
 
 design:
   cost_penalty:

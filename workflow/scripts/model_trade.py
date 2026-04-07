@@ -796,6 +796,10 @@ def resolve_mga_exporters_from_indicator(mga, indicators):
     indicator_name = mga["indicator"]
     threshold = mga.get("threshold_value")
 
+    # Chokepoint indicator is handled separately in solve_network
+    if indicator_name == "chokepoint":
+        return mga
+
     if indicator_name not in indicators:
         raise ValueError(
             f"Indicator '{indicator_name}' not found in available indicators: {list(indicators.keys())}"
@@ -825,6 +829,87 @@ def resolve_mga_exporters_from_indicator(mga, indicators):
     mga["export"] = selected_regions
 
     return mga
+
+
+def resolve_mga_links_from_chokepoints(n, mga, trade_options, interone):
+    """
+    Resolve MGA link indices based on chokepoint avoidance.
+
+    Instead of filtering by exporter region (like stability), this function
+    selects shipping links whose routes pass through any of the chokepoints
+    listed in mga['threshold_value'].
+
+    Parameters:
+    -----------
+    n : pypsa.Network
+        The network containing shipping links
+    mga : dict
+        MGA configuration containing:
+        - 'carrier': str, the carrier type (e.g., 'hbi')
+        - 'threshold_value': list of str, chokepoint names to avoid
+          (e.g., ['suez', 'ormuz', 'babalmandab'])
+    trade_options : pd.DataFrame
+        Trade options DataFrame with 'region_from', 'region_to', and 'chokepoints' columns.
+        The 'chokepoints' column contains semicolon-separated passage names.
+    interone : str
+        The intermediate product name (e.g., 'hbi')
+
+    Returns:
+    --------
+    pd.Index : Index of link names whose routes traverse listed chokepoints
+    """
+    carrier = mga["carrier"]
+    chokepoints_to_avoid = set(mga["threshold_value"])
+
+    # Build a lookup: (region_from, region_to) -> set of chokepoints
+    route_chokepoints = {}
+    for _, row in trade_options.iterrows():
+        r_from = row["region_from"]
+        r_to = row["region_to"]
+        cp_str = row.get("chokepoints", "")
+        if pd.isna(cp_str) or cp_str == "":
+            cp_set = set()
+        else:
+            cp_set = set(str(cp_str).split(";"))
+        route_chokepoints[(r_from, r_to)] = cp_set
+
+    # Select shipping links that match the carrier and traverse any listed chokepoint
+    mask = n.links.carrier == f"shipping_{carrier}"
+    carrier_links = n.links[mask]
+
+    selected_links = []
+    for link_name, link_row in carrier_links.iterrows():
+        # Extract region_from and region_to from link name
+        # Link names: "shipping {interone} {r_from}-{r_to}" or "shipping iron ore {r_from}-{r_to}"
+        if f"shipping {interone}" in link_name:
+            route_part = link_name.replace(f"shipping {interone} ", "")
+        elif "shipping iron ore" in link_name:
+            route_part = link_name.replace("shipping iron ore ", "")
+        else:
+            continue
+
+        parts = route_part.split("-")
+        if len(parts) == 2:
+            r_from, r_to = parts
+        else:
+            # Handle region names that contain hyphens (unlikely but safe)
+            continue
+
+        # Check if this route passes through any chokepoint to avoid
+        route_cp = route_chokepoints.get((r_from, r_to), set())
+        if route_cp & chokepoints_to_avoid:  # set intersection
+            selected_links.append(link_name)
+            print(
+                f"  Chokepoint MGA: link '{link_name}' traverses "
+                f"{route_cp & chokepoints_to_avoid}"
+            )
+
+    print(
+        f"Chokepoint MGA: selected {len(selected_links)}/{len(carrier_links)} "
+        f"shipping links traversing {chokepoints_to_avoid}"
+    )
+
+    return pd.Index(selected_links)
 
 
 def solve_network(n, mga=None, indicators=None):
@@ -883,19 +968,31 @@ def solve_network(n, mga=None, indicators=None):
     optimal_cost = tsc.sum()
 
     carrier = mga["carrier"]
-    exports = normalize_regions(mga.get("export"), carrier)
-    imports = normalize_regions(mga.get("import"), carrier)
 
-    # Select links in PyPSA
-    mask = n.links.carrier == f"shipping_{carrier}"
+    # Determine which links to target based on indicator type
+    indicator_name = mga.get("indicator")
 
-    if exports is not None:
-        mask &= n.links.bus0.isin(exports)
+    if indicator_name == "chokepoint" and indicators and "chokepoint" in indicators:
+        # Chokepoint MGA: select links directly based on route chokepoints
+        trade_options_data = indicators["chokepoint"]
+        idx = resolve_mga_links_from_chokepoints(
+            n, mga, trade_options_data, interone
+        )
+    else:
+        # Region-based MGA (stability or manual export/import specification)
+        exports = normalize_regions(mga.get("export"), carrier)
+        imports = normalize_regions(mga.get("import"), carrier)
 
-    if imports is not None:
-        mask &= n.links.bus1.isin(imports)
+        # Select links in PyPSA
+        mask = n.links.carrier == f"shipping_{carrier}"
 
-    idx = n.links[mask].index
+        if exports is not None:
+            mask &= n.links.bus0.isin(exports)
+
+        if imports is not None:
+            mask &= n.links.bus1.isin(imports)
+
+        idx = n.links[mask].index
 
     # Build MGA weights for all matched links
     weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
@@ -984,6 +1081,7 @@ if __name__ == "__main__":
     # Load indicators for MGA (flexible architecture for future extensions)
     indicators = {}
     indicators["stability"] = political_stability_data
+    indicators["chokepoint"] = trade_options  # trade_options now has 'chokepoints' column
 
     # limit regions
     trade_options = trade_options[
