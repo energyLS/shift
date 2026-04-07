@@ -239,6 +239,7 @@ rule plot_mga:
     input:
         network = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-new-indicators-multiple/network.nc",
         political_stability = "../resources/political_stability_clustered.csv",
+        trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv",
     output:
         mga_plot = "../results/figures_general/mga/mga_analysis.pdf",
         mga_plot_png = "../results/figures_general/mga/mga_analysis.png",
