@@ -83,7 +83,7 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         sense: "min"
         carrier: "hbi"
         indicator: "chokepoint"
-        threshold_value: ["babalmandab", "bosporus", "gibraltar", "suez", "panama", "ormuz", "northwest", "malacca", "sunda", "chili", "south_africa"]
+        threshold_value: ["babalmandab", "bosporus", "gibraltar", "suez", "panama", "ormuz", "malacca", "south_africa"] # Primary chokepoints according to https://porteconomicsmanagement.org/pemp/contents/part1/interoceanic-passages/main-maritime-shipping-routes/  # Secondary chokepoints: ["northwest", "sunda", "chili"], Primary chokepoints not in searoutes: ["Oresund"]
 
 design:
   cost_penalty:
