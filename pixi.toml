@@ -32,6 +32,8 @@ libgdal-netcdf = "*"
 
 # Geospatial and mapping
 geopandas = ">=1"
+pycountry = "*"
+geohash2 = "*"
 
 # Scientific computing
 scipy = "*"
