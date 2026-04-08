@@ -237,7 +237,8 @@ rule model_trade:
 
 rule plot_mga:
     input:
-        network = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-new-indicators-multiple/network.nc",
+        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-new-indicators-multiple/network.nc",
+        network_mga_chokepoints = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-chokepoints/network.nc",
         political_stability = "../resources/political_stability_clustered.csv",
         trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv",
     output:
