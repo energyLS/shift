@@ -70,7 +70,7 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.1]
+        slack: [0.01, 0.02, 0.03, 0.04, 0.05]
         sense: "min"
         carrier: "hbi"
         indicator: "stability"
@@ -79,11 +79,23 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.01, 0.02, 0.03]
+        slack: [0.01, 0.02, 0.03,0.04, 0.05]
         sense: "min"
         carrier: "hbi"
         indicator: "chokepoint"
         threshold_value: ["babalmandab", "bosporus", "gibraltar", "suez", "panama", "ormuz", "malacca", "south_africa"] # Primary chokepoints according to https://porteconomicsmanagement.org/pemp/contents/part1/interoceanic-passages/main-maritime-shipping-routes/  # Secondary chokepoints: ["northwest", "sunda", "chili"], Primary chokepoints not in searoutes: ["Oresund"]
+  mga-blocks:
+    modifiers:
+      cost_penalty:
+      mga:
+        slack: [0.005, 0.01, 0.015, 0.02, 0.03] #[0.01, 0.02, 0.03]
+        sense: "min"
+        carrier: "hbi"
+        indicator: "blocks"
+        threshold_value: 
+          block_a: ["Europe","Far_West_Europe","North_America","East_East_Asia","South_South_America", "Oceania"]
+          block_b: ["Middle_East","Subsaharan_Africa","North_West_Africa", "Eurasia","South_America","Central_America","West_Asia","East_Asia","Pacific_Asia"]
+
 
 design:
   cost_penalty:

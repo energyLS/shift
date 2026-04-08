@@ -796,8 +796,8 @@ def resolve_mga_exporters_from_indicator(mga, indicators):
     indicator_name = mga["indicator"]
     threshold = mga.get("threshold_value")
 
-    # Chokepoint indicator is handled separately in solve_network
-    if indicator_name == "chokepoint":
+    # Chokepoint and blocks indicators are handled separately in solve_network
+    if indicator_name in ("chokepoint", "blocks"):
         return mga
 
     if indicator_name not in indicators:
@@ -912,6 +912,110 @@ def resolve_mga_links_from_chokepoints(n, mga, trade_options, interone):
     return pd.Index(selected_links)
 
 
+def resolve_mga_links_from_blocks(n, mga):
+    """
+    Resolve MGA link indices for inter-block trade minimisation.
+
+    Selects shipping links where the exporter (bus0) belongs to one block
+    and the importer (bus1) belongs to a different block.  Intra-block trade
+    is left unconstrained.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        The network containing shipping links.
+    mga : dict
+        MGA configuration.  ``threshold_value`` must be a dict mapping
+        block names to lists of region names, e.g.
+        ``{"block_a": ["Europe", ...], "block_b": ["Middle_East", ...]}``.
+
+    Returns
+    -------
+    pd.Index
+        Index of link names that represent inter-block shipping.
+    """
+    carrier = mga["carrier"]
+    blocks = mga["threshold_value"]  # dict: block_name -> [regions]
+
+    # Build region -> block mapping
+    region_to_block = {}
+    for block_name, regions in blocks.items():
+        for region in regions:
+            region_to_block[region] = block_name
+
+    print(f"Blocks MGA: {', '.join(f'{k}: {len(v)} regions' for k, v in blocks.items())}")
+
+    # Select shipping links for the target carrier
+    mask = n.links.carrier == f"shipping_{carrier}"
+    carrier_links = n.links[mask]
+
+    selected_links = []
+    for link_name, link_row in carrier_links.iterrows():
+        # bus0 / bus1 are e.g. "Europe_hbi", "Middle_East_hbi"
+        bus0_region = link_row["bus0"].rsplit(f"_{carrier}", 1)[0]
+        bus1_region = link_row["bus1"].rsplit(f"_{carrier}", 1)[0]
+
+        block_from = region_to_block.get(bus0_region)
+        block_to = region_to_block.get(bus1_region)
+
+        if block_from is None or block_to is None:
+            # Region not assigned to any block — skip
+            continue
+
+        if block_from != block_to:
+            selected_links.append(link_name)
+            print(
+                f"  Blocks MGA: link '{link_name}' crosses "
+                f"{block_from} → {block_to}"
+            )
+
+    print(
+        f"Blocks MGA: selected {len(selected_links)}/{len(carrier_links)} "
+        f"inter-block shipping links"
+    )
+
+    return pd.Index(selected_links)
+
+
+def resolve_mga_links(n, mga, indicators=None):
+    """
+    Unified dispatcher that resolves which shipping links to include in the
+    MGA objective, based on the indicator type.
+
+    Supports:
+    - ``"chokepoint"``: routes traversing listed chokepoints
+    - ``"blocks"``: inter-block trade routes
+    - ``"stability"`` / manual ``export``/``import``: region-based filtering
+
+    Returns
+    -------
+    pd.Index
+        Index of link names to include in the MGA weights.
+    """
+    indicator_name = mga.get("indicator")
+    carrier = mga["carrier"]
+
+    if indicator_name == "chokepoint" and indicators and "chokepoint" in indicators:
+        return resolve_mga_links_from_chokepoints(
+            n, mga, indicators["chokepoint"], interone
+        )
+
+    if indicator_name == "blocks":
+        return resolve_mga_links_from_blocks(n, mga)
+
+    # Default: region-based (stability, manual export/import)
+    exports = normalize_regions(mga.get("export"), carrier)
+    imports = normalize_regions(mga.get("import"), carrier)
+
+    mask = n.links.carrier == f"shipping_{carrier}"
+    if exports is not None:
+        mask &= n.links.bus0.isin(exports)
+    if imports is not None:
+        mask &= n.links.bus1.isin(imports)
+
+    return n.links[mask].index
+
+
 def solve_network(n, mga=None, indicators=None):
     """
     Solve the network with optional MGA (Modelling to generate Alternatives).
@@ -967,32 +1071,8 @@ def solve_network(n, mga=None, indicators=None):
     )
     optimal_cost = tsc.sum()
 
-    carrier = mga["carrier"]
-
-    # Determine which links to target based on indicator type
-    indicator_name = mga.get("indicator")
-
-    if indicator_name == "chokepoint" and indicators and "chokepoint" in indicators:
-        # Chokepoint MGA: select links directly based on route chokepoints
-        trade_options_data = indicators["chokepoint"]
-        idx = resolve_mga_links_from_chokepoints(
-            n, mga, trade_options_data, interone
-        )
-    else:
-        # Region-based MGA (stability or manual export/import specification)
-        exports = normalize_regions(mga.get("export"), carrier)
-        imports = normalize_regions(mga.get("import"), carrier)
-
-        # Select links in PyPSA
-        mask = n.links.carrier == f"shipping_{carrier}"
-
-        if exports is not None:
-            mask &= n.links.bus0.isin(exports)
-
-        if imports is not None:
-            mask &= n.links.bus1.isin(imports)
-
-        idx = n.links[mask].index
+    # Resolve which links to target via unified dispatcher
+    idx = resolve_mga_links(n, mga, indicators)
 
     # Build MGA weights for all matched links
     weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
