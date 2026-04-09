@@ -79,7 +79,9 @@ rule prepare_chokepoints:
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
     output:
-        trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv"
+        trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv",
+        map_chokepoints = "../results/figures_general/chokepoints/map_chokepoints.pdf",
+        map_chokepoints_png = "../results/figures_general/chokepoints/map_chokepoints.png",
     resources:
         mem_mb=5000,
     threads: 2
@@ -279,6 +281,8 @@ rule collect_figures:
         hourly_analysis_png = "../results/figures_general/hourly_analysis.png", #workflow/notebooks/analysis-hourly.ipynb
         mga_plot = "../results/figures_general/mga/mga_analysis.pdf", # integrated in workflow
         mga_plot_png = "../results/figures_general/mga/mga_analysis.png", # integrated in workflow
+        map_chokepoints = "../results/figures_general/chokepoints/map_chokepoints.pdf", # integrated in workflow
+        map_chokepoints_png = "../results/figures_general/chokepoints/map_chokepoints.png", # integrated in workflow
 
 
 ### Additional rules 
