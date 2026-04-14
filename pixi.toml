@@ -60,6 +60,7 @@ ruff = "*"
 pre-commit = "*"
 pylint = "*"
 jupyter = "*"
+ipykernel = "*"
 ipython = "*"
 nbqa = "*"
 
