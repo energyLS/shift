@@ -57,6 +57,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-he90730b_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cartopy-0.25.0-py313h08cd8bf_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.2.25-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.0.0-py313hf46b229_1.conda
@@ -314,6 +315,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.2-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyproj-3.7.2-py313h446daf0_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pypsa-1.1.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.10.2-py313h85046ba_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pytables-3.11.1-py313h0546747_0.conda
@@ -465,6 +467,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/cairo-1.18.4-h477c42c_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/cartopy-0.25.0-py313hc90dcd4_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.2.25-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cffi-2.0.0-py313h5ea7bf4_1.conda
@@ -687,6 +690,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyproj-3.7.2-py313hbf73894_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pypsa-1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyreadline3-3.5.4-py313hfa70ccb_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyside6-6.10.2-py313h475ba69_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyh09c184e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pytables-3.11.1-py313h98afe49_0.conda
@@ -847,6 +851,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-he90730b_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cartopy-0.25.0-py313h08cd8bf_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.2.25-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.0.0-py313hf46b229_1.conda
@@ -1166,6 +1171,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.2-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyproj-3.7.2-py313h446daf0_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pypsa-1.1.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.10.2-py313h85046ba_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pytables-3.11.1-py313h0546747_0.conda
@@ -1356,6 +1362,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/cairo-1.18.4-h477c42c_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/cartopy-0.25.0-py313hc90dcd4_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.2.25-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cffi-2.0.0-py313h5ea7bf4_1.conda
@@ -1638,6 +1645,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyproj-3.7.2-py313hbf73894_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pypsa-1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyreadline3-3.5.4-py313hfa70ccb_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyside6-6.10.2-py313h475ba69_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyh09c184e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pytables-3.11.1-py313h98afe49_0.conda
@@ -1814,6 +1822,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-he90730b_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cartopy-0.25.0-py313h08cd8bf_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.2.25-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cffi-2.0.0-py313hf46b229_1.conda
@@ -2072,6 +2081,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/pyparsing-3.3.2-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyproj-3.7.2-py313h446daf0_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pypsa-1.1.2-pyhd8ed1ab_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.10.2-py313h85046ba_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyha55dd90_7.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pytables-3.11.1-py313h0546747_0.conda
@@ -2224,6 +2234,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached-property-1.5.2-hd8ed1ab_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/noarch/cached_property-1.5.2-pyha770c72_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/win-64/cairo-1.18.4-h477c42c_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/cartopy-0.25.0-py313hc90dcd4_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/certifi-2026.2.25-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cffi-2.0.0-py313h5ea7bf4_1.conda
@@ -2447,6 +2458,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyproj-3.7.2-py313hbf73894_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pypsa-1.1.2-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyreadline3-3.5.4-py313hfa70ccb_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyside6-6.10.2-py313h475ba69_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pysocks-1.7.1-pyh09c184e_7.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pytables-3.11.1-py313h98afe49_0.conda
@@ -3870,6 +3882,48 @@ packages:
   purls: []
   size: 1537783
   timestamp: 1766416059188
+- conda: https://conda.anaconda.org/conda-forge/linux-64/cartopy-0.25.0-py313h08cd8bf_1.conda
+  sha256: 0ee1bf217caa0841b08d9182575cbf951bf40686afbfae5286cdd0e10ad20071
+  md5: a0d8dc5c90850d9f1a79f69c98aef0ff
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  - libstdcxx >=14
+  - matplotlib-base >=3.6
+  - numpy >=1.23,<3
+  - packaging >=21
+  - pyproj >=3.3.1
+  - pyshp >=2.3
+  - python >=3.13,<3.14.0a0
+  - python_abi 3.13.* *_cp313
+  - shapely >=2.0
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/cartopy?source=hash-mapping
+  size: 1554872
+  timestamp: 1756883736828
+- conda: https://conda.anaconda.org/conda-forge/win-64/cartopy-0.25.0-py313hc90dcd4_1.conda
+  sha256: e2295645446dd19f991717880f3a6b54cdce3bbab785a9101337ab808d7ff17e
+  md5: a3e17bc9d5a5e82c0c0fbea5ced9a5ff
+  depends:
+  - matplotlib-base >=3.6
+  - numpy >=1.23,<3
+  - packaging >=21
+  - pyproj >=3.3.1
+  - pyshp >=2.3
+  - python >=3.13,<3.14.0a0
+  - python_abi 3.13.* *_cp313
+  - shapely >=2.0
+  - ucrt >=10.0.20348.0
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/cartopy?source=hash-mapping
+  size: 1598853
+  timestamp: 1756884228101
 - conda: https://conda.anaconda.org/conda-forge/noarch/cdsapi-0.7.7-pyhd8ed1ab_0.conda
   sha256: 1237a587e35fa74b36323084e58620367a3adf7f60f201b7a9c41261958dc5d4
   md5: 1f878573c1ee2798c052bee1f5a94f50
@@ -10841,6 +10895,17 @@ packages:
   - pkg:pypi/pyreadline3?source=hash-mapping
   size: 171632
   timestamp: 1756887863806
+- conda: https://conda.anaconda.org/conda-forge/noarch/pyshp-3.0.3-pyhd8ed1ab_0.conda
+  sha256: d9a0be08f14d5d513611f9902affb49ca3ed72e05509d15d3cdf1970a84b9233
+  md5: c138c7aaa6a10b5762dcd92247864aff
+  depends:
+  - python >=3.10
+  license: MIT
+  license_family: MIT
+  purls:
+  - pkg:pypi/pyshp?source=hash-mapping
+  size: 454408
+  timestamp: 1764355333136
 - conda: https://conda.anaconda.org/conda-forge/linux-64/pyside6-6.10.2-py313h85046ba_0.conda
   sha256: dc1382585d8c1a5426d1bec814ee9ecc13340137099a62183bcc5010b2fd0098
   md5: f6161781ceb86e9f5da1b532e4c4453c
