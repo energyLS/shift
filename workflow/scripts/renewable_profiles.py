@@ -443,6 +443,51 @@ def build_profiles(
     """
     Main orchestrator: 7-stage pipeline to build renewable profiles.
 
+    ============================================================================
+    OUTPUT DATA FORMAT
+    ============================================================================
+
+    This function produces TWO complementary data structures:
+
+    1. xarray.Dataset (Energy Data)
+       ─────────────────────────────
+       Dimensions: [bus, technology, hour, y_grid, x_grid]
+
+       Coordinates:
+         • bus: Unique renewable region IDs representing a voronoi cell (format: ISO3_ON/OFF_geohash)
+         • technology: ["onwind", "offwind-ac", "solar"]
+         • hour: 0–8759 (hourly steps in a year, Jan 1 – Dec 30)
+         • x_grid, y_grid: 0.25° × 0.25° grid cell corners
+
+       Data Variables (all float32):
+         • capacity_factor[bus, tech, hour]: Hourly CF timeseries (0–1)
+         • p_nom_max[bus, tech]: Max installable capacity (MW)
+         • avg_cf[bus, tech]: Annual average capacity factor
+         • potential[y_grid, x_grid, tech]: Grid-level potential (GW/cell)
+         • weight[bus]: Area-normalized weight (sum=1 across all buses)
+         • data_quality_flag[bus, tech]: Boolean indicating data completeness
+
+       → Saved to NetCDF (.nc) with zlib compression, chunked by bus
+
+    2. GeoDataFrame (Geometry & Attributes)
+       ──────────────────────────────────
+       Columns:
+         • bus_id: Unique identifier (matches Dataset bus coordinate)
+         • pypsa_region_id: Original PyPSA-Earth region name
+         • country: ISO3 country code
+         • onshore_offshore: "onshore" or "offshore"
+         • x_centroid, y_centroid: Polygon centroid (lon, lat)
+         • area_km2: Voronoi cell area in km²
+         • geometry: WKT polygon (Voronoi cell boundary)
+
+       → Saved to GeoJSON (.geojson) with full spatial reference
+
+    Note: GIS data (geometries, country, area) are stored ONLY in GeoJSON,
+          not duplicated in NetCDF (reduces file size from ~27GB → ~558MB).
+          Use geometry_gdf for all spatial operations and attribute lookups.
+
+    ============================================================================
+
     Parameters
     ----------
     profile_datasets : dict
