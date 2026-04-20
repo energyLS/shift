@@ -354,6 +354,9 @@ def _reconcile_grids(tech_data_cache, technologies):
     """
     Reconcile grid extents across all technologies.
 
+    Technologies may have identical spacing (e.g., 0.25°) but different start/end points.
+    This function finds the union of all extents and returns a unified grid that covers all data.
+
     Returns
     -------
     tuple
@@ -361,77 +364,90 @@ def _reconcile_grids(tech_data_cache, technologies):
     """
     logger.info("Reconciling grid extents across technologies...")
 
-    grid_x = tech_data_cache[technologies[0]]["x"]
-    grid_y = tech_data_cache[technologies[0]]["y"]
+    # Extract grids from all technologies
+    grids = {
+        tech: (tech_data_cache[tech]["x"], tech_data_cache[tech]["y"])
+        for tech in technologies
+    }
 
-    reference_dx = np.diff(grid_x).mean()
-    reference_dy = np.diff(grid_y).mean()
+    # Get reference spacing from first technology
+    ref_x, ref_y = grids[technologies[0]]
+    reference_dx = np.diff(ref_x).mean()
+    reference_dy = np.diff(ref_y).mean()
 
-    max_x_grid = grid_x.copy()
-    max_y_grid = grid_y.copy()
+    logger.info(f"  Reference spacing: dx={reference_dx:.6f}, dy={reference_dy:.6f}")
 
+    # Verify all technologies have compatible spacing
     for tech in technologies[1:]:
-        x_tech = tech_data_cache[tech]["x"]
-        y_tech = tech_data_cache[tech]["y"]
-
+        x_tech, y_tech = grids[tech]
         dx = np.diff(x_tech).mean()
         dy = np.diff(y_tech).mean()
 
         if not (
-            np.isclose(dx, reference_dx, rtol=1e-5)
-            and np.isclose(dy, reference_dy, rtol=1e-5)
+            np.isclose(dx, reference_dx, rtol=1e-3)
+            and np.isclose(dy, reference_dy, rtol=1e-3)
         ):
             raise ValueError(
-                f"Grid spacing mismatch for {tech}: "
-                f"dx={dx:.6f} vs {reference_dx:.6f}, dy={dy:.6f} vs {reference_dy:.6f}"
+                f"Spacing mismatch for {tech}: dx={dx:.6f} vs {reference_dx:.6f}, "
+                f"dy={dy:.6f} vs {reference_dy:.6f}. All technologies must have compatible spacing."
             )
 
-        # Expand bounds
-        x_min_union = min(max_x_grid.min(), x_tech.min())
-        x_max_union = max(max_x_grid.max(), x_tech.max())
-        y_min_union = min(max_y_grid.min(), y_tech.min())
-        y_max_union = max(max_y_grid.max(), y_tech.max())
+    # Find union bounds
+    x_min_union = min(x.min() for x, _ in grids.values())
+    x_max_union = max(x.max() for x, _ in grids.values())
+    y_min_union = min(y.min() for _, y in grids.values())
+    y_max_union = max(y.max() for _, y in grids.values())
 
-        if not (
-            np.isclose(x_min_union, max_x_grid.min())
-            and np.isclose(x_max_union, max_x_grid.max())
-        ):
-            max_x_grid = np.arange(
-                x_min_union, x_max_union + reference_dx / 2, reference_dx
-            )
+    # Reconstruct unified grid with proper uniform spacing
+    n_x = int(np.round((x_max_union - x_min_union) / reference_dx)) + 1
+    n_y = int(np.round((y_max_union - y_min_union) / reference_dy)) + 1
 
-        if not (
-            np.isclose(y_min_union, max_y_grid.min())
-            and np.isclose(y_max_union, max_y_grid.max())
-        ):
-            max_y_grid = np.arange(
-                y_min_union, y_max_union + reference_dy / 2, reference_dy
-            )
+    grid_x = np.linspace(x_min_union, x_max_union, n_x)
+    grid_y = np.linspace(y_min_union, y_max_union, n_y)
 
-    # Pad potentials to match unified grid
+    logger.info(
+        f"  Union bounds: X=[{x_min_union:.4f}, {x_max_union:.4f}], Y=[{y_min_union:.4f}, {y_max_union:.4f}]"
+    )
+    logger.info(
+        f"  Unified grid: {len(grid_x)} × {len(grid_y)}, spacing dx={np.diff(grid_x).mean():.6f}, dy={np.diff(grid_y).mean():.6f}"
+    )
+
+    # Map each technology's potential to unified grid
     reconciled_potentials = {}
     for tech in technologies:
-        current_potential = tech_data_cache[tech]["potential"]
-        x_old = tech_data_cache[tech]["x"]
-        y_old = tech_data_cache[tech]["y"]
+        x_old, y_old = grids[tech]
+        potential_old = tech_data_cache[tech]["potential"]
 
-        if current_potential.shape != (len(max_y_grid), len(max_x_grid)):
-            y_offset = np.argmin(np.abs(max_y_grid - y_old[0]))
-            x_offset = np.argmin(np.abs(max_x_grid - x_old[0]))
+        if potential_old.shape != (len(grid_y), len(grid_x)):
+            # Calculate where old grid starts in new grid (in grid indices)
+            dx_new = np.diff(grid_x).mean()
+            dy_new = np.diff(grid_y).mean()
 
-            padded = np.full(
-                (len(max_y_grid), len(max_x_grid)), np.nan, dtype=np.float32
-            )
-            y_end = y_offset + current_potential.shape[0]
-            x_end = x_offset + current_potential.shape[1]
-            padded[y_offset:y_end, x_offset:x_end] = current_potential
+            x_offset = int(np.round((x_old[0] - grid_x[0]) / dx_new))
+            y_offset = int(np.round((y_old[0] - grid_y[0]) / dy_new))
+
+            # Clamp to valid range
+            x_offset = max(0, min(x_offset, len(grid_x)))
+            y_offset = max(0, min(y_offset, len(grid_y)))
+
+            # Pad with NaN
+            padded = np.full((len(grid_y), len(grid_x)), np.nan, dtype=np.float32)
+            y_end = min(y_offset + potential_old.shape[0], len(grid_y))
+            x_end = min(x_offset + potential_old.shape[1], len(grid_x))
+
+            padded[y_offset:y_end, x_offset:x_end] = potential_old[
+                : y_end - y_offset, : x_end - x_offset
+            ]
 
             reconciled_potentials[tech] = padded
+            logger.info(
+                f"  {tech}: padded {potential_old.shape} → {padded.shape} (offset: y={y_offset}, x={x_offset})"
+            )
         else:
-            reconciled_potentials[tech] = current_potential
+            reconciled_potentials[tech] = potential_old
 
-    logger.info(f"Final grid: {len(max_y_grid)} × {len(max_x_grid)}")
-    return max_x_grid, max_y_grid, reconciled_potentials
+    logger.info("✓ Grid reconciliation complete")
+    return grid_x, grid_y, reconciled_potentials
 
 
 def build_profiles(
@@ -1123,6 +1139,7 @@ def plot_grid_potentials(
     dataset,
     region=None,
     technology="onwind",
+    geometry_gdf=None,
     figsize=(14, 11),
     projection=ccrs.PlateCarree(),
     cmap="Blues",
@@ -1142,6 +1159,9 @@ def plot_grid_potentials(
         If None, uses all countries present in dataset. Default: None
     technology : str
         Technology: "onwind", "offwind-ac", or "solar". Default: "onwind"
+    geometry_gdf : GeoDataFrame, optional
+        GeoDataFrame with bus geometries and country data (from build_profiles() or load_profiles()).
+        Used to look up countries when region is None. Default: None
     figsize : tuple
         Figure size (width, height) in inches. Default: (14, 11)
     projection : cartopy CRS
@@ -1159,7 +1179,7 @@ def plot_grid_potentials(
     -------
     fig, ax : matplotlib Figure and Axes objects
     """
-    regions = _parse_region_list(region, dataset=dataset)
+    regions = _parse_region_list(region, dataset=dataset, geometry_gdf=geometry_gdf)
     extent = _get_country_extent(regions)
 
     font_scale = figsize[0] / 10
@@ -1170,13 +1190,27 @@ def plot_grid_potentials(
     # Setup map
     _setup_map_features(ax, extent)
 
-    # Extract and plot grid potential
+    # Extract grid
     tech_idx = list(dataset.technology.values).index(technology)
     potential_gw = dataset["potential"].values[:, :, tech_idx] / 1e3  # MW → GW
 
     x_grid = dataset.coords["x_grid"].values
     y_grid = dataset.coords["y_grid"].values
-    X, Y = np.meshgrid(x_grid, y_grid)
+
+    # Convert cell centers to edges for proper pcolormesh alignment
+    # If spacing is uniform (from linspace), compute half-cell offsets
+    dx = (x_grid[-1] - x_grid[0]) / (len(x_grid) - 1) if len(x_grid) > 1 else 0.25
+    dy = (y_grid[-1] - y_grid[0]) / (len(y_grid) - 1) if len(y_grid) > 1 else 0.25
+
+    # Create edge arrays: add half-cell boundaries
+    x_edges = np.concatenate(
+        [[x_grid[0] - dx / 2], (x_grid[:-1] + x_grid[1:]) / 2, [x_grid[-1] + dx / 2]]
+    )
+    y_edges = np.concatenate(
+        [[y_grid[0] - dy / 2], (y_grid[:-1] + y_grid[1:]) / 2, [y_grid[-1] + dy / 2]]
+    )
+
+    X, Y = np.meshgrid(x_edges, y_edges)
 
     im = ax.pcolormesh(
         X,
@@ -1184,7 +1218,7 @@ def plot_grid_potentials(
         potential_gw,
         transform=ccrs.PlateCarree(),
         cmap=cmap,
-        shading="auto",
+        shading="flat",  # 'flat' works with edges
         zorder=2,
         alpha=0.85,
     )
