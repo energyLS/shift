@@ -119,7 +119,9 @@ def building_model(
         elif regionalise == "uniform":
             iron_ore_cost = snakemake.config["iron_ore"]["marginal_cost"]
         else:
-            ValueError("Invalid option for iron ore regionalisation. Choose 'grade-dependent' or 'uniform'.")
+            ValueError(
+                "Invalid option for iron ore regionalisation. Choose 'grade-dependent' or 'uniform'."
+            )
 
         n.add(
             "Generator",
@@ -498,9 +500,53 @@ def save_trade_network(solved_network):
     print("added bus_capacities to sol")
 
     sol.to_csv(snakemake.output.trade_result)
-    n.export_to_netcdf(snakemake.output.trade_network)
 
     return
+
+
+def save_network_collection(nc, output_path, optimal_network=None):
+    """
+    Save a NetworkCollection to netCDF format.
+
+    Each network in the collection is saved as a separate netCDF file with
+    the index/key appended to the filename. The optimal solution (without slack)
+    is also saved to the base filename.
+
+    Parameters:
+    -----------
+    nc : pypsa.NetworkCollection
+        The NetworkCollection to save
+    output_path : str
+        Base output path (e.g., "network.nc"). Will become "network.nc" (optimal),
+        "network_0.005.nc", "network_0.01.nc", etc.
+    optimal_network : pypsa.Network, optional
+        The optimal network (solved without MGA slack). If provided, saved to output_path.
+    """
+    import os
+
+    # Create output directory if it doesn't exist
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Split path into base and extension
+    base, ext = os.path.splitext(output_path)
+
+    print(f"Saving NetworkCollection with {len(nc.networks)} networks to {output_dir}")
+
+    # Save optimal network (without slack) to the base filename if provided
+    if optimal_network is not None:
+        print(f"  Saving optimal network (no slack) to {output_path}")
+        optimal_network.export_to_netcdf(output_path)
+
+    # Save each network with its index/key in the filename
+    for key, network in nc.networks.items():
+        filename = f"{base}_{key}{ext}"
+        print(f"  Saving network with key '{key}' to {filename}")
+        network.export_to_netcdf(filename)
+
+    total_saved = len(nc.networks) + (1 if optimal_network is not None else 0)
+    print(f"Saved {total_saved} networks to {output_dir}")
 
 
 def plot_trade_network(
@@ -638,16 +684,17 @@ def apply_cost_penalty(n, cost_penalty):
 
     return n
 
+
 def apply_hbi_diversity_constraint(n, diversity_factor, demands):
     """
     Apply HBI import diversity constraint.
-    
+
     Constrains each importer region to not import more than diversity_factor
-    from any single supplier. 
-    
-    E.g., diversity_factor=0.5 means each region can import at most 50% of its 
+    from any single supplier.
+
+    E.g., diversity_factor=0.5 means each region can import at most 50% of its
     steel demand from any single HBI supplier.
-    
+
     Parameters:
     -----------
     n : pypsa.Network
@@ -657,17 +704,17 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
     demands : pd.DataFrame
         DataFrame with steel demands by region
     """
-    
+
     if diversity_factor is False:
         print("HBI diversity constraint disabled")
         return n
-    
+
     if diversity_factor <= 0 or diversity_factor > 1:
         raise ValueError("diversity_factor must be between 0 and 1")
-    
+
     # Get all HBI shipping links
     hbi_shipping_links = n.links[n.links.carrier == "shipping_hbi"]
-    
+
     # Group by destination (bus1) to find all suppliers for each importer
     for destination_bus, group in hbi_shipping_links.groupby("bus1"):
         # Extract region name from bus (e.g., "Europe_hbi" -> "Europe")
@@ -675,26 +722,31 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
             region_name = destination_bus[:-4]
         else:
             region_name = destination_bus
-        
+
         # Get the HBI demand for this region (equals steel demand in tonnes)
         demand_tonnes = demands.loc[demands["region"] == region_name, "demand"].values
-        
+
         if len(demand_tonnes) == 0:
-            print(f"Warning: No demand found for region {region_name}, skipping diversity constraint")
+            print(
+                f"Warning: No demand found for region {region_name}, skipping diversity constraint"
+            )
             continue
-        
+
         demand_tonnes = float(demand_tonnes[0])
-        
+
         # Maximum import from single supplier = diversity_factor * demand
         max_from_single_supplier = diversity_factor * demand_tonnes
-        
+
         # Set p_nom_max for all links to this destination
         for link_idx in group.index:
             n.links.loc[link_idx, "p_nom_max"] = max_from_single_supplier
-        
-        print(f"HBI diversity constraint applied to {region_name}: max {diversity_factor*100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier")
-    
+
+        print(
+            f"HBI diversity constraint applied to {region_name}: max {diversity_factor*100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier"
+        )
+
     return n
+
 
 def normalize_regions(regions, carrier):
     """Ensure regions are lists and suffixed with _{carrier}."""
@@ -711,47 +763,338 @@ def normalize_regions(regions, carrier):
             normalized.append(f"{r}_{carrier}")
     return normalized
 
-def solve_network(n, mga=None):
+
+def resolve_mga_exporters_from_indicator(mga, indicators):
+    """
+    Resolve MGA (Modelling to generate Alternatives) exporters based on indicator thresholds.
+
+    If mga config specifies an 'indicator' instead of explicit 'export' regions,
+    this function selects regions where the indicator is below the threshold_value.    Parameters:
+    -----------
+    mga : dict
+        MGA configuration containing:
+        - 'indicator': str, name of the indicator (e.g., 'stability')
+        - 'threshold_value': float, regions with indicator below this value are selected
+        - OR 'export': list of regions (manual specification takes precedence)
+    indicators : dict
+        Dictionary mapping indicator_name -> DataFrame with region as index
+
+    Returns:
+    --------
+    dict : Updated mga config with 'export' regions resolved
+    """
+
+    # If export is manually specified, use that
+    if "export" in mga and mga["export"] is not None:
+        return mga
+
+    # Otherwise, resolve from indicator
+    if "indicator" not in mga:
+        print("No indicator or export specified in MGA config")
+        return mga
+
+    indicator_name = mga["indicator"]
+    threshold = mga.get("threshold_value")
+
+    # Chokepoint and blocks indicators are handled separately in solve_network
+    if indicator_name in ("chokepoint", "blocks"):
+        return mga
+
+    if indicator_name not in indicators:
+        raise ValueError(
+            f"Indicator '{indicator_name}' not found in available indicators: {list(indicators.keys())}"
+        )
+
+    if threshold is None:
+        raise ValueError(
+            f"threshold_value must be specified when using indicator '{indicator_name}'"
+        )
+
+    indicator_data = indicators[indicator_name]
+
+    # Select regions where indicator is below threshold
+    # indicator_data is a DataFrame with region as index and a single column
+    # Extract the actual values (first column)
+    if isinstance(indicator_data, pd.DataFrame):
+        values = indicator_data.iloc[:, 0]
+    else:
+        values = indicator_data
+
+    selected_regions = values[values < threshold].index.tolist()
+
+    print(f"Selected regions with {indicator_name} < {threshold}: {selected_regions}")
+    print(f"Values: {values[values < threshold].to_dict()}")
+
+    # Set export to the selected regions
+    mga["export"] = selected_regions
+
+    return mga
+
+
+def resolve_mga_links_from_chokepoints(n, mga, trade_options, interone):
+    """
+    Resolve MGA link indices based on chokepoint avoidance.
+
+    Instead of filtering by exporter region (like stability), this function
+    selects shipping links whose routes pass through any of the chokepoints
+    listed in mga['threshold_value'].
+
+    Parameters:
+    -----------
+    n : pypsa.Network
+        The network containing shipping links
+    mga : dict
+        MGA configuration containing:
+        - 'carrier': str, the carrier type (e.g., 'hbi')
+        - 'threshold_value': list of str, chokepoint names to avoid
+          (e.g., ['suez', 'ormuz', 'babalmandab'])
+    trade_options : pd.DataFrame
+        Trade options DataFrame with 'region_from', 'region_to', and 'chokepoints' columns.
+        The 'chokepoints' column contains semicolon-separated passage names.
+    interone : str
+        The intermediate product name (e.g., 'hbi')
+
+    Returns:
+    --------
+    pd.Index : Index of link names whose routes traverse listed chokepoints
+    """
+    carrier = mga["carrier"]
+    chokepoints_to_avoid = set(mga["threshold_value"])
+
+    # Build a lookup: (region_from, region_to) -> set of chokepoints
+    route_chokepoints = {}
+    for _, row in trade_options.iterrows():
+        r_from = row["region_from"]
+        r_to = row["region_to"]
+        cp_str = row.get("chokepoints", "")
+        if pd.isna(cp_str) or cp_str == "":
+            cp_set = set()
+        else:
+            cp_set = set(str(cp_str).split(";"))
+        route_chokepoints[(r_from, r_to)] = cp_set
+
+    # Select shipping links that match the carrier and traverse any listed chokepoint
+    mask = n.links.carrier == f"shipping_{carrier}"
+    carrier_links = n.links[mask]
+
+    selected_links = []
+    for link_name, link_row in carrier_links.iterrows():
+        # Extract region_from and region_to from link name
+        # Link names: "shipping {interone} {r_from}-{r_to}" or "shipping iron ore {r_from}-{r_to}"
+        if f"shipping {interone}" in link_name:
+            route_part = link_name.replace(f"shipping {interone} ", "")
+        elif "shipping iron ore" in link_name:
+            route_part = link_name.replace("shipping iron ore ", "")
+        else:
+            continue
+
+        parts = route_part.split("-")
+        if len(parts) == 2:
+            r_from, r_to = parts
+        else:
+            # Handle region names that contain hyphens (unlikely but safe)
+            continue
+
+        # Check if this route passes through any chokepoint to avoid
+        route_cp = route_chokepoints.get((r_from, r_to), set())
+        if route_cp & chokepoints_to_avoid:  # set intersection
+            selected_links.append(link_name)
+            print(
+                f"  Chokepoint MGA: link '{link_name}' traverses "
+                f"{route_cp & chokepoints_to_avoid}"
+            )
+
+    print(
+        f"Chokepoint MGA: selected {len(selected_links)}/{len(carrier_links)} "
+        f"shipping links traversing {chokepoints_to_avoid}"
+    )
+
+    return pd.Index(selected_links)
+
+
+def resolve_mga_links_from_blocks(n, mga):
+    """
+    Resolve MGA link indices for inter-block trade minimisation.
+
+    Selects shipping links where the exporter (bus0) belongs to one block
+    and the importer (bus1) belongs to a different block.  Intra-block trade
+    is left unconstrained.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        The network containing shipping links.
+    mga : dict
+        MGA configuration.  ``threshold_value`` must be a dict mapping
+        block names to lists of region names, e.g.
+        ``{"block_a": ["Europe", ...], "block_b": ["Middle_East", ...]}``.
+
+    Returns
+    -------
+    pd.Index
+        Index of link names that represent inter-block shipping.
+    """
+    carrier = mga["carrier"]
+    blocks = mga["threshold_value"]  # dict: block_name -> [regions]
+
+    # Build region -> block mapping
+    region_to_block = {}
+    for block_name, regions in blocks.items():
+        for region in regions:
+            region_to_block[region] = block_name
+
+    print(f"Blocks MGA: {', '.join(f'{k}: {len(v)} regions' for k, v in blocks.items())}")
+
+    # Select shipping links for the target carrier
+    mask = n.links.carrier == f"shipping_{carrier}"
+    carrier_links = n.links[mask]
+
+    selected_links = []
+    for link_name, link_row in carrier_links.iterrows():
+        # bus0 / bus1 are e.g. "Europe_hbi", "Middle_East_hbi"
+        bus0_region = link_row["bus0"].rsplit(f"_{carrier}", 1)[0]
+        bus1_region = link_row["bus1"].rsplit(f"_{carrier}", 1)[0]
+
+        block_from = region_to_block.get(bus0_region)
+        block_to = region_to_block.get(bus1_region)
+
+        if block_from is None or block_to is None:
+            # Region not assigned to any block — skip
+            continue
+
+        if block_from != block_to:
+            selected_links.append(link_name)
+            print(
+                f"  Blocks MGA: link '{link_name}' crosses "
+                f"{block_from} → {block_to}"
+            )
+
+    print(
+        f"Blocks MGA: selected {len(selected_links)}/{len(carrier_links)} "
+        f"inter-block shipping links"
+    )
+
+    return pd.Index(selected_links)
+
+
+def resolve_mga_links(n, mga, indicators=None):
+    """
+    Unified dispatcher that resolves which shipping links to include in the
+    MGA objective, based on the indicator type.
+
+    Supports:
+    - ``"chokepoint"``: routes traversing listed chokepoints
+    - ``"blocks"``: inter-block trade routes
+    - ``"stability"`` / manual ``export``/``import``: region-based filtering
+
+    Returns
+    -------
+    pd.Index
+        Index of link names to include in the MGA weights.
+    """
+    indicator_name = mga.get("indicator")
+    carrier = mga["carrier"]
+
+    if indicator_name == "chokepoint" and indicators and "chokepoint" in indicators:
+        return resolve_mga_links_from_chokepoints(
+            n, mga, indicators["chokepoint"], interone
+        )
+
+    if indicator_name == "blocks":
+        return resolve_mga_links_from_blocks(n, mga)
+
+    # Default: region-based (stability, manual export/import)
+    exports = normalize_regions(mga.get("export"), carrier)
+    imports = normalize_regions(mga.get("import"), carrier)
+
+    mask = n.links.carrier == f"shipping_{carrier}"
+    if exports is not None:
+        mask &= n.links.bus0.isin(exports)
+    if imports is not None:
+        mask &= n.links.bus1.isin(imports)
+
+    return n.links[mask].index
+
+
+def solve_network(n, mga=None, indicators=None):
+    """
+    Solve the network with optional MGA (Modelling to generate Alternatives).
+
+    Always returns a tuple (optimal_network, NetworkCollection) where:
+    - optimal_network: the optimal solution without MGA slack
+    - NetworkCollection: contains all MGA variants (or just the optimal if no MGA)
+
+    Parameters:
+    -----------
+    n : pypsa.Network
+        The network to solve
+    mga : dict, optional
+        MGA configuration with keys: carrier, slack (list), sense,
+        and optionally export, import, indicator, threshold_value
+    indicators : dict, optional
+        Dictionary of indicator DataFrames for indicator-based MGA
+
+    Returns:
+    --------
+    tuple(pypsa.Network, pypsa.NetworkCollection)
+        (optimal_network, NetworkCollection with MGA variants or just optimal)
+    """
 
     solver_name = snakemake.config["solver"]["name"]
     options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
 
+    # First optimize without MGA
     n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
 
-    if mga == None:
-        pass
-    else:
+    # Clear solver model attached to the solved network so it can be copied.
+    try:
+        if hasattr(n, "model") and getattr(n.model, "solver_model", None) is not None:
+            n.model.solver_model = None
+    except Exception as e:
+        print(f"Warning clearing solver model before copying network: {e}")
 
-        tsc = (
-            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
-            .sum(axis=1)
-            .div(1e9)
-        )
-        optimal_cost = tsc.sum()
+    optimal_network = n.copy()  # Store the optimal solution
 
-        carrier = mga["carrier"]
-        exports = normalize_regions(mga["export"], carrier)
-        imports = normalize_regions(mga["import"], carrier)
+    # If no MGA, return optimal as both optimal and collection
+    if mga is None:
+        nc = pypsa.NetworkCollection({None: optimal_network})
+        return (optimal_network, nc)
 
-        # Select links in PyPSA
-        mask = n.links.carrier == f"shipping_{carrier}"
+    # Resolve exporters from indicator if needed
+    if indicators:
+        mga = resolve_mga_exporters_from_indicator(mga, indicators)
 
-        if exports is not None:
-            mask &= n.links.bus0.isin(exports)
+    tsc = (
+        pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+        .sum(axis=1)
+        .div(1e9)
+    )
+    optimal_cost = tsc.sum()
 
-        if imports is not None:
-            mask &= n.links.bus1.isin(imports)
+    # Resolve which links to target via unified dispatcher
+    idx = resolve_mga_links(n, mga, indicators)
 
-        idx = n.links[mask].index
+    # Build MGA weights for all matched links
+    weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
 
-        # Build MGA weights for all matched links
-        weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
+    sense = mga["sense"]
+    slack_list = mga["slack"]  # Always a list in config
 
-        sense = mga["sense"]
-        slack = mga["slack"]
+    # Handle slack values (always as a list)
+    print(f"MGA activated with slacks: {slack_list}")
+    print(f"Optimal cost (no MGA): {optimal_cost:.2f} B€")
 
-        n.optimize.optimize_mga(
-            slack=slack,
+    networks = {}
+
+    for slack_value in slack_list:
+        print(f"\n--- Solving with slack = {slack_value} ---")
+
+        # Create a copy of the network for each slack
+        n_copy = n.copy()
+
+        # Run MGA optimization
+        n_copy.optimize.optimize_mga(
+            slack=slack_value,
             weights=weights,
             sense=sense,
             solver_name=solver_name,
@@ -759,17 +1102,22 @@ def solve_network(n, mga=None):
         )
 
         tsc = (
-            pd.concat([n.statistics.capex(), n.statistics.opex()], axis=1)
+            pd.concat([n_copy.statistics.capex(), n_copy.statistics.opex()], axis=1)
             .sum(axis=1)
             .div(1e9)
         )
         mga_cost = tsc.sum()
-        print(f"Optimal cost: {optimal_cost:.2f} B€")
         print(
-            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack):.2f} B€"
+            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack_value):.2f} B€"
         )
 
-    return n
+        # Store in dictionary with slack as key
+        networks[slack_value] = n_copy
+
+    # Create NetworkCollection with optimal at None key plus all MGA variants
+    networks[None] = optimal_network
+    nc = pypsa.NetworkCollection(networks)
+    return (optimal_network, nc)
 
 
 if __name__ == "__main__":
@@ -782,7 +1130,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="default",
+            scenario="mga-new-indicators-multiple",
         )
 
     final = snakemake.wildcards["final"]
@@ -805,7 +1153,15 @@ if __name__ == "__main__":
     supply_curves_intertwo = snakemake.input.supply_curves_intertwo
     bus_locations = pd.read_csv(snakemake.input.bus_locations, header=0)
     iron_ore = pd.read_csv(snakemake.input.iron_ore, header=0)
+    political_stability_data = pd.read_csv(
+        snakemake.input.political_stability, index_col=0
+    )
     regions = snakemake.config["regions"]
+
+    # Load indicators for MGA (flexible architecture for future extensions)
+    indicators = {}
+    indicators["stability"] = political_stability_data
+    indicators["chokepoint"] = trade_options  # trade_options now has 'chokepoints' column
 
     # limit regions
     trade_options = trade_options[
@@ -865,7 +1221,6 @@ if __name__ == "__main__":
         print("HBI diversity constraint disabled")
 
     # MGA
-
     if "mga" not in snakemake.config["scenario"][scenario]["modifiers"].keys():
         mga = None
         print("MGA not activated")
@@ -875,36 +1230,74 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
-    n = solve_network(n, mga=mga)
+    result = solve_network(n, mga=mga, indicators=indicators if indicators else None)
     print("network was solved")
 
+    # Export result: always a tuple (optimal_network, NetworkCollection)
+    print("saving network to netCDF")
+    optimal_net, nc = result
+    save_network_collection(
+        nc, snakemake.output.trade_network, optimal_network=optimal_net
+    )
+    n_selected = optimal_net
+    print(
+        f"Saved optimal network and NetworkCollection with {len(nc.networks)} networks"
+    )
+
     # saving results and calculating LCOH
-    print("saving results as network+csv and pdf")
-    save_trade_network(n)
+    print("saving results as network+csv")
+    save_trade_network(n_selected)
 
-    # Plot iron ore map
-    plot_trade_network(
-        n,
-        product="iron_ore",
-        alpha_supply=0.5,
-        output_path=snakemake.output.trade_plot_ironore,
-        output_path_png=snakemake.output.trade_plot_ironore_png,
-    )
+    # Plot results: consolidate plotting for all networks
+    print("saving plots")
 
-    # Plot iron ore map
-    plot_trade_network(
-        n,
-        product="hbi",
-        alpha_supply=0.5,
-        output_path=snakemake.output.trade_plot_hbi,
-        output_path_png=snakemake.output.trade_plot_hbi_png,
-    )
+    # Define the products to plot and their settings
+    plot_settings = [
+        (
+            "iron_ore",
+            0.5,
+            snakemake.output.trade_plot_ironore,
+            snakemake.output.trade_plot_ironore_png,
+        ),
+        (
+            "hbi",
+            0.5,
+            snakemake.output.trade_plot_hbi,
+            snakemake.output.trade_plot_hbi_png,
+        ),
+        (
+            "steel",
+            0.7,
+            snakemake.output.trade_plot_steel,
+            snakemake.output.trade_plot_steel_png,
+        ),
+    ]
 
-    # Plot steel map
-    plot_trade_network(
-        n,
-        product="steel",
-        alpha_supply=0.7,
-        output_path=snakemake.output.trade_plot_steel,
-        output_path_png=snakemake.output.trade_plot_steel_png,
-    )
+    # Plot for each network in the collection (including optimal at key=None)
+    for slack_key, network in nc.networks.items():
+        # Check if this is the optimal solution (None key)
+        is_optimal = pd.isna(slack_key)
+
+        if is_optimal:
+            print(f"\nPlotting optimal network (no slack)")
+        else:
+            print(f"\nPlotting for slack={slack_key}")
+
+        for product, alpha_supply, output_path, output_path_png in plot_settings:
+            # Use base filenames for optimal, append slack value for MGA variants
+            if is_optimal:
+                final_output_path = output_path
+                final_output_path_png = output_path_png
+            else:
+                base, ext = os.path.splitext(output_path)
+                final_output_path = f"{base}_{slack_key}{ext}"
+                base_png, ext_png = os.path.splitext(output_path_png)
+                final_output_path_png = f"{base_png}_{slack_key}{ext_png}"
+
+            plot_trade_network(
+                network,
+                product=product,
+                alpha_supply=alpha_supply,
+                output_path=final_output_path,
+                output_path_png=final_output_path_png,
+            )

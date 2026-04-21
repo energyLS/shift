@@ -61,6 +61,34 @@ rule prepare_wacc:
         "notebooks/prepare-wacc.ipynb"
 
 
+rule prepare_political_stability:
+    input:
+        political_stability = "../data/political-stability/API_PV.PER.RNK_DS2_en_csv_v2_4585.csv",
+        bus_locations = "../data/bus_locations.csv",
+    output:
+        political_stability = "../resources/political_stability_clustered.csv"
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        "notebooks/prepare-political-stability.ipynb"
+
+
+rule prepare_chokepoints:
+    input:
+        trade_options = "../data/trade_opt.csv",
+        bus_locations = "../data/bus_locations.csv",
+    output:
+        trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv",
+        map_chokepoints = "../results/figures_general/chokepoints/map_chokepoints.pdf",
+        map_chokepoints_png = "../results/figures_general/chokepoints/map_chokepoints.png",
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        "notebooks/prepare-chokepoints.ipynb"
+
+
 rule retrieve_iron_ore:
     input:
         iron_ore_production = "../data/owid-iron-ore/iron-ore-crude-ore-production.csv",
@@ -188,12 +216,13 @@ rule model_trade:
         #     "../resources/supply_curves/cost_year~{cost_year}/{region}_{final}.csv",
         #     allow_missing=True, region=config["regions"]),
         transport_costs = "../data/transport_costs/steel_r_iron_r.csv",
-        trade_options = "../data/trade_opt.csv",
+        trade_options = "../resources/trade_opt_chokepoints.csv",
         bus_locations = "../data/bus_locations.csv",
         demand = "../data/un_enerdata_demand_2050_final.csv",
         steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore = "../resources/ironore_production_clustered.csv",
         grid_potential = "../data/grid_potential_custom.csv",
+        political_stability = "../resources/political_stability_clustered.csv",
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network = f"../results/{trade_scenarios.wildcard_pattern}/network.nc",
@@ -208,6 +237,21 @@ rule model_trade:
         "scripts/model_trade.py"
 
 
+rule plot_mga:
+    input:
+        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-new-indicators-multiple/network.nc",
+        network_mga_chokepoints = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-chokepoints/network.nc",
+        network_mga_blocks = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-blocks/network.nc",
+        political_stability = "../resources/political_stability_clustered.csv",
+        trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv",
+    output:
+        mga_plot = "../results/figures_general/mga/mga_analysis.pdf",
+        mga_plot_png = "../results/figures_general/mga/mga_analysis.png",
+    resources:
+        mem_mb=4000,
+    threads: 2
+    notebook:
+        "notebooks/plot-mga.ipynb"
 
 
 # Povide a rule which triggers creation of all scenarios listed (= rows) in 'scenarios/trade_scenarios.csv'
@@ -235,6 +279,10 @@ rule collect_figures:
         value_chain_comparison_png = "../results/figures_general/value_chain_comparison.png", #workflow/notebooks/analyse-steel-hbi-split.ipynb
         hourly_analysis = "../results/figures_general/hourly_analysis.pdf", #workflow/notebooks/analysis-hourly.ipynb
         hourly_analysis_png = "../results/figures_general/hourly_analysis.png", #workflow/notebooks/analysis-hourly.ipynb
+        mga_plot = "../results/figures_general/mga/mga_analysis.pdf", # integrated in workflow
+        mga_plot_png = "../results/figures_general/mga/mga_analysis.png", # integrated in workflow
+        map_chokepoints = "../results/figures_general/chokepoints/map_chokepoints.pdf", # integrated in workflow
+        map_chokepoints_png = "../results/figures_general/chokepoints/map_chokepoints.png", # integrated in workflow
 
 
 ### Additional rules 
