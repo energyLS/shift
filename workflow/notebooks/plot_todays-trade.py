@@ -28,6 +28,7 @@ Relevant HS product codes for steel trade (raw):
 
 
 import os
+import sys
 import warnings
 import numpy as np
 import pandas as pd
@@ -35,6 +36,9 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from matplotlib.lines import Line2D
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 warnings.filterwarnings("ignore")
 plt.style.use("bmh")
@@ -42,39 +46,45 @@ plt.style.use("bmh")
 # ==============================================================================
 # CONFIGURATION
 # ==============================================================================
-BACI_FOLDER = r"/home/mea39219/shift/workflow/notebooks/BACI_HS22_V202601"
-YEAR = 2024
-
-COUNTRY_TRADE_PATH = os.path.join(BACI_FOLDER, f"BACI_HS22_Y{YEAR}_V202601.csv")
-COUNTRY_CODES_PATH = os.path.join(BACI_FOLDER, "country_codes_V202601.csv")
-
+# Resolved at runtime from snakemake (see __main__ block below)
 PRODUCT_OPTIONS = {
-    "Iron Ore": [260111, 260112],
-    "DRI-HBI": [720310, 720390],
+    "Iron Ore":    [260111, 260112],
+    "DRI-HBI":     [720310, 720390],
     "Steel (raw)": [720711, 720712, 720719, 720720],
 }
 
-PRODUCT_NAME = "Steel (raw)"   # options: "Iron Ore", "DRI-HBI", "Steel (raw)"
-PRODUCT_CODES = PRODUCT_OPTIONS[PRODUCT_NAME]
+# Safe filename stems matching Snakemake output keys
+PRODUCT_SAFE_NAMES = {
+    "Iron Ore":    "Iron_Ore",
+    "DRI-HBI":     "DRI-HBI",
+    "Steel (raw)": "Steel_raw",
+}
 
-OUT_DIR = os.path.join(BACI_FOLDER, f"_outputs_{PRODUCT_NAME}")
-os.makedirs(OUT_DIR, exist_ok=True)
-
-# Plot settings
+# How many bilateral net-flow arrows to draw on the map.
+# Larger values add more (smaller) trade arrows; 100 keeps the map readable
+# while still capturing the dominant flows.
 TOP_N_FLOWS = 100
-VALUE_COLUMN = "quantity"   # "quantity" or "trade_value"
+
+# Which column to size bubbles and lines by.
+# "quantity"    → physical volume (metric tonnes) — best for comparing trade magnitude.
+# "trade_value" → USD value — useful if price differences between products matter.
+VALUE_COLUMN = "quantity"
+
 
 
 # ==============================================================================
 # 1. PREPARE TRADE DATA
 # ==============================================================================
-def prepare_trade():
-    print(f"Reading {COUNTRY_TRADE_PATH}")
-    # i: exporter, j: importer, k: product, v: value, q: quantity
-    df = pd.read_csv(COUNTRY_TRADE_PATH, usecols=["i", "j", "k", "v", "q"])
+def prepare_trade(baci_folder, product_name, product_codes, out_dir, year):
+    country_trade_path = os.path.join(baci_folder, f"BACI_HS22_Y{year}_V202601.csv")
+    country_codes_path = os.path.join(baci_folder, "country_codes_V202601.csv")
 
-    print(f"Filtering {PRODUCT_NAME} products: {PRODUCT_CODES}")
-    df = df[df["k"].isin(PRODUCT_CODES)].copy()
+    print(f"Reading {country_trade_path}")
+    # i: exporter, j: importer, k: product, v: value, q: quantity
+    df = pd.read_csv(country_trade_path, usecols=["i", "j", "k", "v", "q"])
+
+    print(f"Filtering {product_name} products: {product_codes}")
+    df = df[df["k"].isin(product_codes)].copy()
 
     print("Aggregating bilateral trade")
     trade_pair = (
@@ -85,7 +95,7 @@ def prepare_trade():
     )
 
     print("Loading country codes")
-    cc = pd.read_csv(COUNTRY_CODES_PATH)
+    cc = pd.read_csv(country_codes_path)
     cc["country_code"] = cc["country_code"].astype(int)
 
     print("Mapping ISO3 codes")
@@ -101,7 +111,7 @@ def prepare_trade():
         on="importer", how="left"
     )
 
-    out_iso3 = os.path.join(OUT_DIR, f"{PRODUCT_NAME}_trade_iso3.csv")
+    out_iso3 = os.path.join(out_dir, f"{product_name}_trade_iso3.csv")
     trade_iso3.to_csv(out_iso3, index=False)
 
     print(f"Saved processed trade file: {out_iso3}")
@@ -191,17 +201,14 @@ def process_data_for_plot(trade_file, world_gdf, value_column):
 # ==============================================================================
 # 4. PLOT
 # ==============================================================================
-def plot(data_plot, year, product_name, value_column, output_path=None):
+def plot(data_plot, year, product_name, value_column, colors, output_path=None):
     fig, ax = plt.subplots(1, 1, figsize=(18, 9))
 
     world_df, flow_df = data_plot
-    world_df.plot(ax=ax, color="#eeeeee", edgecolor="#bcbcbc", linewidth=0.4)
+    world_df.plot(ax=ax, color=colors["land"], edgecolor=colors["border"], linewidth=0.4)
 
     global_max_bubble = world_df["net_export"].abs().max()
     global_max_line = flow_df["quantity"].max() if len(flow_df) > 0 else 0
-
-    COLOR_SURPLUS = "#d94801"
-    COLOR_DEFICIT = "#045a8d"
 
     bounds = world_df.total_bounds
     max_r = (bounds[2] - bounds[0]) * 0.03
@@ -219,7 +226,7 @@ def plot(data_plot, year, product_name, value_column, output_path=None):
             lw = (row["quantity"] / global_max_line) * 5.5
             ax.plot(
                 [p1.x, p2.x], [p1.y, p2.y],
-                color="#525252",
+                color=colors["flow_line"],
                 linewidth=max(lw, 0.5),
                 alpha=0.3,
                 zorder=2
@@ -229,7 +236,7 @@ def plot(data_plot, year, product_name, value_column, output_path=None):
         net_val = row["net_export"]
         if global_max_bubble > 0 and abs(net_val) > global_max_bubble * 0.001:
             r = get_radius(net_val)
-            color = COLOR_SURPLUS if net_val > 0 else COLOR_DEFICIT
+            color = colors["surplus"] if net_val > 0 else colors["deficit"]
             ax.add_patch(
                 Circle(
                     (row.centroid.x, row.centroid.y),
@@ -242,7 +249,6 @@ def plot(data_plot, year, product_name, value_column, output_path=None):
                 )
             )
 
-    metric_label = "Quantity" if value_column == "quantity" else "Trade Value"
     ax.set_title(
         f"Global {product_name} Trade",
         fontsize=22,
@@ -252,33 +258,33 @@ def plot(data_plot, year, product_name, value_column, output_path=None):
     ax.axis("off")
 
     legend_elements = [
-    Line2D(
-        [0], [0],
-        marker='o',
-        color='w',
-        label='Net exporter',
-        markerfacecolor=COLOR_SURPLUS,
-        markeredgecolor='white',
-        markersize=12,
-        alpha=0.7,
-    ),
-    Line2D(
-        [0], [0],
-        marker='o',
-        color='w',
-        label='Net importer',
-        markerfacecolor=COLOR_DEFICIT,
-        markeredgecolor='white',
-        markersize=12,
-        alpha=0.7,
-    ),
-    Line2D(
-        [0], [0],
-        color='#525252',
-        lw=2,
-        label='Trade flow'
-    )
-]
+        Line2D(
+            [0], [0],
+            marker='o',
+            color='w',
+            label='Net exporter',
+            markerfacecolor=colors["surplus"],
+            markeredgecolor='white',
+            markersize=12,
+            alpha=0.7,
+        ),
+        Line2D(
+            [0], [0],
+            marker='o',
+            color='w',
+            label='Net importer',
+            markerfacecolor=colors["deficit"],
+            markeredgecolor='white',
+            markersize=12,
+            alpha=0.7,
+        ),
+        Line2D(
+            [0], [0],
+            color=colors["flow_line"],
+            lw=2,
+            label='Trade flow'
+        ),
+    ]
 
     leg = ax.legend(
         handles=legend_elements,
@@ -287,20 +293,37 @@ def plot(data_plot, year, product_name, value_column, output_path=None):
         fontsize=12
     )
 
-    leg.get_frame().set_facecolor("#f5f5f5")
-    leg.get_frame().set_edgecolor("#bdbdbd")
+    leg.get_frame().set_facecolor(colors["legend_bg"])
+    leg.get_frame().set_edgecolor(colors["legend_edge"])
 
     if output_path:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         print(f"Saved plot: {output_path}")
+    plt.close(fig)
 
 
 # ==============================================================================
 # 5. MAIN
 # ==============================================================================
 if __name__ == "__main__":
-    print("Preparing trade data")
-    trade_file = prepare_trade()
+    from _helpers import mock_snakemake
+
+    if "snakemake" not in globals():
+        snakemake = mock_snakemake("plot_trade_today")
+
+    # --- resolve inputs / outputs / config -----------------------------------
+    BACI_FOLDER = str(snakemake.input.baci_folder)
+    YEAR = 2024
+
+    colors = snakemake.config["colors"]["trade_today"]
+
+    # Map product names to snakemake output paths
+    output_map = {
+        "Iron Ore":    str(snakemake.output.iron_ore),
+        "DRI-HBI":     str(snakemake.output.dri_hbi),
+        "Steel (raw)": str(snakemake.output.steel_raw),
+    }
 
     print("Loading world geometry")
     world = gpd.read_file(
@@ -309,20 +332,34 @@ if __name__ == "__main__":
     world = world.rename(columns={"ADM0_A3": "iso3"}).to_crs("ESRI:54030")
     world = world[world["NAME"] != "Antarctica"]
 
-    print("Processing plot data")
-    data_plot = process_data_for_plot(
-        trade_file=trade_file,
-        world_gdf=world,
-        value_column=VALUE_COLUMN
-    )
+    # --- loop over all products ----------------------------------------------
+    for product_name, product_codes in PRODUCT_OPTIONS.items():
+        safe_name = PRODUCT_SAFE_NAMES[product_name]
+        out_dir = os.path.join(BACI_FOLDER, f"_outputs_{safe_name}")
+        os.makedirs(out_dir, exist_ok=True)
 
-    plot_path = os.path.join(OUT_DIR, f"{PRODUCT_NAME}_net_flow_{YEAR}.png")
+        print(f"\n=== {product_name} ===")
+        trade_file = prepare_trade(
+            baci_folder=BACI_FOLDER,
+            product_name=product_name,
+            product_codes=product_codes,
+            out_dir=out_dir,
+            year=YEAR,
+        )
 
-    print("Creating plot")
-    plot(
-        data_plot=data_plot,
-        year=YEAR,
-        product_name=PRODUCT_NAME,
-        value_column=VALUE_COLUMN,
-        output_path=plot_path,
-    )
+        data_plot = process_data_for_plot(
+            trade_file=trade_file,
+            world_gdf=world,
+            value_column=VALUE_COLUMN,
+        )
+
+        plot(
+            data_plot=data_plot,
+            year=YEAR,
+            product_name=product_name,
+            value_column=VALUE_COLUMN,
+            colors=colors,
+            output_path=output_map[product_name],
+        )
+
+    print("\nDone.")
