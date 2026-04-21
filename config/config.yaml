@@ -248,4 +248,12 @@ colors:
   Pacific_Asia:         '#AF7AC5'  # lavender
   East_East_Asia:       '#922B21'  # dark red
   Oceania:              '#1F618D'  # steel blue
+  trade_today:
+    surplus:            '#d94801'  # orange-red  (net exporter bubble)
+    deficit:            '#045a8d'  # dark blue   (net importer bubble)
+    flow_line:          '#525252'  # dark grey   (trade flow lines)
+    land:               '#eeeeee'  # light grey  (country fill)
+    border:             '#bcbcbc'  # mid grey    (country borders)
+    legend_bg:          '#f5f5f5'  # near-white  (legend background)
+    legend_edge:        '#bdbdbd'  # grey        (legend border)
 
