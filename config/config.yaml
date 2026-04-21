@@ -139,14 +139,14 @@ plot:
       bus_size: 1.0e-8
       link_width: 1.0e-9
     iron_ore:
-      bus_size: 1.0e-7
-      link_width: 1.5e-8
+      bus_size: 2.0e-7
+      link_width: 3.0e-8
     hbi:
-      bus_size: 1.0e-7
-      link_width: 1.5e-8
+      bus_size: 2.0e-7
+      link_width: 3.0e-8
     steel:
-      bus_size: 1.0e-7
-      link_width: 1.5e-8
+      bus_size: 2.0e-7
+      link_width: 3.0e-8
   colors:
     steel: 'grey'
     steel_shipping: 'darkgrey'
