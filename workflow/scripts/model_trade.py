@@ -1179,7 +1179,7 @@ if __name__ == "__main__":
     if final == "steel":
 
         demands = pd.read_csv(snakemake.input.steel_demand, header=0)
-        demands.rename(columns={"SteelDemandMt": "demand"}, inplace=True)
+        demands.rename(columns={"SteelDemand_DRI_Mt": "demand"}, inplace=True)
         demands["demand"] = demands["demand"] * 1e6  # Mt to t
         unit = "t"
 
