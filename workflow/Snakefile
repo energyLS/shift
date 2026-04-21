@@ -217,6 +217,15 @@ rule model_trade_all:
         trade_plot_ironore=expand("../results/{scenarios}/map_ironore.pdf", scenarios=trade_scenarios.instance_patterns),
         trade_plot_steel=expand("../results/{scenarios}/map_steel.pdf", scenarios=trade_scenarios.instance_patterns),
 
+rule plot_trade_today:
+    input:
+        baci_folder = ancient("/mnt/c/Users/scl38887/Documents/git/shift/data/BACI_HS22_V202601"),
+    output:
+        iron_ore  = "../results/figures_general/trade-today/Iron_Ore_net_flow.png",
+        dri_hbi   = "../results/figures_general/trade-today/DRI-HBI_net_flow.png",
+        steel_raw = "../results/figures_general/trade-today/Steel_raw_net_flow.png",
+    script:
+        "notebooks/plot_todays-trade.py"
 
 rule collect_figures:
     input:
