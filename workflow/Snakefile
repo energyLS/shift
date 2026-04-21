@@ -221,9 +221,12 @@ rule plot_trade_today:
     input:
         baci_folder = ancient("/mnt/c/Users/scl38887/Documents/git/shift/data/BACI_HS22_V202601"),
     output:
-        iron_ore  = "../results/figures_general/trade-today/Iron_Ore_net_flow.png",
-        dri_hbi   = "../results/figures_general/trade-today/DRI-HBI_net_flow.png",
-        steel_raw = "../results/figures_general/trade-today/Steel_raw_net_flow.png",
+        iron_ore       = "../results/figures_general/trade-today/Iron_Ore_net_flow.png",
+        dri_hbi        = "../results/figures_general/trade-today/DRI-HBI_net_flow.png",
+        steel_raw      = "../results/figures_general/trade-today/Steel_raw_net_flow.png",
+        iron_ore_csv   = "../results/figures_general/trade-today/Iron_Ore_trade_iso3.csv",
+        dri_hbi_csv    = "../results/figures_general/trade-today/DRI-HBI_trade_iso3.csv",
+        steel_raw_csv  = "../results/figures_general/trade-today/Steel_raw_trade_iso3.csv",
     script:
         "notebooks/plot_todays-trade.py"
 
