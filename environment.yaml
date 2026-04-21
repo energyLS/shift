@@ -50,6 +50,7 @@ dependencies:
 - graphviz
 - geojson
 - pyscipopt
+- wbdata
 
 # GIS dependencies:
 - cartopy
