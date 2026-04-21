@@ -49,7 +49,7 @@ plt.style.use("bmh")
 # Resolved at runtime from snakemake (see __main__ block below)
 PRODUCT_OPTIONS = {
     "Iron Ore":    [260111, 260112],
-    "DRI-HBI":     [720310, 720390],
+    "DRI-HBI":     [720310],  # 720390 excluded: covers electrolytic/carbonyl iron (≥99.94% Fe), not commercial DRI/HBI
     # Semi-finished (7207) + flat-rolled (7208-7212) + long products (7213-7217)
     # + stainless (7218-7223) + other alloy steel (7224-7229).
     # Excludes pig iron/ferro-alloys/scrap (7201-7205) and DRI/HBI (7203, already above).
@@ -242,7 +242,7 @@ def process_data_for_plot(trade_file, world_gdf, value_column):
 # ==============================================================================
 # 4. PLOT
 # ==============================================================================
-def plot(data_plot, year, product_name, value_column, colors, output_path=None):
+def plot(data_plot, year, product_name, value_column, colors, output_path=None, output_path_pdf=None):
     fig, ax = plt.subplots(1, 1, figsize=(18, 9))
 
     world_df, flow_df = data_plot
@@ -322,50 +322,82 @@ def plot(data_plot, year, product_name, value_column, colors, output_path=None):
     )
     leg1.get_frame().set_facecolor(colors["legend_bg"])
     leg1.get_frame().set_edgecolor(colors["legend_edge"])
-    ax.add_artist(leg1)   # keep leg1 when adding leg2
+    ax.add_artist(leg1)
 
-    # 2) Bubble-size scale: show 3 reference circles at 25 %, 50 %, 100 % of max
+    # 2) Bubble-size scale drawn as real Circle patches in data coordinates,
+    #    so sizes are exactly proportional to the map bubbles.
+    #    Stacked vertically (graduated-circles style) in the upper-left corner,
+    #    below the category legend.
     if global_max_bubble > 0:
-        scale_fracs = [0.25, 0.50, 1.0]
-        scale_handles = []
-        unit = "Mt" if value_column == "quantity" else "M USD"
-        # BACI quantities are in metric tonnes → convert to Mt for display
-        denom = 1e6 if value_column == "quantity" else 1e6
+        unit  = "Mt"  if value_column == "quantity" else "M USD"
+        denom = 1e6   if value_column == "quantity" else 1e6
+        scale_fracs = [1.0, 0.50, 0.25]          # largest on top
+        scale_labels = [f"{frac * global_max_bubble / denom:.0f} {unit}"
+                        for frac in scale_fracs]
+
+        map_height = bounds[3] - bounds[1]
+        # anchor: upper-left, leave a small margin
+        margin_x = map_width  * 0.03
+        margin_y = map_height * 0.03
+        cx = bounds[0] + margin_x + max_r * 1.6  # centre x of all circles
+
+        # stack circles top-to-bottom: largest first at the top
+        title_h  = max_r * 1.1
+        pad_y    = max_r * 0.4
+        y_start  = bounds[3] - margin_y - title_h  # top of first circle centre
+
+        centres_y = []
+        y_cursor  = y_start
         for frac in scale_fracs:
-            val = frac * global_max_bubble
-            # marker size in points: radius in data units → approximate pt size
-            # We use markersize proportional to sqrt(frac) scaled to a readable range
-            ms = 6 + 14 * np.sqrt(frac)
-            label_val = val / denom
-            label = f"{label_val:.0f} {unit}"
-            color = colors["surplus"]
-            scale_handles.append(
-                Line2D([0], [0], marker='o', color='w', label=label,
-                       markerfacecolor=color, markeredgecolor='white',
-                       markersize=ms, alpha=0.7)
-            )
-        leg2 = ax.legend(
-            handles=scale_handles,
-            loc="lower right",
-            frameon=True,
-            fontsize=10,
-            title="Net export volume\n(sizes proportional, not to map scale)",
-            title_fontsize=9,
-        )
-        leg2.get_frame().set_facecolor(colors["legend_bg"])
-        leg2.get_frame().set_edgecolor(colors["legend_edge"])
-        ax.add_artist(leg2)
+            r_i = get_radius(frac * global_max_bubble)
+            y_cursor -= r_i                        # move down by radius
+            centres_y.append(y_cursor)
+            y_cursor -= r_i + max_r * 0.25         # gap between circles
+
+        # extra room to the right for labels — use 3× max_r so values fit
+        pad_x_left  = max_r * 0.6
+        pad_x_right = max_r * 3.2
+        box_left   = cx - max_r - pad_x_left
+        box_top    = bounds[3] - margin_y
+        box_bottom = centres_y[-1] - max_r - pad_y
+        box_width  = max_r + pad_x_left + pad_x_right
+        box_height = box_top - box_bottom
+
+        from matplotlib.patches import FancyBboxPatch
+        ax.add_patch(FancyBboxPatch(
+            (box_left, box_bottom), box_width, box_height,
+            boxstyle="round,pad=0.02",
+            facecolor=colors["legend_bg"],
+            edgecolor=colors["legend_edge"],
+            linewidth=0.8, zorder=8,
+        ))
+
+        # title at the top of the box
+        ax.text(box_left + box_width / 2,
+                box_top - pad_y * 0.5,
+                "Net trade\nvolume",
+                ha="center", va="top", fontsize=9, zorder=9)
+
+        for frac, label, cy_i in zip(scale_fracs, scale_labels, centres_y):
+            r_i = get_radius(frac * global_max_bubble)
+            ax.add_patch(Circle(
+                (cx, cy_i), r_i,
+                facecolor=colors["surplus"], alpha=0.7,
+                edgecolor="white", linewidth=0.5, zorder=9,
+            ))
+            # label to the right of each circle
+            ax.text(cx + max_r + pad_x_left * 0.5, cy_i, label,
+                    ha="left", va="center", fontsize=8, zorder=9)
 
     # 3) Line-width scale: show 3 reference flow sizes
     if global_max_line > 0:
+        unit  = "Mt"  if value_column == "quantity" else "M USD"
+        denom = 1e6   if value_column == "quantity" else 1e6
         line_fracs = [0.25, 0.50, 1.0]
         line_handles = []
-        unit = "Mt" if value_column == "quantity" else "M USD"
-        denom = 1e6 if value_column == "quantity" else 1e6
         for frac in line_fracs:
-            val = frac * global_max_line
-            lw = max((frac) * 5.5, 0.3)
-            label = f"{val / denom:.0f} {unit}"
+            lw    = max(frac * 5.5, 0.3)
+            label = f"{frac * global_max_line / denom:.0f} {unit}"
             line_handles.append(
                 Line2D([0], [0], color=colors["flow_line"], lw=lw,
                        alpha=0.7, label=label)
@@ -385,6 +417,10 @@ def plot(data_plot, year, product_name, value_column, colors, output_path=None):
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         plt.savefig(output_path, dpi=300, bbox_inches="tight")
         print(f"Saved plot: {output_path}")
+    if output_path_pdf:
+        os.makedirs(os.path.dirname(output_path_pdf), exist_ok=True)
+        plt.savefig(output_path_pdf, bbox_inches="tight")
+        print(f"Saved plot: {output_path_pdf}")
     plt.close(fig)
 
 
@@ -405,9 +441,9 @@ if __name__ == "__main__":
 
     # Map product names to snakemake output paths
     output_map = {
-        "Iron Ore":    {"png": str(snakemake.output.iron_ore),  "csv": str(snakemake.output.iron_ore_csv)},
-        "DRI-HBI":     {"png": str(snakemake.output.dri_hbi),   "csv": str(snakemake.output.dri_hbi_csv)},
-        "Steel (raw)": {"png": str(snakemake.output.steel_raw), "csv": str(snakemake.output.steel_raw_csv)},
+        "Iron Ore":    {"pdf": str(snakemake.output.iron_ore),    "png": str(snakemake.output.iron_ore_png),  "csv": str(snakemake.output.iron_ore_csv)},
+        "DRI-HBI":     {"pdf": str(snakemake.output.dri_hbi),     "png": str(snakemake.output.dri_hbi_png),   "csv": str(snakemake.output.dri_hbi_csv)},
+        "Steel (raw)": {"pdf": str(snakemake.output.steel_raw),   "png": str(snakemake.output.steel_raw_png), "csv": str(snakemake.output.steel_raw_csv)},
     }
 
     print("Loading world geometry")
@@ -441,6 +477,7 @@ if __name__ == "__main__":
             value_column=VALUE_COLUMN,
             colors=colors,
             output_path=output_map[product_name]["png"],
+            output_path_pdf=output_map[product_name]["pdf"],
         )
 
     print("\nDone.")
