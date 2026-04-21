@@ -251,7 +251,7 @@ rule plot_mga:
         mem_mb=4000,
     threads: 2
     notebook:
-        "notebooks/plot_mga.ipynb"
+        "notebooks/plot-mga.ipynb"
 
 
 # Povide a rule which triggers creation of all scenarios listed (= rows) in 'scenarios/trade_scenarios.csv'
