@@ -152,15 +152,15 @@ if config["enable"].get("run_supply_chain", True):
             "Calculating the LCoX of {wildcards.product} for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum product potential."
         params:
             interest_rate=config["interest_rate"],
-            region_specific_wacc=config["region-specific-wacc"],
+            # region_specific_wacc=config["region-specific-wacc"],
         input:
             supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
             costs = "../resources/technology_data/costs_{cost_year}.csv",
             trace = "../resources/trace/steel_{cost_year}.nc",
             wacc = "../resources/wacc-clustered.csv",
         output:
-            results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+            results="../resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}/results_{demand_factor}.csv",
+            network="../resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}/network_{demand_factor}.nc",
         threads: 4
         resources:
             mem_mb=8000,
@@ -177,16 +177,16 @@ if config["enable"].get("run_supply_curve", True):
             "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
         input:
             lco_product_data = lambda wildcards: expand(
-                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
+                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}/results_{{demand_factor}}.csv",
                 demand_factor=config["demand_factors"],
                 allow_missing=True
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
             steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         output:
-            supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
-            supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
+            supply = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+            supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+            supply_curve = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.pdf",
         threads: 2
         script:
             "scripts/create_supply_curve.py"
@@ -196,8 +196,8 @@ if config["enable"].get("run_supply_curve", True):
 rule create_all_supply_curves:
     input:
         expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            cost_year=[2030,2050], region=config["regions"], product=["steel"], allow_missing=True
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+            cost_year=[2030,2050], wacc=["uniform"], region=config["regions"], product=["steel"], allow_missing=True
             ) #cost_year=[2030,2050], region=config["regions"], product=["steel", "hydrogen"]
 
 
@@ -207,17 +207,17 @@ rule model_trade:
         cost_penalty=config["design"]["cost_penalty"],
         scenarios=config["scenario"],
         interest_rate=config["interest_rate"],
-        region_specific_wacc=config["region-specific-wacc"],
+        # region_specific_wacc=config["region-specific-wacc"],
         diversity_factor=config["trade"]["diversity_factor"],
     input:
         supply_curves_interone = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
             allow_missing=True, region=config["regions"]),
         supply_curves_intertwo = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{intertwo}.csv",
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{intertwo}.csv",
             allow_missing=True, region=config["regions"]),
         # supply_curves_final = expand(
-        #     "../resources/supply_curves/cost_year~{cost_year}/{region}_{final}.csv",
+        #     "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{final}.csv",
         #     allow_missing=True, region=config["regions"]),
         transport_costs = "../data/transport_costs/steel_r_iron_r.csv",
         trade_options = "../resources/trade_opt_chokepoints.csv",

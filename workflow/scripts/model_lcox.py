@@ -101,7 +101,7 @@ def building_model(n, region, ds, dw, dc, load, h_cost, iron_ore_cost):
         # Country specific wacc
         base_interest_rate = snakemake.params.interest_rate
 
-        if snakemake.params.region_specific_wacc:
+        if snakemake.wildcards.wacc == "regional":
             print(f"applying region specific wacc")
             wacc = pd.read_csv(snakemake.input.wacc, header=0)
             wacc.set_index("region", inplace=True)
