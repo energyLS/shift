@@ -1,5 +1,5 @@
 enable:
-  run_supply_chain: False # Enable for first run
+  run_supply_chain: True # Enable for first run
   run_supply_curve: False # Enable for first run
 
 
@@ -217,7 +217,9 @@ solver_options:
 colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'grey'
+  hydrogen direct iron reduction furnace: 'grey'
   electrolysis: 'magenta'
+  battery inverter: '#6A000E'
   battery inverter (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
   battery: 'purple'
