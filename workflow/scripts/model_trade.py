@@ -685,21 +685,23 @@ def apply_cost_penalty(n, cost_penalty):
     return n
 
 
-def apply_wacc_simple(n, wacc):
+# def apply_wacc_simple(n, wacc):
 
-    # Add cost pentalty to all technologies of a certain region, excluding shipping
-    wacc.set_index("region", inplace=True)
-    base_interest_rate = snakemake.params.interest_rate
+#     # Add cost pentalty to all technologies of a certain region, excluding shipping
+#     wacc.set_index("region", inplace=True)
+#     base_interest_rate = snakemake.params.interest_rate
 
-    for region in wacc.index:
+#     for region in wacc.index:
 
-        capital_cost_adj = wacc.loc[region].values[0] / base_interest_rate
+#         capital_cost_adj = wacc.loc[region].values[0] / base_interest_rate
 
-        n.links.loc[
-            ((n.links.bus1 == f"{region}_steel") | (n.links.bus1 == f"{region}_hbi"))
-            & ~n.links.carrier.str.contains("shipping"),
-            "marginal_cost",
-        ] *= capital_cost_adj
+#         n.links.loc[
+#             ((n.links.bus1 == f"{region}_steel") | (n.links.bus1 == f"{region}_hbi"))
+#             & ~n.links.carrier.str.contains("shipping"),
+#             "marginal_cost",
+#         ] *= capital_cost_adj
+
+
 def apply_hbi_diversity_constraint(n, diversity_factor, demands):
     """
     Apply HBI import diversity constraint.
@@ -958,7 +960,9 @@ def resolve_mga_links_from_blocks(n, mga):
         for region in regions:
             region_to_block[region] = block_name
 
-    print(f"Blocks MGA: {', '.join(f'{k}: {len(v)} regions' for k, v in blocks.items())}")
+    print(
+        f"Blocks MGA: {', '.join(f'{k}: {len(v)} regions' for k, v in blocks.items())}"
+    )
 
     # Select shipping links for the target carrier
     mask = n.links.carrier == f"shipping_{carrier}"
@@ -1177,7 +1181,9 @@ if __name__ == "__main__":
     # Load indicators for MGA (flexible architecture for future extensions)
     indicators = {}
     indicators["stability"] = political_stability_data
-    indicators["chokepoint"] = trade_options  # trade_options now has 'chokepoints' column
+    indicators["chokepoint"] = (
+        trade_options  # trade_options now has 'chokepoints' column
+    )
 
     # limit regions
     trade_options = trade_options[
@@ -1228,12 +1234,13 @@ if __name__ == "__main__":
     print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
     n = apply_cost_penalty(n, cost_penalty)
 
+    # Note: Only relevant when capital costs are added in this script. Currently, they are added only in model_lcox
     # Country specific wacc adjustment (simplified)
-    if snakemake.params.region_specific_wacc:
-        print(f"applying region specific wacc (simplified)")
-        n = apply_wacc_simple(n, wacc)
-    else:
-        pass
+    # if snakemake.wildcards.wacc == "regional":
+    #     print(f"applying region specific wacc (simplified)")
+    #     n = apply_wacc_simple(n, wacc)
+    # else:
+    #     pass
 
     # MGA
     # HBI diversity constraint
