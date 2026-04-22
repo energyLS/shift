@@ -28,114 +28,252 @@ def region_to_iso3_codes(region: str, config: dict) -> List[str]:
 
 
 # ============================================================================
-# RENEWABLE CLUSTER LOADING
+# RENEWABLE PROFILES LOADING (NEW FORMAT)
 # ============================================================================
 
 
-def load_renewable_clusters_for_region(
-    region: str, renewable_timeseries_path: str, config: dict
-) -> Dict:
-    """Load renewable clusters for region directly from netCDF (includes all metadata + timeseries)."""
-    # Step 1: Get ISO3 codes for region
+def load_renewable_profiles(nc_path: str) -> xr.Dataset:
+    """Load renewable profiles from new xarray format (single .nc file).
+
+    Parameters
+    ----------
+    nc_path : str
+        Path to renewable profiles netCDF file
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with dimensions [bus, technology, hour] and variables:
+        - capacity_factor[bus, tech, hour]
+        - p_nom_max[bus, tech]
+        - avg_cf[bus, tech]
+    """
+    logger.info(f"Loading renewable profiles from {nc_path}...")
+
+    try:
+        dataset = xr.open_dataset(nc_path)
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Renewable profiles file not found: {nc_path}") from e
+    except Exception as e:
+        raise RuntimeError(f"Failed to load renewable profiles: {e}") from e
+
+    # Validate dimensions
+    required_dims = {"bus", "technology", "hour"}
+    actual_dims = set(dataset.dims.keys())
+    if not required_dims.issubset(actual_dims):
+        raise ValueError(
+            f"Dataset missing required dimensions. Required: {required_dims}, "
+            f"Found: {actual_dims}"
+        )
+
+    # Validate data variables
+    required_vars = {"capacity_factor", "p_nom_max", "avg_cf"}
+    actual_vars = set(dataset.data_vars.keys())
+    if not required_vars.issubset(actual_vars):
+        raise ValueError(
+            f"Dataset missing required variables. Required: {required_vars}, "
+            f"Found: {actual_vars}"
+        )
+
+    logger.info(
+        f"✓ Loaded renewable profiles: {len(dataset.bus)} buses, "
+        f"{len(dataset.technology)} technologies, {len(dataset.hour)} hours"
+    )
+
+    return dataset
+
+
+def filter_by_region(dataset: xr.Dataset, region: str, config: dict) -> xr.Dataset:
+    """Filter renewable profiles by region using ISO3 codes from bus_id.
+
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        Unfiltered renewable profiles
+    region : str
+        Region name (key in config["regions"])
+    config : dict
+        Config dict with regions mapping
+
+    Returns
+    -------
+    xr.Dataset
+        Filtered dataset (subset of buses matching region's ISO3 codes)
+    """
+    # Get ISO3 codes for this region
     iso3_list = region_to_iso3_codes(region, config)
     logger.info(f"Region '{region}' maps to ISO3 codes: {iso3_list}")
 
-    # Step 2: Load netCDF dataset
-    timeseries_ds = xr.open_dataset(renewable_timeseries_path)
+    # Parse ISO3 from bus_id strings (format: "{ISO3}_{other_identifiers}")
+    bus_ids = dataset.coords["bus"].values
+    bus_iso3_codes = []
 
-    # Filter clusters by ISO3 country codes
-    cluster_iso3 = timeseries_ds.coords["iso3"].values  # ISO3 per cluster
-    cluster_ids = timeseries_ds.coords["cluster"].values  # Cluster IDs
+    for bus_id in bus_ids:
+        bus_id_str = str(bus_id)
+        # Extract ISO3 from bus_id (first component before underscore)
+        iso3 = bus_id_str.split("_")[0]
+        bus_iso3_codes.append(iso3)
 
-    # Select clusters for this region's ISO3 codes
-    cluster_mask = np.isin(cluster_iso3, iso3_list)
-    selected_clusters = cluster_ids[cluster_mask]
+    # Create mask for buses in this region
+    bus_mask = np.isin(bus_iso3_codes, iso3_list)
+    selected_buses = bus_ids[bus_mask]
 
-    if len(selected_clusters) == 0:
+    if len(selected_buses) == 0:
         raise ValueError(
-            f"No clusters found for region '{region}' with ISO3 {iso3_list}. "
-            f"Available ISO3 in data: {np.unique(cluster_iso3)}"
+            f"No buses found for region '{region}' with ISO3 {iso3_list}. "
+            f"Available ISO3 codes in data: {np.unique(bus_iso3_codes)}"
         )
 
-    logger.info(f"Found {len(selected_clusters)} clusters for region {region}")
-    logger.info(f"Unique technologies: {timeseries_ds.technology.values}")
+    # Filter dataset to selected buses
+    filtered = dataset.sel(bus=selected_buses)
 
-    # Step 3: Extract cluster data for each selected cluster
-    clusters = []
-    total_potential_mw = 0
+    logger.info(
+        f"Filtered dataset to {len(selected_buses)} buses in region {region} "
+        f"(from {len(bus_ids)} total)"
+    )
 
-    for cluster_id in selected_clusters:
-        # Get data for this cluster across all technologies
-        cluster_idx = list(cluster_ids).index(cluster_id)
-        iso3 = cluster_iso3[cluster_idx]
+    return filtered
 
-        for tech in timeseries_ds.technology.values:
-            # Extract 2D arrays from dataset
-            renewable_potential = float(
-                timeseries_ds["renewable_potential"]
-                .sel(cluster=cluster_id, technology=tech)
-                .values
-            )
-            p_nom_max = float(
-                timeseries_ds["p_nom_max"]
-                .sel(cluster=cluster_id, technology=tech)
-                .values
-            )
-            avg_cf = float(
-                timeseries_ds["avg_cf"].sel(cluster=cluster_id, technology=tech).values
-            )
-            cf_timeseries = (
-                timeseries_ds["capacity_factor"]
-                .sel(cluster=cluster_id, technology=tech)
-                .values
-            )
 
-            # Handle NaN/missing values - default to 0
-            renewable_potential = (
-                0 if np.isnan(renewable_potential) else renewable_potential
-            )
-            p_nom_max = 0 if np.isnan(p_nom_max) else p_nom_max
-            avg_cf = 0 if np.isnan(avg_cf) else avg_cf
-            if isinstance(cf_timeseries, np.ndarray):
-                cf_timeseries = np.nan_to_num(cf_timeseries, nan=0.0)
-            else:
-                cf_timeseries = (
-                    np.zeros(8760) if np.isnan(cf_timeseries) else cf_timeseries
-                )
+def filter_by_technologies(dataset: xr.Dataset, config: dict) -> xr.Dataset:
+    """Filter renewable technologies based on config.
 
-            # Get geographic coordinates
-            lat = float(timeseries_ds["lat"].sel(cluster=cluster_id).values)
-            lon = float(timeseries_ds["lon"].sel(cluster=cluster_id).values)
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        Renewable profiles with all technologies
+    config : dict
+        Config dict with optional `renewable_technologies` list
 
-            clusters.append(
-                {
-                    "cluster_id": f"{cluster_id}_{tech}",  # Unique ID combining cluster + technology
-                    "iso3": iso3,
-                    "technology": tech,
-                    "renewable_potential_mw": renewable_potential,
-                    "p_nom_max": p_nom_max,
-                    "avg_cf": avg_cf,
-                    "cf_timeseries": cf_timeseries,
-                    "lat": lat,
-                    "lon": lon,
-                }
-            )
+    Returns
+    -------
+    xr.Dataset
+        Filtered dataset with only specified technologies
+    """
+    # Get allowed technologies from config, default to ["solar", "onwind"]
+    allowed_techs = config.get("renewable_technologies", ["solar", "onwind"])
+    logger.info(f"Allowed renewable technologies: {allowed_techs}")
 
-            total_potential_mw += renewable_potential
+    # Get available technologies in dataset
+    available_techs = list(dataset.technology.values)
+    logger.info(f"Available technologies in dataset: {available_techs}")
 
-    # Aggregate results
-    iso3_codes = sorted(list(set(c["iso3"] for c in clusters)))
-    technologies = sorted(list(set(c["technology"] for c in clusters)))
+    # Find intersection of allowed and available
+    techs_to_keep = [t for t in available_techs if str(t) in allowed_techs]
 
-    logger.info(f"Total renewable potential for region: {total_potential_mw:.1f} MW")
-    logger.info(f"Clusters loaded: {len(clusters)}")
+    if not techs_to_keep:
+        raise ValueError(
+            f"No renewable technologies available after filtering. "
+            f"Allowed: {allowed_techs}, Available: {available_techs}"
+        )
 
-    return {
-        "clusters": clusters,
-        "iso3_list": iso3_codes,
-        "technologies": technologies,
-        "total_potential_mw": total_potential_mw,
-    }
+    # Filter dataset
+    filtered = dataset.sel(technology=techs_to_keep)
+
+    logger.info(
+        f"Filtered to {len(techs_to_keep)} technologies: {techs_to_keep} "
+        f"(from {len(available_techs)} available)"
+    )
+
+    return filtered
+
+
+# ============================================================================
+# ELECTRICITY BACK-PROPAGATION
+# ============================================================================
+
+
+def back_propagate_electricity_need(
+    tech_costs: pd.Series, product: str, config: dict
+) -> float:
+    """Calculate electricity requirement (MWh) per tonne of product.
+
+    Back-propagates through supply chain efficiency chain:
+    - steel (t): Electrolyzer(elec) + DRI(elec + H2) + EAF(elec)
+    - hbi (t): Electrolyzer(elec) + DRI(elec + H2)
+    - h2 (t): Electrolyzer(elec) only
+
+    Parameters
+    ----------
+    tech_costs : pd.Series
+        Technology cost database (MultiIndex by [tech_name, parameter])
+    product : str
+        Product: "steel", "hbi", or "h2"
+    config : dict
+        Config dict with optional overrides: "electricity_per_tonne_{product}_mwh"
+
+    Returns
+    -------
+    float
+        Electricity requirement in MWh per tonne of product
+    """
+    # Check for config override first
+    override_key = f"electricity_per_tonne_{product}_mwh"
+    if override_key in config:
+        elec_need = config[override_key]
+        logger.info(
+            f"Using config override for {product}: "
+            f"{override_key} = {elec_need:.4f} MWh/t"
+        )
+        return elec_need
+
+    # Extract efficiencies from tech database
+    # Electrolyzer: Electricity → H2
+    elec_params = td.get_tech(tech_costs, "Alkaline electrolyzer large size")
+    elec_mwh_per_mwh_h2 = td.get_tech_param(elec_params, "electricity-input", 1.38)
+    logger.debug(
+        f"Electrolyzer electricity input: {elec_mwh_per_mwh_h2:.4f} MWh/MWh H2"
+    )
+
+    if product == "h2":
+        # H2 only: just electrolyzer electricity
+        # Note: 1 MWh H2 ≈ 1 t H2 for energy accounting (MWh/MWh = MWh/t in energy terms)
+        elec_need = elec_mwh_per_mwh_h2
+        logger.info(
+            f"Back-propagated electricity for H2: {elec_need:.4f} MWh/t H2 "
+            f"(electrolyzer only)"
+        )
+        return elec_need
+
+    # DRI Furnace: Iron ore + Hydrogen + Electricity → HBI
+    dri_params = td.get_tech(tech_costs, "hydrogen direct iron reduction furnace")
+    h2_per_t_hbi = td.get_tech_param(dri_params, "hydrogen-input", 2.1)
+    dri_elec_per_t_hbi = td.get_tech_param(dri_params, "electricity-input", 1.03)
+    logger.debug(f"DRI hydrogen input: {h2_per_t_hbi:.4f} t H2/t HBI")
+    logger.debug(f"DRI electricity input: {dri_elec_per_t_hbi:.4f} MWh/t HBI")
+
+    # Electricity for H2 production (via electrolyzer)
+    h2_elec_per_t_hbi = h2_per_t_hbi * elec_mwh_per_mwh_h2
+
+    if product == "hbi":
+        # HBI: H2 production + DRI electricity
+        elec_need = h2_elec_per_t_hbi + dri_elec_per_t_hbi
+        logger.info(
+            f"Back-propagated electricity for HBI: {elec_need:.4f} MWh/t HBI "
+            f"(H2 production: {h2_elec_per_t_hbi:.4f}, DRI: {dri_elec_per_t_hbi:.4f})"
+        )
+        return elec_need
+
+    if product == "steel":
+        # EAF: HBI + Electricity → Steel
+        eaf_params = td.get_tech(tech_costs, "electric arc furnace")
+        eaf_elec_per_t_steel = td.get_tech_param(
+            eaf_params, "electricity-input", 0.6395
+        )
+        logger.debug(f"EAF electricity input: {eaf_elec_per_t_steel:.4f} MWh/t Steel")
+
+        # Steel: H2 production + DRI electricity + EAF electricity
+        elec_need = h2_elec_per_t_hbi + dri_elec_per_t_hbi + eaf_elec_per_t_steel
+        logger.info(
+            f"Back-propagated electricity for Steel: {elec_need:.4f} MWh/t Steel "
+            f"(H2 production: {h2_elec_per_t_hbi:.4f}, DRI: {dri_elec_per_t_hbi:.4f}, "
+            f"EAF: {eaf_elec_per_t_steel:.4f})"
+        )
+        return elec_need
+
+    raise ValueError(
+        f"Product '{product}' not recognized. Choose from: 'h2', 'hbi', 'steel'"
+    )
 
 
 # ============================================================================
@@ -145,21 +283,28 @@ def load_renewable_clusters_for_region(
 
 def add_renewable_generators(
     network: pypsa.Network,
-    renewable_clusters: Dict,
+    dataset: xr.Dataset,
     tech_costs: pd.Series,
     config: dict,
-) -> None:
-    """Add renewable generators to electricity bus for all clusters.
+) -> Dict:
+    """Add renewable generators from xarray dataset to electricity bus.
 
-    Renewable generators (wind, solar) produce electricity, so all have carrier="electricity".
-    The technology type (onwind, offwind, solar) is tracked in the generator name.
+    Parameters
+    ----------
+    network : pypsa.Network
+        PyPSA network to add generators to
+    dataset : xr.Dataset
+        Filtered renewable profiles with dimensions [bus, technology, hour]
+    tech_costs : pd.Series
+        Technology cost parameters
+    config : dict
+        Configuration dict
+
+    Returns
+    -------
+    dict
+        Audit info with counts and statistics
     """
-    clusters = renewable_clusters["clusters"]
-
-    if not clusters:
-        logger.warning("No clusters provided; no generators added")
-        return
-
     # Map technology names to database keys for cost lookup
     tech_database_map = {
         "onwind": "onwind",
@@ -174,49 +319,103 @@ def add_renewable_generators(
     # Use the network's discount_rate (which is set regionally in prepare_network)
     discount_rate = network.discount_rate
 
-    for cluster in clusters:
-        cluster_id = cluster["cluster_id"]
-        technology = cluster["technology"]
-        p_nom_max = cluster["p_nom_max"]  # Use cluster-aggregated p_nom_max
-        cf_ts = cluster["cf_timeseries"]
+    # Validate data quality
+    n_total_combos = len(dataset.bus) * len(dataset.technology)
+    n_valid_combos = 0
+    n_added_generators = 0
+    total_p_nom_max = 0
+    iso3_set = set()
 
-        # Get technology parameters from database (handles missing tech gracefully)
-        db_tech_name = tech_database_map.get(technology, technology)
-        tech_params = td.get_tech(tech_costs, db_tech_name)
+    for bus_id in dataset.bus.values:
+        # Extract ISO3 from bus_id
+        iso3 = str(bus_id).split("_")[0]
+        iso3_set.add(iso3)
 
-        overnight_cost = (
-            td.get_tech_param(tech_params, "investment", 0) * 1000
-        )  # EUR/kW → EUR/MW
-        lifetime = td.get_tech_param(tech_params, "lifetime", 20)
-        fom_pct = td.get_tech_param(tech_params, "FOM", 0)
-        fom_cost = overnight_cost * (fom_pct / 100) if overnight_cost > 0 else 0
+        for tech in dataset.technology.values:
+            tech_str = str(tech)
 
-        gen_name = f"renewable_{cluster_id}"
+            # Extract data for this bus-tech combination
+            p_nom_max = float(
+                dataset["p_nom_max"].sel(bus=bus_id, technology=tech).values
+            )
+            avg_cf = float(dataset["avg_cf"].sel(bus=bus_id, technology=tech).values)
+            cf_timeseries = (
+                dataset["capacity_factor"].sel(bus=bus_id, technology=tech).values
+            )
 
-        # Add generator with cluster data
-        # All renewables produce electricity (carrier="electricity")
-        # Technology type (onwind, offwind, solar) is encoded in the generator name
-        network.add(
-            "Generator",
-            gen_name,
-            bus="electricity",
-            carrier="electricity",
-            p_nom_extendable=True,
-            p_nom=0,  # Start with no capacity; optimization will decide
-            p_nom_max=p_nom_max,  # Upper ceiling from cluster data (MW)
-            p_max_pu=cf_ts,  # Hourly capacity factor from cluster data (0-1)
-            overnight_cost=overnight_cost,
-            discount_rate=discount_rate,
-            lifetime=lifetime,
-            fom_cost=fom_cost,
+            # Skip invalid combinations (NaN or ≤0)
+            if np.isnan(p_nom_max) or p_nom_max <= 0 or np.isnan(avg_cf) or avg_cf <= 0:
+                continue
+
+            n_valid_combos += 1
+
+            # Handle timeseries NaNs
+            if isinstance(cf_timeseries, np.ndarray):
+                cf_timeseries = np.nan_to_num(cf_timeseries, nan=0.0)
+            else:
+                cf_timeseries = np.zeros(8760)
+
+            # Get technology parameters from database
+            db_tech_name = tech_database_map.get(tech_str, tech_str)
+            tech_params = td.get_tech(tech_costs, db_tech_name)
+
+            overnight_cost = (
+                td.get_tech_param(tech_params, "investment", 0) * 1000
+            )  # EUR/kW → EUR/MW
+            lifetime = td.get_tech_param(tech_params, "lifetime", 20)
+            fom_pct = td.get_tech_param(tech_params, "FOM", 0)
+            fom_cost = overnight_cost * (fom_pct / 100) if overnight_cost > 0 else 0
+
+            gen_name = f"renewable_{bus_id}_{tech_str}"
+
+            # Add generator
+            network.add(
+                "Generator",
+                gen_name,
+                bus="electricity",
+                carrier="electricity",
+                p_nom_extendable=True,
+                p_nom=0,  # Start with no capacity; optimization will decide
+                p_nom_max=p_nom_max,  # Upper ceiling from dataset (MW)
+                p_max_pu=cf_timeseries,  # Hourly capacity factor (0-1)
+                overnight_cost=overnight_cost,
+                discount_rate=discount_rate,
+                lifetime=lifetime,
+                fom_cost=fom_cost,
+            )
+
+            n_added_generators += 1
+            total_p_nom_max += p_nom_max
+
+            logger.debug(
+                f"Added generator {gen_name}: p_nom_max={p_nom_max:.1f} MW, "
+                f"avg_cf={avg_cf:.3f}, overnight_cost={overnight_cost:.1f} EUR/MW"
+            )
+
+    # Build audit info
+    coverage_pct = (n_valid_combos / n_total_combos * 100) if n_total_combos > 0 else 0
+
+    logger.info(
+        f"Added {n_added_generators} renewable generators to network "
+        f"({n_valid_combos}/{n_total_combos} valid combos, {coverage_pct:.1f}% coverage)"
+    )
+    logger.info(f"Total p_nom_max capacity: {total_p_nom_max:.1f} MW")
+
+    if coverage_pct < 50:
+        logger.warning(
+            f"Low data coverage: {coverage_pct:.1f}% valid combos. "
+            f"Consider checking data source."
         )
 
-        logger.debug(
-            f"Added generator {gen_name}: p_nom_max={p_nom_max:.1f} MW, "
-            f"overnight_cost={overnight_cost:.1f} EUR/MW"
-        )
-
-    logger.info(f"Added {len(clusters)} renewable generators to network")
+    return {
+        "n_generators_added": n_added_generators,
+        "n_valid_bus_tech_combos": n_valid_combos,
+        "n_total_bus_tech_combos": n_total_combos,
+        "coverage_pct": coverage_pct,
+        "total_p_nom_max_mw": total_p_nom_max,
+        "iso3_codes": sorted(list(iso3_set)),
+        "technologies": sorted([str(t) for t in dataset.technology.values]),
+    }
 
 
 def _apply_discount_rate_to_components(
@@ -355,13 +554,34 @@ def apply_product_cutoff(network: pypsa.Network, product: str) -> None:
 
 def prepare_network(
     skeleton_network_path: str,
-    renewable_timeseries_path: str,
+    renewable_nc_path: str,
     tech_costs_path: str,
     region: str,
     product: str,
     config: dict,
 ) -> Tuple[pypsa.Network, Dict]:
-    """Prepare network: add renewables, apply product cutoff. Returns (network, audit_info)."""
+    """Prepare network: add renewables, apply product cutoff. Returns (network, audit_info).
+
+    Parameters
+    ----------
+    skeleton_network_path : str
+        Path to skeleton network
+    renewable_nc_path : str
+        Path to renewable profiles .nc file (NEW xarray format)
+    tech_costs_path : str
+        Path to technology costs CSV
+    region : str
+        Region name
+    product : str
+        Product (h2, hbi, or steel)
+    config : dict
+        Configuration dict
+
+    Returns
+    -------
+    tuple
+        (network: pypsa.Network, audit_info: dict)
+    """
     logger.info("=" * 70)
     logger.info(f"Preparing network for region={region}, product={product}")
     logger.info("=" * 70)
@@ -375,7 +595,7 @@ def prepare_network(
         f"{len(network.links)} links, {len(network.stores)} stores"
     )
 
-    # Set snapshots here using wildcard year coming from Snakemake
+    # Set snapshots
     cost_year = None
     if "snakemake" in globals():
         cost_year = getattr(snakemake.wildcards, "cost_year", None)
@@ -384,13 +604,13 @@ def prepare_network(
         network.set_snapshots(
             pd.date_range(f"{cost_year}-01-01", periods=8760, freq="h")
         )
-        logger.info(f"Set snapshots for cost_year={cost_year} in prepare_network")
+        logger.info(f"Set snapshots for cost_year={cost_year}")
     else:
         raise ValueError(
             "cost_year must be defined in snakemake wildcards for prepare_network"
         )
 
-    # Step 1b: Set interest rate (discount rate) for the network
+    # Step 1b: Set interest rate (discount rate)
     interest_rates = config.get("interest_rate", {})
     discount_rate = interest_rates.get(region, interest_rates.get("default", 0.07))
     network.discount_rate = discount_rate
@@ -400,19 +620,21 @@ def prepare_network(
     logger.info("Loading technology costs...")
     tech_costs = td.load_tech_costs(tech_costs_path)
 
-    # Step 3: Load renewable clusters for region
-    logger.info(f"Loading renewable clusters for region {region}...")
-    renewable_clusters = load_renewable_clusters_for_region(
-        region=region,
-        renewable_timeseries_path=renewable_timeseries_path,
-        config=config,
-    )
+    # Step 3: Load renewable profiles (NEW FORMAT)
+    logger.info(f"Loading renewable profiles for region {region}...")
+    renewable_dataset = load_renewable_profiles(renewable_nc_path)
+
+    # Step 3b: Filter by region
+    renewable_dataset = filter_by_region(renewable_dataset, region, config)
+
+    # Step 3c: Filter by allowed technologies
+    renewable_dataset = filter_by_technologies(renewable_dataset, config)
 
     # Step 4: Add renewable generators
     logger.info("Adding renewable generators to network...")
-    add_renewable_generators(
+    gen_audit = add_renewable_generators(
         network=network,
-        renewable_clusters=renewable_clusters,
+        dataset=renewable_dataset,
         tech_costs=tech_costs,
         config=config,
     )
@@ -422,22 +644,17 @@ def prepare_network(
     apply_product_cutoff(network=network, product=product)
 
     # Step 6: Build audit info
-    # Count unique geographic cluster IDs (without technology suffix)
-    unique_geographic_clusters = set()
-    for cluster in renewable_clusters["clusters"]:
-        # Extract base cluster ID (without technology)
-        cluster_id = cluster["cluster_id"]
-        base_cluster = "_".join(cluster_id.split("_")[:-1])  # Remove tech suffix
-        unique_geographic_clusters.add(base_cluster)
-
     audit_info = {
         "region": region,
         "product": product,
         "discount_rate": discount_rate,
-        "iso3_list": renewable_clusters["iso3_list"],
-        "num_geographic_clusters": len(unique_geographic_clusters),
-        "num_technologies": len(renewable_clusters["technologies"]),
-        "total_renewable_potential_mw": renewable_clusters["total_potential_mw"],
+        "iso3_list": gen_audit["iso3_codes"],
+        "num_buses_in_region": len(renewable_dataset.bus),
+        "num_technologies": len(gen_audit["technologies"]),
+        "num_generators_added": gen_audit["n_generators_added"],
+        "data_coverage_pct": gen_audit["coverage_pct"],
+        "total_renewable_p_nom_max_mw": gen_audit["total_p_nom_max_mw"],
+        "technologies": gen_audit["technologies"],
         "network_stats": {
             "num_buses": len(network.buses),
             "num_links": len(network.links),
@@ -448,10 +665,11 @@ def prepare_network(
 
     logger.info("Network preparation complete:")
     logger.info(f"  - Region: {region} (ISO3: {audit_info['iso3_list']})")
-    logger.info(f"  - Geographic clusters: {audit_info['num_geographic_clusters']}")
-    logger.info(f"  - Technologies per cluster: {audit_info['num_technologies']}")
+    logger.info(f"  - Buses in region: {audit_info['num_buses_in_region']}")
+    logger.info(f"  - Generators added: {audit_info['num_generators_added']}")
+    logger.info(f"  - Data coverage: {audit_info['data_coverage_pct']:.1f}%")
     logger.info(
-        f"  - Total renewable potential: {audit_info['total_renewable_potential_mw']:.1f} MW"
+        f"  - Total p_nom_max: {audit_info['total_renewable_p_nom_max_mw']:.1f} MW"
     )
     logger.info(
         f"  - Network: {audit_info['network_stats']['num_buses']} buses, "
@@ -461,7 +679,7 @@ def prepare_network(
     # Apply regional discount_rate to all cost-bearing components
     _apply_discount_rate_to_components(network, discount_rate)
 
-    # Run consistency check and sanitize
+    # Run consistency check
     _consistency_check(network)
 
     logger.info("=" * 70)
@@ -484,7 +702,7 @@ if __name__ == "__main__":
             def __init__(self):
                 self.input = {
                     "skeleton": "../resources/networks/skeleton_2030.nc",
-                    "clusters_timeseries": "../data/renewable_clusters.nc",
+                    "renewable_nc": "../data/renewable_profiles/renewable_profiles_EU__20260420_142941.nc",
                     "costs": "../resources/technology_data/costs_2030.csv",
                 }
                 self.output = {
@@ -492,12 +710,15 @@ if __name__ == "__main__":
                     "audit": "test_audit.json",
                 }
                 self.wildcards = {
-                    "region": "Test_1",
+                    "region": "EU",
                     "product": "steel",
                     "cost_year": "2030",
                 }
                 self.config = {
-                    "regions": {"Test_1": ["NLD"], "Test_2": ["PRT"], "Test_3": ["IRL"]}
+                    "regions": {
+                        "EU": ["DEU", "FRA", "ITA", "NLD"],
+                        "Africa": ["EGY", "ZAF"],
+                    }
                 }
 
         snakemake = MockSnakemake()
@@ -506,7 +727,7 @@ if __name__ == "__main__":
     try:
         network, audit_info = prepare_network(
             skeleton_network_path=snakemake.input.skeleton,
-            renewable_timeseries_path=snakemake.input.clusters_timeseries,
+            renewable_nc_path=snakemake.input.renewable_nc,
             tech_costs_path=snakemake.input.costs,
             region=snakemake.wildcards.region,
             product=snakemake.wildcards.product,
