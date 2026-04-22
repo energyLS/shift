@@ -254,7 +254,7 @@ def building_model(n, region, ds, dw, dc, load, h_cost, iron_ore_cost):
                 "hydrogen",
                 "iron ore",
                 "electrolysis",
-                "direct reduction furnace",
+                "hydrogen direct iron reduction furnace",
             ],
         )
         n.remove(
@@ -390,8 +390,6 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
     return load
 
 
-
-
 def adjust_wacc(n, base_interest_rate, regional_wacc, costs):
     # TODO This is only applied to links
     """
@@ -476,10 +474,11 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "model_lcox",
-            cost_year="2030",
-            region="Europe",
-            product="hbi",
+            cost_year="2050",
+            region="Middle_East",
+            product="eaf-grid",
             demand_factor=10,
+            wacc="regional",
         )
 
     # making dataframes from inputs
