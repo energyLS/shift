@@ -1,25 +1,27 @@
 """
-Calculate regional Levelized Cost of X (LCOX) for a single steel demand level.
+Calculate regional Levelized Cost of X (LCOX) for a single product demand level.
 
-Workflow (single fraction per invocation):
+Supports: steel, hbi, h2 (flexible product support)
+
+Workflow (single demand level per invocation):
   1. Load base_network (renewables + product already configured)
-  2. Load product-specific demands and scale by fraction
-  3. Apply renewable constraint (highest-CF blocked for local demand)
-  4. Add final loads based on scaled demand
+  2. Load product-specific demands
+  3. Apply incremental generator selection (delete generators outside demand level set)
+  4. Add hourly loads based on demand
   5. Solve optimization
-  6. Extract LCOX and save results_{fraction}.csv
-  7. Export solved network_{fraction}.nc
+  6. Extract LCOX and save results_{demand_level}.csv
+  7. Export solved network_{demand_level}.nc
 
-Parallelization: Each fraction is a separate Snakemake job, enabling parallel execution.
+Parallelization: Each demand level is a separate Snakemake job, enabling parallel execution.
 
 Inputs (from Snakemake):
   - base_network: PyPSA network with renewables, prepared per region (netCDF)
-  - steel_demand: Regional steel demand [Mt/year] (CSV)
+  - incremental_sets: Pre-filtered generator sets per demand level (JSON)
   - local_demand: Regional local electricity demand [MWh/year] (CSV)
 
-Outputs (generated for each fraction):
-  - results_{fraction}.csv: LCOX point for that demand level
-  - network_{fraction}.nc: Optimized network
+Outputs (generated for each demand level):
+  - results_{demand_level}.csv: LCOX point for that demand level
+  - network_{demand_level}.nc: Optimized network
 """
 
 import logging
@@ -57,8 +59,6 @@ def load_demands_for_region(region, config):
 
     Returns dict with:
       - local_el_demand_mwh: MWh/year (for renewable constraint calculation)
-
-    Note: steel_demand_mt is passed directly from Snakemake params, not loaded from file
     """
     # Load local electricity demand (for renewable constraint calculation)
     try:
@@ -89,156 +89,98 @@ def load_demands_for_region(region, config):
 # ============================================================================
 
 
-def apply_renewable_constraint(network, local_el_demand_mwh, config):
-    """Block highest-CF renewables for local demand (priority mechanism).
+# ============================================================================
+# INCREMENTAL RENEWABLE SELECTION (upstream filtering, Phase 3)
+# ============================================================================
 
-    Logic:
-      1. Get all renewable generators with their average CF
-      2. Sort by average CF (descending) - highest quality first
-      3. Accumulate capacity from highest CF until >= local_demand
-      4. Block these generators for local demand (set p_nom_max=0)
-      5. Remaining renewables available for steel production
 
-    The load determines electrolyzer operation; no capacity constraint applied.
+def apply_incremental_generator_selection(network, product_demand_mt, incremental_sets):
+    """Delete renewable generators NOT in the incremental set for this demand level.
 
-    Returns: audit dict with capacity breakdown and blocked generators
+    NEW WORKFLOW (Phase 3):
+    - Base network contains ALL generators from max-demand filtering
+    - Incremental sets pre-computed in prepare_regional_network.py
+    - For each demand level, delete generators outside that level's set
+
+    OLD WORKFLOW (Phase 2) REMOVED:
+    - apply_renewable_constraint() - blocked highest-CF for local demand
+    - Now: filtering done once upstream, no per-demand redundancy
+
+    Parameters
+    ----------
+    network : pypsa.Network
+        Network with full renewable set (from filtering at max demand)
+    product_demand_mt : float
+        Current product demand level in Mt/year
+    incremental_sets : dict
+        Mapping: {demand_mt: [selected_generators]}
+        Each generator dict has: bus_id, technology, p_nom_max, avg_cf
+
+    Returns
+    -------
+    dict
+        Audit info with generator deletion stats
     """
-    # Get all renewable generators (identified by name pattern "renewable_*")
+    logger.info("=" * 70)
+    logger.info("APPLYING INCREMENTAL GENERATOR SELECTION")
+    logger.info("=" * 70)
+
+    # Get the selected generators for this demand level
+    if product_demand_mt not in incremental_sets:
+        logger.warning(
+            f"Demand level {product_demand_mt} Mt not in incremental sets: {list(incremental_sets.keys())}"
+        )
+        return {
+            "total_generators_before": len(network.generators),
+            "generators_deleted": 0,
+            "generators_kept": len(network.generators),
+            "selected_for_demand": 0,
+        }
+
+    selected_generators = incremental_sets[product_demand_mt]
+
+    # Build set of generator names for this demand level
+    # Generator names are formatted as: renewable_{bus_id}_{technology}
+    selected_gen_names = set()
+    for gen_dict in selected_generators:
+        gen_name = f"renewable_{gen_dict['bus_id']}_{gen_dict['technology']}"
+        selected_gen_names.add(gen_name)
+
+    logger.info(
+        f"Selected generators for {product_demand_mt} Mt: {len(selected_gen_names)}"
+    )
+
+    # Get all renewable generators in network
     renewable_gens = network.generators[
         network.generators.index.str.startswith("renewable_")
     ]
 
-    if renewable_gens.empty:
-        logger.warning("No renewable generators found in network")
-        return {
-            "total_renewable_capacity_mw": 0,
-            "capacity_for_local_demand_mw": 0,
-            "capacity_available_for_steel_mw": 0,
-            "generators_blocked_for_local_demand": [],
-        }
-
-    # ====== STEP 1: Calculate average CF for each generator ======
-    gen_cf_data = []
-
-    for gen_name, gen_row in renewable_gens.iterrows():
-        h_max_pu = gen_row["p_max_pu"]  # Hourly timeseries (0-1) or scalar
-
-        # Handle both pandas Series, numpy array, and scalars
-        if isinstance(h_max_pu, (int, float, np.number)):
-            # Scalar CF - use directly
-            avg_cf = float(h_max_pu)
-        elif hasattr(h_max_pu, "values"):
-            # Pandas Series
-            cf_values = h_max_pu.values
-            avg_cf = np.mean(cf_values) if len(cf_values) > 0 else 0
-        else:
-            # Numpy array or list
-            cf_values = h_max_pu
-            avg_cf = (
-                np.mean(cf_values)
-                if isinstance(cf_values, np.ndarray) and len(cf_values) > 0
-                else float(cf_values)
-            )
-        p_nom_max = gen_row["p_nom_max"]
-
-        gen_cf_data.append(
-            {
-                "gen_name": gen_name,
-                "avg_cf": avg_cf,
-                "p_nom_max": p_nom_max,
-                "carrier": gen_row["carrier"],
-            }
-        )
-
-    logger.debug(f"Found {len(gen_cf_data)} renewable generators")
-
-    # ====== STEP 2: Sort by average CF (descending) - prioritize best ======
-    gen_cf_data.sort(key=lambda x: x["avg_cf"], reverse=True)
-
-    total_renewable_capacity = sum([g["p_nom_max"] for g in gen_cf_data])
-    logger.info(f"Total renewable capacity: {total_renewable_capacity:.1f} MW")
-    logger.info(
-        f"Top 3 generators by CF: {[(g['gen_name'], format(g['avg_cf'], '.3f')) for g in gen_cf_data[:3]]}"
-    )
-
-    # ====== STEP 3: Block highest-CF generators for local demand ======
-
-    capacity_accumulated = 0  # Track cumulative capacity factor contribution
-    generators_for_local = []
-
-    for gen_info in gen_cf_data:
-        if capacity_accumulated >= local_el_demand_mwh:
-            # We've accumulated enough to serve local demand, stop
-            break
-
-        gen_name = gen_info["gen_name"]
-        avg_cf = gen_info["avg_cf"]
-        p_nom_max = gen_info["p_nom_max"]
-
-        # How much energy does this generator produce annually?
-        annual_energy = avg_cf * p_nom_max * 8760  # MWh/year
-
-        # How much do we still need?
-        remaining_needed = local_el_demand_mwh - capacity_accumulated
-
-        if annual_energy <= remaining_needed:
-            # Use entire generator for local demand
-            capacity_to_use = p_nom_max
-            capacity_accumulated += annual_energy
-            new_p_nom_max = 0
-        else:
-            # Use partial generator to exactly meet local demand
-            capacity_to_use = remaining_needed / (avg_cf * 8760)
-            capacity_accumulated += remaining_needed
-            new_p_nom_max = p_nom_max - capacity_to_use
-
-        generators_for_local.append(
-            {
-                "gen_name": gen_name,
-                "avg_cf": avg_cf,
-                "capacity_blocked_mw": capacity_to_use,
-                "energy_provided_mwh": capacity_to_use * avg_cf * 8760,
-                "p_nom_max_before": p_nom_max,
-                "p_nom_max_after": new_p_nom_max,
-            }
-        )
-
-        # Update generator availability for steel
-        network.generators.at[gen_name, "p_nom_max"] = new_p_nom_max
-        blocked_msg = (
-            "fully blocked"
-            if new_p_nom_max == 0
-            else f"reduced to {new_p_nom_max:.2f} MW"
-        )
-        logger.info(
-            f"  Blocked {gen_name:40s} (CF={avg_cf:.3f}, {capacity_to_use:7.1f} MW) → local demand, {blocked_msg}"
-        )
-
-    logger.info(
-        f"Allocated {len(generators_for_local)} generators for local demand ({capacity_accumulated:.0f} MWh/year)"
-    )
-
-    # ====== STEP 4: Calculate remaining renewable capacity (for steel) ======
-    # Get remaining generators that are NOT blocked (p_nom_max > 0)
-    remaining_renewable_gens = network.generators[
-        (network.generators.index.str.startswith("renewable_"))
-        & (network.generators["p_nom_max"] > 0)
+    # Find generators to delete (those NOT in selected set)
+    generators_to_delete = [
+        gen_name
+        for gen_name in renewable_gens.index
+        if gen_name not in selected_gen_names
     ]
-    total_remaining_capacity = remaining_renewable_gens["p_nom_max"].sum()
 
     logger.info(
-        f"Remaining renewable capacity for steel: {total_remaining_capacity:.1f} MW"
+        f"Deleting {len(generators_to_delete)} generators not in incremental set"
     )
+
+    # Delete generators
+    for gen_name in generators_to_delete:
+        network.remove("Generator", gen_name)
+        logger.debug(f"Deleted generator: {gen_name}")
+
+    logger.info(
+        f"Kept {len(selected_gen_names)} generators for demand level {product_demand_mt} Mt"
+    )
+    logger.info("=" * 70)
 
     return {
-        "total_renewable_capacity_mw": total_renewable_capacity,
-        "capacity_for_local_demand_mw": capacity_accumulated
-        / 8760,  # Convert back to MW
-        "capacity_available_for_steel_mw": total_remaining_capacity,
-        "generators_blocked_for_local_demand": [
-            g["gen_name"] for g in generators_for_local
-        ],
-        "num_generators_blocked": len(generators_for_local),
+        "total_generators_before": len(renewable_gens),
+        "generators_deleted": len(generators_to_delete),
+        "generators_kept": len(selected_gen_names),
+        "selected_for_demand": len(selected_gen_names),
     }
 
 
@@ -257,25 +199,27 @@ def add_loads_to_network(network, product, demands):
     if product == "steel":
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["steel_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        hourly_demand_t = demands["product_demand_mt"] * 1000 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
     elif product == "hbi":
         bus_name = "hbi"
         # HBI is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["steel_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        hourly_demand_t = demands["product_demand_mt"] * 1000 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
     elif product == "h2":
         bus_name = "hydrogen"
         # H2 is measured in MWh/year, convert to MW (hourly average)
-        hourly_demand_mwh = demands["steel_demand_mwh_per_h"]  # Already hourly average
+        hourly_demand_mwh = demands[
+            "product_demand_mwh_per_h"
+        ]  # Already hourly average
         unit_str = "MW"
 
     elif product in ["eaf", "eaf-grid"]:
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["steel_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        hourly_demand_t = demands["product_demand_mt"] * 1000 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
     else:
@@ -577,7 +521,7 @@ def extract_lcox(network, product, demands):
         if obj_value is None or np.isnan(obj_value):
             raise ValueError("Optimization failed to return valid objective")
 
-        demand_annual_t = demands["steel_demand_mt"] * 1000  # Mt → t
+        demand_annual_t = demands["product_demand_mt"] * 1000  # Mt → t
         hourly_load_t = demand_annual_t / 8760
         lcox = obj_value / demand_annual_t if demand_annual_t > 0 else np.inf
 
@@ -593,7 +537,7 @@ def extract_lcox(network, product, demands):
 
     except Exception as e:
         logger.error(f"Optimization infeasible or failed: {e}")
-        demand_annual_t = demands["steel_demand_mt"] * 1000
+        demand_annual_t = demands["product_demand_mt"] * 1000
         hourly_load_t = demand_annual_t / 8760
         results_df.loc[0] = [
             demand_annual_t,
@@ -619,11 +563,11 @@ if __name__ == "__main__":
     # ==================== SETUP ====================
     logger.info("=" * 70)
     # Get the specific demand level for THIS invocation (passed by Snakemake)
-    steel_demand_mt = float(snakemake.params.steel_demand_mt)
+    product_demand_mt = float(snakemake.params.product_demand_mt)
     logger.info(
         f"LCOX Calculation: region={snakemake.wildcards.region}, "
         f"product={snakemake.wildcards.product}, "
-        f"steel_demand={steel_demand_mt} Mt/year."
+        f"demand={product_demand_mt} Mt/year."
     )
     logger.info("=" * 70)
 
@@ -647,14 +591,14 @@ if __name__ == "__main__":
     )
 
     # ==================== PROCESS SINGLE DEMAND LEVEL ====================
-    electricity_per_steel_t = snakemake.config.get("electricity_steel_ratio", 5.25)
+    electricity_per_product_t = snakemake.config.get("electricity_steel_ratio", 5.25)
 
-    logger.info(f"Processing: {steel_demand_mt} Mt/year")
+    logger.info(f"Processing: {product_demand_mt} Mt/year")
 
     # ==================== NETWORK SETUP ====================
     # Create a copy of base network
     network = base_network.copy()
-    network.name = f"LCOX-{snakemake.wildcards.region}-{snakemake.wildcards.product}-{steel_demand_mt}"
+    network.name = f"LCOX-{snakemake.wildcards.region}-{snakemake.wildcards.product}-{product_demand_mt}"
 
     # Ensure snapshot year is set by upstream network preparation;
     # do not override if already set.
@@ -675,24 +619,42 @@ if __name__ == "__main__":
     network.discount_rate = base_network.discount_rate
 
     # Calculate electricity needed for this demand level
-    scaled_steel_demand_mwh_per_h = steel_demand_mt * electricity_per_steel_t / 8760
+    scaled_product_demand_mwh_per_h = (
+        product_demand_mt * electricity_per_product_t / 8760
+    )
 
-    logger.info(f"Steel demand: {steel_demand_mt:.1f} Mt/year")
+    logger.info(f"Product demand: {product_demand_mt:.1f} Mt/year")
     logger.info(
-        f"Electricity required: {scaled_steel_demand_mwh_per_h * 8760:.1f} MWh/year"
+        f"Electricity required: {scaled_product_demand_mwh_per_h * 8760:.1f} MWh/year"
     )
 
     # Create scaled demands dict for this demand level
     scaled_demands = demands.copy()
-    scaled_demands["steel_demand_mt"] = steel_demand_mt
-    scaled_demands["steel_demand_mwh_per_h"] = scaled_steel_demand_mwh_per_h
+    scaled_demands["product_demand_mt"] = product_demand_mt
+    scaled_demands["product_demand_mwh_per_h"] = scaled_product_demand_mwh_per_h
 
-    # Block highest-CF renewables for local demand (priority mechanism)
-    logger.info("Applying renewable priority constraint...")
-    constraint_info = apply_renewable_constraint(
+    # Load incremental generator sets and apply filtering
+    logger.info("Loading incremental generator sets...")
+    try:
+        import json
+
+        with open(snakemake.input.incremental_sets, "r") as f:
+            incremental_sets_raw = json.load(f)
+        # Convert keys from strings back to floats
+        incremental_sets = {float(k): v for k, v in incremental_sets_raw.items()}
+        logger.info(
+            f"Loaded incremental sets for demand levels: {list(incremental_sets.keys())}"
+        )
+    except Exception as e:
+        logger.error(f"Failed to load incremental sets: {e}")
+        raise
+
+    # Apply incremental generator selection (delete generators outside this demand level)
+    logger.info("Applying incremental generator selection...")
+    selection_info = apply_incremental_generator_selection(
         network=network,
-        local_el_demand_mwh=demands["local_el_demand_mwh"],
-        config=snakemake.config,
+        product_demand_mt=product_demand_mt,
+        incremental_sets=incremental_sets,
     )
 
     # Add hourly load for steel output
@@ -705,7 +667,7 @@ if __name__ == "__main__":
     # Debug: Print network structure
     logger.info(
         "\n--- Network Structure for Demand Level {:.1f} Mt/year ---".format(
-            steel_demand_mt
+            product_demand_mt
         )
     )
     logger.info(f"Buses: {list(network.buses.index)}")
@@ -732,12 +694,14 @@ if __name__ == "__main__":
             else "infeasible"
         )
     except Exception as e:
-        logger.warning(f"Solver error for steel demand {steel_demand_mt} Mt/year: {e}")
+        logger.warning(
+            f"Solver error for product demand {product_demand_mt} Mt/year: {e}"
+        )
         optimization_status = "error"
 
     if optimization_status != "optimal":
         logger.warning(
-            f"Optimization {optimization_status} for steel demand {steel_demand_mt} Mt/year - returning NaN values"
+            f"Optimization {optimization_status} for product demand {product_demand_mt} Mt/year - returning NaN values"
         )
 
     # Extract LCOX results

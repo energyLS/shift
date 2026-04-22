@@ -277,6 +277,379 @@ def back_propagate_electricity_need(
 
 
 # ============================================================================
+# TWO-STEP RENEWABLE FILTERING
+# ============================================================================
+
+
+def load_local_demand(local_demand_path: str, region: str, config: dict) -> float:
+    """Load local electricity demand for region from CSV file.
+
+    Parameters
+    ----------
+    local_demand_path : str
+        Path to local demand CSV (columns: region, demand, el_share or similar)
+    region : str
+        Region name
+    config : dict
+        Configuration dict
+
+    Returns
+    -------
+    float
+        Local electricity demand in MWh/year. Returns 0 if region not found (with warning).
+    """
+    try:
+        df = pd.read_csv(local_demand_path)
+    except FileNotFoundError:
+        logger.warning(
+            f"Local demand file not found: {local_demand_path}. Using 0 MWh/year."
+        )
+        return 0.0
+    except Exception as e:
+        logger.warning(f"Failed to load local demand: {e}. Using 0 MWh/year.")
+        return 0.0
+
+    # Look for region in dataframe (try common column names)
+    region_col = None
+    for col in ["region", "Region", "name", "Name"]:
+        if col in df.columns:
+            region_col = col
+            break
+
+    if region_col is None:
+        logger.warning(
+            f"Could not find region column in {local_demand_path}. Using 0 MWh/year."
+        )
+        return 0.0
+
+    # Find demand value for this region
+    region_data = df[df[region_col] == region]
+
+    if region_data.empty:
+        logger.warning(
+            f"Region '{region}' not found in local demand data. "
+            f"Available regions: {df[region_col].unique()}. Using 0 MWh/year."
+        )
+        return 0.0
+
+    # Look for demand column (try common names)
+    demand_col = None
+    for col in ["demand", "Demand", "demand_mwh", "demand_MWh", "el_demand"]:
+        if col in df.columns:
+            demand_col = col
+            break
+
+    if demand_col is None:
+        logger.warning(
+            f"Could not find demand column in {local_demand_path}. Using 0 MWh/year."
+        )
+        return 0.0
+
+    demand_mwh = float(region_data[demand_col].iloc[0])
+    logger.info(
+        f"Loaded local electricity demand for {region}: {demand_mwh:.1f} MWh/year"
+    )
+
+    return demand_mwh
+
+
+def filter_renewable_generators_by_potential(
+    dataset: xr.Dataset,
+    region: str,
+    product: str,
+    tech_costs: pd.Series,
+    config: dict,
+    local_demand_mwh: float,
+    max_product_demand_mt: float,
+) -> Tuple[List[Dict], Dict]:
+    """Two-step renewable filtering: reserve for domestic + select for product (per-tech).
+
+    Parameters
+    ----------
+    dataset : xr.Dataset
+        Filtered renewable profiles (already region + tech filtered)
+    region : str
+        Region name
+    product : str
+        Product (steel, hbi, h2)
+    tech_costs : pd.Series
+        Technology cost database
+    config : dict
+        Configuration dict
+    local_demand_mwh : float
+        Local electricity demand in MWh/year
+    max_product_demand_mt : float
+        Maximum product demand in Mt/year (for capacity target)
+
+    Returns
+    -------
+    tuple
+        (selected_generators, filter_audit)
+        - selected_generators: List of dicts with bus, tech, p_nom_max, avg_cf
+        - filter_audit: Dict with filtering statistics
+    """
+    logger.info("=" * 70)
+    logger.info("TWO-STEP RENEWABLE FILTERING")
+    logger.info("=" * 70)
+
+    # Compute product electricity need per tonne
+    product_elec_per_t = back_propagate_electricity_need(tech_costs, product, config)
+
+    # Target capacity (MW) for product production
+    max_product_elec_mwh = max_product_demand_mt * product_elec_per_t
+    max_product_elec_mw = max_product_elec_mwh / (365 * 24)
+
+    # Multiplier from config (default 5)
+    multiplier = config.get("renewable_coverage_multiplier", 5)
+    target_capacity_mw = multiplier * max_product_elec_mw
+
+    logger.info(f"{product.upper()} demand: {max_product_demand_mt:.1f} Mt")
+    logger.info(
+        f"{product.upper()} electricity need: {product_elec_per_t:.4f} MWh/t → {max_product_elec_mw:.1f} MW average"
+    )
+    logger.info(
+        f"Target renewable capacity ({multiplier}×): {target_capacity_mw:.1f} MW"
+    )
+    logger.info(
+        f"Local demand: {local_demand_mwh:.1f} MWh/year → {local_demand_mwh / (365 * 24):.1f} MW average"
+    )
+
+    # STEP 1: Build bus-tech candidate list with all data
+    candidates = []
+    for bus_id in dataset.bus.values:
+        for tech in dataset.technology.values:
+            p_nom_max = float(
+                dataset["p_nom_max"].sel(bus=bus_id, technology=tech).values
+            )
+            avg_cf = float(dataset["avg_cf"].sel(bus=bus_id, technology=tech).values)
+
+            # Skip invalid combos
+            if np.isnan(p_nom_max) or p_nom_max <= 0 or np.isnan(avg_cf) or avg_cf <= 0:
+                continue
+
+            candidates.append(
+                {
+                    "bus_id": str(bus_id),
+                    "technology": str(tech),
+                    "p_nom_max": p_nom_max,
+                    "avg_cf": avg_cf,
+                    "capacity_factor_ts": dataset["capacity_factor"]
+                    .sel(bus=bus_id, technology=tech)
+                    .values,
+                    "potential": p_nom_max * avg_cf,  # Quality metric (MW × CF)
+                }
+            )
+
+    if not candidates:
+        logger.warning("No valid bus-tech candidates after filtering!")
+        return [], {}
+
+    logger.info(f"Total candidates: {len(candidates)}")
+
+    # STEP 1: DOMESTIC RESERVATION
+    logger.info("-" * 70)
+    logger.info("STEP 1: RESERVE FOR DOMESTIC DEMAND")
+    logger.info("-" * 70)
+
+    # Sort globally by avg_cf (descending) for domestic reservation
+    candidates_sorted_cf = sorted(candidates, key=lambda x: x["avg_cf"], reverse=True)
+
+    local_demand_mw = local_demand_mwh / (365 * 24)
+    reserved_generators = []
+    reserved_capacity_mw = 0
+
+    for candidate in candidates_sorted_cf:
+        if reserved_capacity_mw >= local_demand_mw:
+            break
+        reserved_generators.append(candidate)
+        reserved_capacity_mw += candidate["p_nom_max"]
+
+    logger.info(
+        f"Reserved {len(reserved_generators)} bus-tech combos for domestic demand"
+    )
+    logger.info(
+        f"Reserved capacity: {reserved_capacity_mw:.1f} MW (target: {local_demand_mw:.1f} MW)"
+    )
+
+    # Create set of reserved IDs for filtering
+    reserved_ids = {(g["bus_id"], g["technology"]) for g in reserved_generators}
+
+    # STEP 2: STEEL SELECTION (PER-TECHNOLOGY)
+    logger.info("-" * 70)
+    logger.info("STEP 2: SELECT FOR STEEL PRODUCTION (PER-TECHNOLOGY)")
+    logger.info("-" * 70)
+
+    # Get non-reserved candidates
+    non_reserved = [
+        c for c in candidates if (c["bus_id"], c["technology"]) not in reserved_ids
+    ]
+
+    # Calculate per-technology potential shares
+    tech_potentials = {}
+    total_potential = 0
+    for candidate in non_reserved:
+        tech = candidate["technology"]
+        potential = candidate["potential"]
+        tech_potentials[tech] = tech_potentials.get(tech, 0) + potential
+        total_potential += potential
+
+    if total_potential <= 0:
+        logger.warning("Total potential <= 0 in non-reserved generators!")
+        total_potential = 1.0  # Avoid division by zero
+
+    logger.info(f"Total non-reserved potential: {total_potential:.1f} MW·CF")
+
+    # Per-tech targets (proportional to potential)
+    tech_targets = {}
+    for tech, pot in tech_potentials.items():
+        share = pot / total_potential
+        target_mw = share * target_capacity_mw
+        tech_targets[tech] = target_mw
+        logger.info(f"  {tech}: {share * 100:.1f}% share → target {target_mw:.1f} MW")
+
+    # Select from each tech by avg_cf
+    selected_generators = []
+    selected_capacity_by_tech = {}
+
+    for tech in sorted(tech_targets.keys()):
+        target_mw = tech_targets[tech]
+
+        # Get candidates for this tech, sort by avg_cf
+        tech_candidates = sorted(
+            [c for c in non_reserved if c["technology"] == tech],
+            key=lambda x: x["avg_cf"],
+            reverse=True,
+        )
+
+        tech_selected = []
+        tech_capacity = 0
+
+        for candidate in tech_candidates:
+            if tech_capacity >= target_mw:
+                break
+            selected_generators.append(candidate)
+            tech_selected.append(candidate)
+            tech_capacity += candidate["p_nom_max"]
+
+        selected_capacity_by_tech[tech] = tech_capacity
+        logger.info(
+            f"  {tech}: Selected {len(tech_selected)} generators, "
+            f"{tech_capacity:.1f} MW (target: {target_mw:.1f} MW)"
+        )
+
+    total_selected_capacity = sum(selected_capacity_by_tech.values())
+
+    logger.info("-" * 70)
+    logger.info("FILTERING COMPLETE")
+    logger.info("-" * 70)
+    logger.info(f"Total generators selected: {len(selected_generators)}")
+    logger.info(f"Total capacity selected: {total_selected_capacity:.1f} MW")
+    logger.info(
+        f"Coverage ratio: {total_selected_capacity / target_capacity_mw:.2f}× target"
+    )
+
+    # Build audit info
+    filter_audit = {
+        "region": region,
+        "product": product,
+        "local_demand_mwh": local_demand_mwh,
+        "max_product_demand_mt": max_product_demand_mt,
+        "product_elec_need_mwh_per_t": product_elec_per_t,
+        "multiplier": multiplier,
+        "target_capacity_mw": target_capacity_mw,
+        "n_reserved_generators": len(reserved_generators),
+        "reserved_capacity_mw": reserved_capacity_mw,
+        "n_selected_generators": len(selected_generators),
+        "selected_capacity_mw": total_selected_capacity,
+        "selected_by_tech": selected_capacity_by_tech,
+        "coverage_ratio": total_selected_capacity / target_capacity_mw
+        if target_capacity_mw > 0
+        else 0,
+    }
+
+    logger.info("=" * 70)
+
+    return selected_generators, filter_audit
+
+
+# ============================================================================
+# EXTRACT INCREMENTAL GENERATOR SETS
+# ============================================================================
+
+
+def extract_incremental_generator_sets(
+    selected_generators: List[Dict],
+    product_demand_levels: List[float],
+    product: str,
+    tech_costs: pd.Series,
+    config: dict,
+) -> Dict[float, List[Dict]]:
+    """Extract incremental generator subsets for each demand level.
+
+    Given a ranked list of selected generators (from max demand), extracts smaller
+    subsets for each demand level. Each subset is a proper subset of the next.
+
+    Parameters
+    ----------
+    selected_generators : List[Dict]
+        Ranked list from filter_renewable_generators_by_potential (at max demand)
+    product_demand_levels : List[float]
+        Product demand levels in Mt/year (e.g., [10, 200, 1000])
+    product : str
+        Product (steel, hbi, h2)
+    tech_costs : pd.Series
+        Technology cost database
+    config : dict
+        Configuration dict
+
+    Returns
+    -------
+    dict
+        Mapping: {demand_mt: [selected_generators_for_that_level]}
+        Sets are nested: 10 Mt ⊆ 200 Mt ⊆ 1000 Mt
+    """
+    logger.info("=" * 70)
+    logger.info("EXTRACTING INCREMENTAL GENERATOR SETS")
+    logger.info("=" * 70)
+
+    # Compute electricity need for this product
+    elec_per_t = back_propagate_electricity_need(tech_costs, product, config)
+    multiplier = config.get("renewable_coverage_multiplier", 5)
+
+    # Calculate target MW for each demand level
+    demand_targets = {}  # demand_mt -> target_mw
+    for demand_mt in product_demand_levels:
+        elec_mwh = demand_mt * elec_per_t
+        elec_mw = elec_mwh / (365 * 24)
+        target_mw = multiplier * elec_mw
+        demand_targets[demand_mt] = target_mw
+        logger.info(f"Demand {demand_mt:.1f} Mt → Target {target_mw:.1f} MW")
+
+    # For each demand level, select generators up to its target
+    incremental_sets = {}
+    for demand_mt in sorted(product_demand_levels):
+        target_mw = demand_targets[demand_mt]
+
+        # Accumulate generators until reaching target
+        subset = []
+        accumulated_mw = 0
+        for gen in selected_generators:
+            if accumulated_mw >= target_mw:
+                break
+            subset.append(gen)
+            accumulated_mw += gen["p_nom_max"]
+
+        incremental_sets[demand_mt] = subset
+        logger.info(
+            f"  {demand_mt:.1f} Mt: {len(subset)} generators, "
+            f"{accumulated_mw:.1f} MW (target {target_mw:.1f} MW)"
+        )
+
+    logger.info("=" * 70)
+    return incremental_sets
+
+
+# ============================================================================
 # RENEWABLE GENERATOR ADDITION
 # ============================================================================
 
@@ -286,8 +659,9 @@ def add_renewable_generators(
     dataset: xr.Dataset,
     tech_costs: pd.Series,
     config: dict,
+    selected_generators: List[Dict] = None,
 ) -> Dict:
-    """Add renewable generators from xarray dataset to electricity bus.
+    """Add renewable generators from xarray dataset or pre-filtered list to electricity bus.
 
     Parameters
     ----------
@@ -299,6 +673,10 @@ def add_renewable_generators(
         Technology cost parameters
     config : dict
         Configuration dict
+    selected_generators : List[Dict], optional
+        Pre-filtered list from filter_renewable_generators_by_potential().
+        If provided, ONLY these generators are added (faster).
+        If None, all valid combinations from dataset are added.
 
     Returns
     -------
@@ -326,28 +704,21 @@ def add_renewable_generators(
     total_p_nom_max = 0
     iso3_set = set()
 
-    for bus_id in dataset.bus.values:
-        # Extract ISO3 from bus_id
-        iso3 = str(bus_id).split("_")[0]
-        iso3_set.add(iso3)
+    # If pre-filtered generators provided, use fast path
+    if selected_generators is not None:
+        logger.info(
+            f"Adding {len(selected_generators)} pre-filtered generators (fast path)"
+        )
+        for gen_dict in selected_generators:
+            bus_id = gen_dict["bus_id"]
+            tech_str = gen_dict["technology"]
+            p_nom_max = gen_dict["p_nom_max"]
+            cf_timeseries = gen_dict["capacity_factor_ts"]
+            avg_cf = gen_dict["avg_cf"]
 
-        for tech in dataset.technology.values:
-            tech_str = str(tech)
-
-            # Extract data for this bus-tech combination
-            p_nom_max = float(
-                dataset["p_nom_max"].sel(bus=bus_id, technology=tech).values
-            )
-            avg_cf = float(dataset["avg_cf"].sel(bus=bus_id, technology=tech).values)
-            cf_timeseries = (
-                dataset["capacity_factor"].sel(bus=bus_id, technology=tech).values
-            )
-
-            # Skip invalid combinations (NaN or ≤0)
-            if np.isnan(p_nom_max) or p_nom_max <= 0 or np.isnan(avg_cf) or avg_cf <= 0:
-                continue
-
-            n_valid_combos += 1
+            # Extract ISO3 from bus_id
+            iso3 = str(bus_id).split("_")[0]
+            iso3_set.add(iso3)
 
             # Handle timeseries NaNs
             if isinstance(cf_timeseries, np.ndarray):
@@ -391,6 +762,85 @@ def add_renewable_generators(
                 f"Added generator {gen_name}: p_nom_max={p_nom_max:.1f} MW, "
                 f"avg_cf={avg_cf:.3f}, overnight_cost={overnight_cost:.1f} EUR/MW"
             )
+
+        n_valid_combos = len(selected_generators)
+    else:
+        # Original slow path: iterate through all xarray combos
+        logger.info(
+            f"Adding generators from full dataset ({n_total_combos} combos, slow path)"
+        )
+        for bus_id in dataset.bus.values:
+            # Extract ISO3 from bus_id
+            iso3 = str(bus_id).split("_")[0]
+            iso3_set.add(iso3)
+
+            for tech in dataset.technology.values:
+                tech_str = str(tech)
+
+                # Extract data for this bus-tech combination
+                p_nom_max = float(
+                    dataset["p_nom_max"].sel(bus=bus_id, technology=tech).values
+                )
+                avg_cf = float(
+                    dataset["avg_cf"].sel(bus=bus_id, technology=tech).values
+                )
+                cf_timeseries = (
+                    dataset["capacity_factor"].sel(bus=bus_id, technology=tech).values
+                )
+
+                # Skip invalid combinations (NaN or ≤0)
+                if (
+                    np.isnan(p_nom_max)
+                    or p_nom_max <= 0
+                    or np.isnan(avg_cf)
+                    or avg_cf <= 0
+                ):
+                    continue
+
+                n_valid_combos += 1
+
+                # Handle timeseries NaNs
+                if isinstance(cf_timeseries, np.ndarray):
+                    cf_timeseries = np.nan_to_num(cf_timeseries, nan=0.0)
+                else:
+                    cf_timeseries = np.zeros(8760)
+
+                # Get technology parameters from database
+                db_tech_name = tech_database_map.get(tech_str, tech_str)
+                tech_params = td.get_tech(tech_costs, db_tech_name)
+
+                overnight_cost = (
+                    td.get_tech_param(tech_params, "investment", 0) * 1000
+                )  # EUR/kW → EUR/MW
+                lifetime = td.get_tech_param(tech_params, "lifetime", 20)
+                fom_pct = td.get_tech_param(tech_params, "FOM", 0)
+                fom_cost = overnight_cost * (fom_pct / 100) if overnight_cost > 0 else 0
+
+                gen_name = f"renewable_{bus_id}_{tech_str}"
+
+                # Add generator
+                network.add(
+                    "Generator",
+                    gen_name,
+                    bus="electricity",
+                    carrier="electricity",
+                    p_nom_extendable=True,
+                    p_nom=0,  # Start with no capacity; optimization will decide
+                    p_nom_max=p_nom_max,  # Upper ceiling from dataset (MW)
+                    p_max_pu=cf_timeseries,  # Hourly capacity factor (0-1)
+                    overnight_cost=overnight_cost,
+                    discount_rate=discount_rate,
+                    lifetime=lifetime,
+                    fom_cost=fom_cost,
+                )
+
+                n_added_generators += 1
+                total_p_nom_max += p_nom_max
+
+                logger.debug(
+                    f"Added generator {gen_name}: p_nom_max={p_nom_max:.1f} MW, "
+                    f"avg_cf={avg_cf:.3f}, overnight_cost={overnight_cost:.1f} EUR/MW"
+                )
 
     # Build audit info
     coverage_pct = (n_valid_combos / n_total_combos * 100) if n_total_combos > 0 else 0
@@ -559,8 +1009,17 @@ def prepare_network(
     region: str,
     product: str,
     config: dict,
-) -> Tuple[pypsa.Network, Dict]:
-    """Prepare network: add renewables, apply product cutoff. Returns (network, audit_info).
+    local_demand_path: str = None,
+) -> Tuple[pypsa.Network, Dict, Dict[float, List[Dict]]]:
+    """Prepare network with incremental renewable filtering.
+
+    Workflow:
+    1. Load skeleton + renewables (filtered by region + tech)
+    2. Call filter_renewable_generators_by_potential() with MAX demand
+    3. Extract incremental subsets for each demand level (10 ⊆ 200 ⊆ 1000)
+    4. Build FULL network with max demand set
+    5. Apply product cutoff
+    6. Return: (network, audit_info, incremental_sets)
 
     Parameters
     ----------
@@ -575,16 +1034,30 @@ def prepare_network(
     product : str
         Product (h2, hbi, or steel)
     config : dict
-        Configuration dict
+        Configuration dict with:
+        - steel_demand_levels: [10, 200, 1000] Mt/year (applies to any product)
+        - renewable_technologies: ["solar", "onwind"]
+        - renewable_coverage_multiplier: 5
+    local_demand_path : str, optional
+        Path to local electricity demand CSV (columns: region, demand_mwh)
 
     Returns
     -------
     tuple
-        (network: pypsa.Network, audit_info: dict)
+        (network, audit_info, incremental_sets)
+        - network: PyPSA Network with full max-demand renewable set
+        - audit_info: Dict with filtering + network stats
+        - incremental_sets: {demand_mt: [selected_generators]} nested subsets
     """
     logger.info("=" * 70)
     logger.info(f"Preparing network for region={region}, product={product}")
     logger.info("=" * 70)
+
+    # Step 0: Extract demand levels and max demand (config uses 'steel_demand_levels' for backward compat)
+    product_demand_levels = config.get("steel_demand_levels", [10, 200, 1000])
+    max_product_demand_mt = max(product_demand_levels)
+    logger.info(f"Demand levels: {product_demand_levels} Mt/year")
+    logger.info(f"Max demand: {max_product_demand_mt} Mt/year")
 
     # Step 1: Load skeleton network
     logger.info("Loading skeleton network...")
@@ -630,20 +1103,50 @@ def prepare_network(
     # Step 3c: Filter by allowed technologies
     renewable_dataset = filter_by_technologies(renewable_dataset, config)
 
-    # Step 4: Add renewable generators
-    logger.info("Adding renewable generators to network...")
+    # Step 4: LOAD LOCAL DEMAND for renewable filtering
+    local_demand_mwh = 0.0
+    if local_demand_path:
+        local_demand_mwh = load_local_demand(local_demand_path, region, config)
+    else:
+        logger.warning("local_demand_path not provided, using 0 MWh/year for filtering")
+
+    # Step 5: FILTER RENEWABLES (with MAX demand)
+    logger.info("Filtering renewable generators (max demand set)...")
+    selected_generators, filter_audit = filter_renewable_generators_by_potential(
+        dataset=renewable_dataset,
+        region=region,
+        product=product,
+        tech_costs=tech_costs,
+        config=config,
+        local_demand_mwh=local_demand_mwh,
+        max_product_demand_mt=max_product_demand_mt,
+    )
+
+    # Step 6: EXTRACT INCREMENTAL GENERATOR SETS
+    logger.info("Extracting incremental generator sets...")
+    incremental_sets = extract_incremental_generator_sets(
+        selected_generators=selected_generators,
+        product_demand_levels=product_demand_levels,
+        product=product,
+        tech_costs=tech_costs,
+        config=config,
+    )
+
+    # Step 7: Add renewable generators (FULL SET from filtering)
+    logger.info("Adding renewable generators to network (full max-demand set)...")
     gen_audit = add_renewable_generators(
         network=network,
         dataset=renewable_dataset,
         tech_costs=tech_costs,
         config=config,
+        selected_generators=selected_generators,  # Pre-filtered list (fast path)
     )
 
-    # Step 5: Apply product-specific cutoff
+    # Step 8: Apply product-specific cutoff
     logger.info(f"Applying product cutoff for {product}...")
     apply_product_cutoff(network=network, product=product)
 
-    # Step 6: Build audit info
+    # Step 9: Build audit info
     audit_info = {
         "region": region,
         "product": product,
@@ -655,6 +1158,10 @@ def prepare_network(
         "data_coverage_pct": gen_audit["coverage_pct"],
         "total_renewable_p_nom_max_mw": gen_audit["total_p_nom_max_mw"],
         "technologies": gen_audit["technologies"],
+        "filter_audit": filter_audit,
+        "incremental_set_counts": {
+            demand_mt: len(gen_list) for demand_mt, gen_list in incremental_sets.items()
+        },
         "network_stats": {
             "num_buses": len(network.buses),
             "num_links": len(network.links),
@@ -671,6 +1178,7 @@ def prepare_network(
     logger.info(
         f"  - Total p_nom_max: {audit_info['total_renewable_p_nom_max_mw']:.1f} MW"
     )
+    logger.info(f"  - Incremental sets: {audit_info['incremental_set_counts']}")
     logger.info(
         f"  - Network: {audit_info['network_stats']['num_buses']} buses, "
         f"{audit_info['network_stats']['num_generators']} generators"
@@ -684,7 +1192,7 @@ def prepare_network(
 
     logger.info("=" * 70)
 
-    return network, audit_info
+    return network, audit_info, incremental_sets
 
 
 # ============================================================================
@@ -704,10 +1212,12 @@ if __name__ == "__main__":
                     "skeleton": "../resources/networks/skeleton_2030.nc",
                     "renewable_nc": "../data/renewable_profiles/renewable_profiles_EU__20260420_142941.nc",
                     "costs": "../resources/technology_data/costs_2030.csv",
+                    "local_demand": "../data/local_demand.csv",
                 }
                 self.output = {
                     "base_network": "test_base_network.nc",
                     "audit": "test_audit.json",
+                    "incremental_sets": "test_incremental_sets.json",
                 }
                 self.wildcards = {
                     "region": "EU",
@@ -718,20 +1228,29 @@ if __name__ == "__main__":
                     "regions": {
                         "EU": ["DEU", "FRA", "ITA", "NLD"],
                         "Africa": ["EGY", "ZAF"],
-                    }
+                    },
+                    "renewable_technologies": ["solar", "onwind"],
+                    "renewable_coverage_multiplier": 5,
+                    "steel_demand_levels": [10, 200, 1000],
+                    "interest_rate": {"default": 0.07},
                 }
 
         snakemake = MockSnakemake()
 
     # Prepare network
     try:
-        network, audit_info = prepare_network(
+        local_demand_path = None
+        if hasattr(snakemake.input, "local_demand") and snakemake.input.local_demand:
+            local_demand_path = snakemake.input.local_demand
+
+        network, audit_info, incremental_sets = prepare_network(
             skeleton_network_path=snakemake.input.skeleton,
             renewable_nc_path=snakemake.input.renewable_nc,
             tech_costs_path=snakemake.input.costs,
             region=snakemake.wildcards.region,
             product=snakemake.wildcards.product,
             config=snakemake.config,
+            local_demand_path=local_demand_path,
         )
 
         # Save outputs
@@ -741,6 +1260,23 @@ if __name__ == "__main__":
         with open(snakemake.output.audit, "w") as f:
             json.dump(audit_info, f, indent=2, default=str)
         logger.info(f"Audit info saved to {snakemake.output.audit}")
+
+        # Save incremental generator sets
+        incremental_sets_serializable = {
+            int(demand_mt): [
+                {
+                    "bus_id": gen["bus_id"],
+                    "technology": gen["technology"],
+                    "p_nom_max": float(gen["p_nom_max"]),
+                    "avg_cf": float(gen["avg_cf"]),
+                }
+                for gen in gen_list
+            ]
+            for demand_mt, gen_list in incremental_sets.items()
+        }
+        with open(snakemake.output.incremental_sets, "w") as f:
+            json.dump(incremental_sets_serializable, f, indent=2)
+        logger.info(f"Incremental sets saved to {snakemake.output.incremental_sets}")
 
     except Exception as e:
         logger.error(f"Network preparation failed: {e}", exc_info=True)
