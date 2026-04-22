@@ -1,6 +1,6 @@
 enable:
   run_supply_chain: True # Enable for first run
-  run_supply_curve: False # Enable for first run
+  run_supply_curve: True # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -109,7 +109,7 @@ costs:
   eur_usd: 1.15 # 1 Euro equals 1.15 USD
 
 interest_rate: 0.07
-region-specific-wacc: True
+# region-specific-wacc: True
 
 grid_electricity:
   marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
