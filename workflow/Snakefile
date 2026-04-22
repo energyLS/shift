@@ -152,10 +152,12 @@ if config["enable"].get("run_supply_chain", True):
             "Calculating the LCoX of {wildcards.product} for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum product potential."
         params:
             interest_rate=config["interest_rate"],
+            region_specific_wacc=config["region-specific-wacc"],
         input:
             supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
             costs = "../resources/technology_data/costs_{cost_year}.csv",
-            trace = "../resources/trace/steel_{cost_year}.nc"
+            trace = "../resources/trace/steel_{cost_year}.nc",
+            wacc = "../resources/wacc-clustered.csv",
         output:
             results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
             network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
