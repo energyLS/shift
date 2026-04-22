@@ -358,3 +358,40 @@ rule create_all_supply_curves_with_demand:
 
 #     notebook:
 #         "workflow/notebooks/input-cost-comp.ipynb"
+
+
+rule sync:
+    # """
+    # Synchronize the WSL repo ~/git/shift to Windows J:\\wsl-sync\\shift using rsync.
+    # - Preserves times, symlinks, and directory structure.
+    # - Deletes files on the destination that no longer exist in the source.
+    # - Excludes common VCS/temporary files.
+    # """
+    # Use a phony target so you can run: snakemake sync_shift_repo
+    shell:
+        r"""
+        set -euo pipefail
+
+        SRC="$HOME/git/shift/"
+        DEST="/mnt/j/wsl-sync/shift"
+
+        # Ensure destination directory exists
+        mkdir -p "$DEST"
+
+        # Rsync options explained:
+        # -a  : archive mode (recursive, preserves symlinks, times, etc.)
+        # -v  : verbose
+        # -h  : human-readable numbers
+        # --delete : remove files in DEST not present in SRC (mirror behavior)
+        # --checksum (optional): compare file content not just mtimes/size (slower, safer)
+        # --exclude-from: filter file for ignores
+        # --info=progress2: nice single-line progress
+        # --no-perms/--no-group: avoid NTFS permission warnings on WSL
+        rsync -avh --delete \
+            --info=progress2 \
+            --no-perms --no-group \
+            "$SRC" "$DEST"
+
+        # # Stamp the phony output so Snakemake considers the rule done
+        # touch {output}
+        """
