@@ -269,7 +269,7 @@ rule model_trade_all:
 
 rule plot_trade_today:
     input:
-        baci_folder = ancient("/mnt/c/Users/scl38887/Documents/git/shift/data/BACI_HS22_V202601"),
+        baci_folder = ancient("../data/BACI_HS22_V202601"),
     output:
         iron_ore       = "../results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
         iron_ore_png   = "../results/figures_general/trade-today/Iron_Ore_net_flow.png",
