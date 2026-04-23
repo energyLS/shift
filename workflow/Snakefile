@@ -152,13 +152,15 @@ if config["enable"].get("run_supply_chain", True):
             "Calculating the LCoX of {wildcards.product} for region {wildcards.region} for {wildcards.demand_factor}% of estimated maximum product potential."
         params:
             interest_rate=config["interest_rate"],
+            # region_specific_wacc=config["region-specific-wacc"],
         input:
             supply_data ="../data/new_renewables/supply_{region}_2013_cleaned.nc",
             costs = "../resources/technology_data/costs_{cost_year}.csv",
-            trace = "../resources/trace/steel_{cost_year}.nc"
+            trace = "../resources/trace/steel_{cost_year}.nc",
+            wacc = "../resources/wacc-clustered.csv",
         output:
-            results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{demand_factor}.csv",
-            network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{demand_factor}.nc",
+            results="../resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}/results_{demand_factor}.csv",
+            network="../resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}/network_{demand_factor}.nc",
         threads: 4
         resources:
             mem_mb=8000,
@@ -175,16 +177,16 @@ if config["enable"].get("run_supply_curve", True):
             "Combining individual LCo{wildcards.product[0]} results to create a supply curve for region {wildcards.region}."
         input:
             lco_product_data = lambda wildcards: expand(
-                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{demand_factor}}.csv",
+                f"../resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}/results_{{demand_factor}}.csv",
                 demand_factor=config["demand_factors"],
                 allow_missing=True
             ),
             local_demand = "../data/un_enerdata_demand_2050_final.csv",
             steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         output:
-            supply = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
-            supply_curve = "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
+            supply = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+            supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+            supply_curve = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.pdf",
         threads: 2
         script:
             "scripts/create_supply_curve.py"
@@ -194,8 +196,8 @@ if config["enable"].get("run_supply_curve", True):
 rule create_all_supply_curves:
     input:
         expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            cost_year=[2030,2050], region=config["regions"], product=["steel"], allow_missing=True
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+            cost_year=[2030,2050], wacc=["uniform"], region=config["regions"], product=["steel"], allow_missing=True
             ) #cost_year=[2030,2050], region=config["regions"], product=["steel", "hydrogen"]
 
 
@@ -204,16 +206,18 @@ rule model_trade:
         iron_ore_potential=config["iron_ore"]["potential_allowance"],
         cost_penalty=config["design"]["cost_penalty"],
         scenarios=config["scenario"],
+        interest_rate=config["interest_rate"],
+        # region_specific_wacc=config["region-specific-wacc"],
         diversity_factor=config["trade"]["diversity_factor"],
     input:
         supply_curves_interone = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
             allow_missing=True, region=config["regions"]),
         supply_curves_intertwo = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/{region}_{intertwo}.csv",
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{intertwo}.csv",
             allow_missing=True, region=config["regions"]),
         # supply_curves_final = expand(
-        #     "../resources/supply_curves/cost_year~{cost_year}/{region}_{final}.csv",
+        #     "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{final}.csv",
         #     allow_missing=True, region=config["regions"]),
         transport_costs = "../data/transport_costs/steel_r_iron_r.csv",
         trade_options = "../resources/trade_opt_chokepoints.csv",
@@ -222,6 +226,7 @@ rule model_trade:
         steel_demand = "../resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore = "../resources/ironore_production_clustered.csv",
         grid_potential = "../data/grid_potential_custom.csv",
+        wacc = "../resources/wacc-clustered.csv",
         political_stability = "../resources/political_stability_clustered.csv",
     output:
         trade_result = f"../results/{trade_scenarios.wildcard_pattern}/result.csv",
@@ -264,7 +269,7 @@ rule model_trade_all:
 
 rule plot_trade_today:
     input:
-        baci_folder = ancient("/mnt/c/Users/scl38887/Documents/git/shift/data/BACI_HS22_V202601"),
+        baci_folder = ancient("../data/BACI_HS22_V202601"),
     output:
         iron_ore       = "../results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
         iron_ore_png   = "../results/figures_general/trade-today/Iron_Ore_net_flow.png",
@@ -353,3 +358,40 @@ rule create_all_supply_curves_with_demand:
 
 #     notebook:
 #         "workflow/notebooks/input-cost-comp.ipynb"
+
+
+rule sync:
+    # """
+    # Synchronize the WSL repo ~/git/shift to Windows J:\\wsl-sync\\shift using rsync.
+    # - Preserves times, symlinks, and directory structure.
+    # - Deletes files on the destination that no longer exist in the source.
+    # - Excludes common VCS/temporary files.
+    # """
+    # Use a phony target so you can run: snakemake sync_shift_repo
+    shell:
+        r"""
+        set -euo pipefail
+
+        SRC="$HOME/git/shift/"
+        DEST="/mnt/j/wsl-sync/shift"
+
+        # Ensure destination directory exists
+        mkdir -p "$DEST"
+
+        # Rsync options explained:
+        # -a  : archive mode (recursive, preserves symlinks, times, etc.)
+        # -v  : verbose
+        # -h  : human-readable numbers
+        # --delete : remove files in DEST not present in SRC (mirror behavior)
+        # --checksum (optional): compare file content not just mtimes/size (slower, safer)
+        # --exclude-from: filter file for ignores
+        # --info=progress2: nice single-line progress
+        # --no-perms/--no-group: avoid NTFS permission warnings on WSL
+        rsync -avh --delete \
+            --info=progress2 \
+            --no-perms --no-group \
+            "$SRC" "$DEST"
+
+        # # Stamp the phony output so Snakemake considers the rule done
+        # touch {output}
+        """

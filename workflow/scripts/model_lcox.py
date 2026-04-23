@@ -29,7 +29,13 @@ def calc_cap_cost(costs, tech, i_rate):
     annuity = calc_annuity(i_rate, lifetime)
 
     # returns cap costs in EUR/MW
-    return (annuity + FOM / 100) * CAPEX * 1e3
+
+    if tech in ["hydrogen direct iron reduction furnace", "electric arc furnace"]:
+        capital_cost = (annuity + FOM / 100) * CAPEX
+    else:
+        capital_cost = (annuity + FOM / 100) * CAPEX * 1e3
+
+    return capital_cost
 
 
 def rename_trace_carriers(n):
@@ -37,26 +43,29 @@ def rename_trace_carriers(n):
     # Index name and new carrier
     carrier_rename_dict = {
         "electrolysis (exp)": "electrolysis",
-        "battery inverter (charging, exp)": "battery inverter (charging)",
-        "battery inverter (discharging, exp)": "battery inverter (discharging)",
-        "hydrogen direct iron reduction furnace": "direct reduction furnace",
+        "battery inverter (charging, exp)": "battery inverter",
+        "battery inverter (discharging, exp)": "battery inverter",
+        "hydrogen direct iron reduction furnace": "hydrogen direct iron reduction furnace",
         "electric arc furnace": "electric arc furnace",
     }
 
     nice_names = {
         "electrolysis": "electrolysis",
-        "battery inverter (charging)": "battery inverter (charging)",
-        "battery inverter (discharging)": "battery inverter (discharging)",
-        "direct reduction furnace": "direct reduction furnace",
+        "battery inverter": "battery inverter",
+        "hydrogen direct iron reduction furnace": "hydrogen direct iron reduction furnace",
         "electric arc furnace": "electric arc furnace",
     }
     colors = snakemake.config["colors"]
 
+    # Deduplicate carrier values while preserving insertion order, then build
+    # the parallel nice_name and color lists from the same unique sequence.
+    unique_carriers = list(dict.fromkeys(carrier_rename_dict.values()))
+
     n.add(
         "Carrier",
-        carrier_rename_dict.values(),
-        nice_name=[nice_names[carrier] for carrier in carrier_rename_dict.values()],
-        color=[colors[carrier] for carrier in nice_names.values()],
+        unique_carriers,
+        nice_name=[nice_names[carrier] for carrier in unique_carriers],
+        color=[colors[carrier] for carrier in unique_carriers],
     )
 
     for idx, new_carrier in carrier_rename_dict.items():
@@ -85,11 +94,29 @@ def remove_shipping_importer_components(n):
 
 
 # inputs are solar potentials, wind potentials, costs and load
-def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
+def building_model(n, region, ds, dw, dc, load, h_cost, iron_ore_cost):
 
     if product != "eaf-grid":
+
+        # Country specific wacc
+        base_interest_rate = snakemake.params.interest_rate
+
+        if snakemake.wildcards.wacc == "regional":
+            print(f"applying region specific wacc")
+            wacc = pd.read_csv(snakemake.input.wacc, header=0)
+            wacc.set_index("region", inplace=True)
+            regional_wacc = wacc.loc[region].values[0]
+            interest_rate = regional_wacc
+            # Adjust capital_cost of all pre-loaded TRACE components to the
+            # regional WACC.  Technologies not found in the costs table (e.g.
+            # the 1/1000 stabiliser entries) are left untouched.
+            n = adjust_trace_wacc(n, base_interest_rate, regional_wacc, dc)
+        elif snakemake.wildcards.wacc == "uniform":
+            interest_rate = base_interest_rate
+        else:
+            raise ValueError("wacc wildcard not recognized, choose 'regional' or 'uniform'")
+
         # adding wind and solar generators on el bus
-        interest_rate = snakemake.params.interest_rate
         wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
         # offshore_wind_cost = calc_cap_cost(dc,"offwind",interest_rate)
         solar_cost = calc_cap_cost(dc, "solar-utility", interest_rate)
@@ -229,7 +256,7 @@ def building_model(n, ds, dw, dc, load, h_cost, iron_ore_cost):
                 "hydrogen",
                 "iron ore",
                 "electrolysis",
-                "direct reduction furnace",
+                "hydrogen direct iron reduction furnace",
             ],
         )
         n.remove(
@@ -365,6 +392,67 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
     return load
 
 
+def adjust_trace_wacc(n, base_interest_rate, regional_wacc, costs):
+    # TODO This is only applied to links
+    """
+    Rescale the capital_cost of every PyPSA component in *n* from
+    base_interest_rate to regional_wacc.
+
+    For each component whose carrier exactly matches a technology entry in the
+    costs dataframe, capital_cost is fully recalculated with the new rate
+    (CAPEX, FOM and lifetime are looked up from costs, identical to how
+    calc_cap_cost works for wind/solar).
+
+    Components whose carrier is not found in costs (e.g. the placeholder
+    1/1000 stabiliser costs, or iron-ore generators) are left unchanged.
+    Ensure carrier names are aligned with the costs technology column via
+    rename_trace_carriers() before calling this function.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+    base_interest_rate : float      – rate used when the TRACE network was built
+    regional_wacc      : float      – new, region-specific rate to apply
+    costs              : pd.DataFrame – technology costs table (same ``dc``)
+
+    Returns
+    -------
+    n : pypsa.Network  (modified in place and returned for convenience)
+    """
+    if base_interest_rate == regional_wacc:
+        print("adjust_wacc: base and regional rate are identical – skipping.")
+        return n
+
+    available_techs = set(costs["technology"].unique())
+
+    component_frames = [
+        # ("Generator", n.generators),
+        ("Link", n.links),
+        # ("Store", n.stores),
+        # ("StorageUnit", n.storage_units),
+    ]
+
+    for comp_type, df in component_frames:
+        if df.empty:
+            continue
+        for idx in df.index:
+            carrier = df.at[idx, "carrier"]
+            if carrier not in available_techs:
+                print("Not found in costs, skipping: ", idx)
+                continue
+            old = df.at[idx, "capital_cost"]
+            new = calc_cap_cost(costs, carrier, regional_wacc)
+            new = float(new.flat[0]) if hasattr(new, "__len__") else float(new)
+            df.at[idx, "capital_cost"] = new
+            print(
+                f"  adjust_wacc [{comp_type}] '{idx}' (carrier='{carrier}'): "
+                f"capital_cost {old:.2f} → {new:.2f} EUR/MW  "
+                f"(i {base_interest_rate:.4f} → {regional_wacc:.4f})"
+            )
+
+    return n
+
+
 def adjust_part_load(n):
 
     print(f"adjusting part-load limits for {snakemake.config["part_load"].keys()}")
@@ -388,9 +476,11 @@ if __name__ == "__main__":
 
         snakemake = mock_snakemake(
             "model_lcox",
-            cost_year="2030",
-            region="Europe",
-            product="hbi",
+            cost_year="2050",
+            region="Middle_East",
+            product="eaf-grid",
+            demand_factor=10,
+            wacc="regional",
         )
 
     # making dataframes from inputs
@@ -419,6 +509,7 @@ if __name__ == "__main__":
     print("adding RE to network")
     n = building_model(
         n,
+        snakemake.wildcards.region,
         ds_cleaned,
         dw_cleaned,
         dc,
