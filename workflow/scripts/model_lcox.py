@@ -110,9 +110,11 @@ def building_model(n, region, ds, dw, dc, load, h_cost, iron_ore_cost):
             # Adjust capital_cost of all pre-loaded TRACE components to the
             # regional WACC.  Technologies not found in the costs table (e.g.
             # the 1/1000 stabiliser entries) are left untouched.
-            n = adjust_wacc(n, base_interest_rate, regional_wacc, dc)
-        else:
+            n = adjust_trace_wacc(n, base_interest_rate, regional_wacc, dc)
+        elif snakemake.wildcards.wacc == "uniform":
             interest_rate = base_interest_rate
+        else:
+            raise ValueError("wacc wildcard not recognized, choose 'regional' or 'uniform'")
 
         # adding wind and solar generators on el bus
         wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
@@ -390,7 +392,7 @@ def calculate_load(ds_cleaned, dw_cleaned, pv_p_nom_max_cor, onwind_p_nom_max_co
     return load
 
 
-def adjust_wacc(n, base_interest_rate, regional_wacc, costs):
+def adjust_trace_wacc(n, base_interest_rate, regional_wacc, costs):
     # TODO This is only applied to links
     """
     Rescale the capital_cost of every PyPSA component in *n* from
