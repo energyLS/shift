@@ -1,6 +1,6 @@
 enable:
-  run_supply_chain: True # Enable for first run
-  run_supply_curve: True # Enable for first run
+  run_supply_chain: False # Enable for first run
+  run_supply_curve: False # Enable for first run
 
 
 # Different demand factors of maximum hydrogen potential as demand in [%]
@@ -108,8 +108,7 @@ costs:
   version: v0.12.0
   eur_usd: 1.15 # 1 Euro equals 1.15 USD
 
-interest_rate: 0.07
-# region-specific-wacc: True
+interest_rate: 0.07 # This should align with the TRACE model input WACC. To use a regional interest rate, set the wildcard wacc="regional" in the `config/trade_scenarios.csv`. For uniform interest rate, set wacc="uniform" in the `config/trade_scenarios.csv`.
 
 grid_electricity:
   marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
