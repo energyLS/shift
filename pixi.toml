@@ -56,6 +56,9 @@ gurobipy = "*"
 pytest = "*"
 pytest-cov = "*"
 
+[feature.test.tasks]
+unit-tests = "pytest tests"
+
 [feature.dev.dependencies]
 ruff = "*"
 pre-commit = "*"
@@ -78,6 +81,3 @@ exclude = ["**/*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]  # Basic style, logical and import checks
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
