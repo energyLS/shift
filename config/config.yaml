@@ -20,9 +20,9 @@ run:
 
 # Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
-  "Test_1": ["NLD"]
-  "Test_2": ["PRT"]
-  "Test_3": ["IRL"]
+  "Africa_West": ["SEN", "GMB", "GIN", "SLE"]          # Senegal, Gambia, Guinea, Sierra Leone
+  "Africa_Central": ["GNQ", "GAB", "CMR", "CAF"]       # Equatorial Guinea, Gabon, Cameroon, Central African Republic
+  "Africa_East": ["KEN", "UGA", "RWA", "ETH"]          # Kenya, Uganda, Rwanda, Ethiopia
 
 # Renewable technologies to include in filtering
 # Available: ["solar", "onwind", "offwind-ac"]
