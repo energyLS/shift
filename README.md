@@ -65,22 +65,30 @@ pixi run snakemake -call collect_figures
 
 ## Workflow overview
 
-### Step 0: Renewable potentials (Atlite + GIS)
+### Configuration & Scenario Setup (implicit)
+
+Before execution, Snakemake reads:
+- **Global settings**: `config/config.yaml` (regions, cost years, solver options, enable flags)
+- **Scenario matrix**: `config/trade_scenarios.csv` (rows = distinct trade scenarios)
+
+These expand into a deterministic wildcard space (cost_year, region, product, scenario) that drives all downstream rule creation. This bootstrap is handled automatically by Snakemake; no user action required.
+
+### Step 0: Renewable potentials (pre-computed inputs)
 
 In this stage we generate the supply-side resource backbone.
-PyPSA-Earth assembles spatial inputs (country polygons, exclusion masks, weather datasets) and computes hourly capacity-factor series and maximum deployable potentials for wind and solar in each region.
-The workflow uses the [`build_renewable_profiles`](https://pypsa-earth.readthedocs.io/en/latest/user-guide/rules-reference/populate/build-renewable-profiles/) Snakefile rule, and it can produce .nc outputs for per-region, per-technology capacity factor distributions and installable potentials.
+Renewable capacity-factor series and maximum deployable potentials are pre-computed externally using PyPSA-Earth's `build_renewable_profiles` rule and stored in `data/renewable_profiles/`.
+This stage is not part of the current Snakefile. SHIFT consumes pre-computed .nc datasets to avoid the long runtime of full GIS processing.
 
-> **Note:** SHIFT may consume precomputed Step 0 datasets to avoid the long runtime of full GIS processing; this is the recommended default for day-to-day scenario work.
->
+> **For new users:** No action needed. Renewable data files are provided in the repository.
+
 ### Step 1: Greenfield supply curve generation (PyPSA)
 
 With renewable profiles and [techno-economic assumptions](https://github.com/PyPSA/technology-data) in place, SHIFT builds regional PyPSA optimization models to size generation, storage, and process assets.
 It evaluates each candidate plant (H2 electrolyser, DRI furnace, HBI plant, steel mills) across resource quality and cost parameters to produce levelized cost curves (LCOX) as a function of capacity.
 The result is a fleet of supply curve elements (capacity buckets with marginal costs and metadata) for H2, DRI, HBI, and steel by region.
 
-Each greenfield run schemes the spot around: location selection, renewable share, process stack, cost adders, and available build option integration.
-The output is a harmonized set of offer curves used as input for the trade stage.
+Step 1 is a multi-part stage: load techno-economic data and build regional cost baselines, prepare renewable candidate sets per region, solve optimization problems at discrete demand levels, and consolidate results into piecewise supply curves. Each stage depends on the prior; files are persisted between steps to support reproducibility and debugging.
+The output is a harmonized set of supply curves used as input for the trade stage.
 
 ### Step 2: Global trade optimization (LP)
 
