@@ -396,7 +396,7 @@ def filter_renewable_generators_by_potential(
     product_elec_per_t = back_propagate_electricity_need(tech_costs, product, config)
 
     # Target capacity (MW) for product production
-    max_product_elec_mwh = max_product_demand_mt * product_elec_per_t
+    max_product_elec_mwh = max_product_demand_mt * 1e6 * product_elec_per_t
     max_product_elec_mw = max_product_elec_mwh / (365 * 24)
 
     # Multiplier from config (default 5)
@@ -619,7 +619,7 @@ def extract_incremental_generator_sets(
     # Calculate target MW for each demand level
     demand_targets = {}  # demand_mt -> target_mw
     for demand_mt in product_demand_levels:
-        elec_mwh = demand_mt * elec_per_t
+        elec_mwh = demand_mt * 1e6 * elec_per_t
         elec_mw = elec_mwh / (365 * 24)
         target_mw = multiplier * elec_mw
         demand_targets[demand_mt] = target_mw
@@ -647,6 +647,21 @@ def extract_incremental_generator_sets(
 
     logger.info("=" * 70)
     return incremental_sets
+
+
+def _serialize_dispatch_list(generators: List[Dict]) -> List[Dict]:
+    """Return JSON-safe generator list metadata in selection order."""
+    serialized = []
+    for gen in generators:
+        serialized.append(
+            {
+                "bus_id": str(gen["bus_id"]),
+                "technology": str(gen["technology"]),
+                "p_nom_max_mw": float(gen["p_nom_max"]),
+                "avg_cf": float(gen["avg_cf"]),
+            }
+        )
+    return serialized
 
 
 # ============================================================================
@@ -690,9 +705,11 @@ def add_renewable_generators(
         "solar": "solar-utility",
     }
 
-    # Ensure electricity carrier is defined (all renewables produce electricity)
-    if "electricity" not in network.carriers.index:
-        network.add("Carrier", "electricity")
+    # Ensure carriers are defined before adding renewable generators.
+    _ensure_carriers(
+        network,
+        ["electricity"] + [str(t) for t in dataset.technology.values],
+    )
 
     # Use the network's discount_rate (which is set regionally in prepare_network)
     discount_rate = network.discount_rate
@@ -744,7 +761,7 @@ def add_renewable_generators(
                 "Generator",
                 gen_name,
                 bus="electricity",
-                carrier="electricity",
+                carrier=tech_str,
                 p_nom_extendable=True,
                 p_nom=0,  # Start with no capacity; optimization will decide
                 p_nom_max=p_nom_max,  # Upper ceiling from dataset (MW)
@@ -823,7 +840,7 @@ def add_renewable_generators(
                     "Generator",
                     gen_name,
                     bus="electricity",
-                    carrier="electricity",
+                    carrier=tech_str,
                     p_nom_extendable=True,
                     p_nom=0,  # Start with no capacity; optimization will decide
                     p_nom_max=p_nom_max,  # Upper ceiling from dataset (MW)
@@ -903,6 +920,13 @@ def _apply_discount_rate_to_components(
     logger.debug(
         f"Applied discount_rate={discount_rate:.4f} to all cost-bearing components"
     )
+
+
+def _ensure_carriers(network: pypsa.Network, carrier_names: List[str]) -> None:
+    """Add missing carriers to the network before components reference them."""
+    for carrier_name in carrier_names:
+        if carrier_name not in network.carriers.index:
+            network.add("Carrier", carrier_name)
 
 
 def _consistency_check(network: pypsa.Network) -> None:
@@ -1161,6 +1185,13 @@ def prepare_network(
         "filter_audit": filter_audit,
         "incremental_set_counts": {
             demand_mt: len(gen_list) for demand_mt, gen_list in incremental_sets.items()
+        },
+        "dispatch_order_full": _serialize_dispatch_list(selected_generators),
+        "dispatch_order_by_demand_mt": {
+            str(int(demand_mt))
+            if float(demand_mt).is_integer()
+            else str(demand_mt): _serialize_dispatch_list(gen_list)
+            for demand_mt, gen_list in incremental_sets.items()
         },
         "network_stats": {
             "num_buses": len(network.buses),

@@ -57,6 +57,9 @@ def _add_carriers(network: pypsa.Network) -> None:
         "iron_ore": "Iron ore (mass)",
         "hbi": "Hot Briquetted Iron (mass)",
         "steel": "Steel (mass)",
+        "electrolysis": "Electrolysis process",
+        "direct_reduction_furnace": "Direct reduction furnace",
+        "electric_arc_furnace": "Electric arc furnace",
     }
     for carrier_name, description in carriers.items():
         network.add("Carrier", carrier_name)
@@ -93,6 +96,7 @@ def _add_conversion_chain(
         "electrolyzer",
         bus0="electricity",
         bus1="hydrogen",
+        carrier="electrolysis",
         efficiency=1.0 / td.get_tech_param(elec_params, "electricity-input", 1.38),
         overnight_cost=elec_inv_cost,  # EUR/kW → EUR/MW
         lifetime=td.get_tech_param(elec_params, "lifetime", 40.0),
@@ -113,6 +117,7 @@ def _add_conversion_chain(
         bus1="hbi",
         bus2="hydrogen",
         bus3="electricity",
+        carrier="direct_reduction_furnace",
         efficiency=1.0 / td.get_tech_param(dri_params, "ore-input", 1.59),
         efficiency2=-td.get_tech_param(dri_params, "hydrogen-input", 2.1),
         efficiency3=-td.get_tech_param(dri_params, "electricity-input", 1.03),
@@ -134,6 +139,7 @@ def _add_conversion_chain(
         bus0="hbi",
         bus1="steel",
         bus2="electricity",
+        carrier="electric_arc_furnace",
         efficiency=1.0 / td.get_tech_param(eaf_params, "hbi-input", 1.0),
         efficiency2=-td.get_tech_param(eaf_params, "electricity-input", 0.6395),
         overnight_cost=eaf_inv_cost,
