@@ -199,13 +199,13 @@ def add_loads_to_network(network, product, demands):
     if product == "steel":
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["product_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
     elif product == "hbi":
         bus_name = "hbi"
         # HBI is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["product_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
     elif product == "h2":
@@ -219,7 +219,7 @@ def add_loads_to_network(network, product, demands):
     elif product in ["eaf", "eaf-grid"]:
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["product_demand_mt"] * 1000 / 8760  # Mt/year → t/h
+        hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
     else:
@@ -521,7 +521,7 @@ def extract_lcox(network, product, demands):
         if obj_value is None or np.isnan(obj_value):
             raise ValueError("Optimization failed to return valid objective")
 
-        demand_annual_t = demands["product_demand_mt"] * 1000  # Mt → t
+        demand_annual_t = demands["product_demand_mt"] * 1e6  # Mt → t
         hourly_load_t = demand_annual_t / 8760
         lcox = obj_value / demand_annual_t if demand_annual_t > 0 else np.inf
 
@@ -537,7 +537,7 @@ def extract_lcox(network, product, demands):
 
     except Exception as e:
         logger.error(f"Optimization infeasible or failed: {e}")
-        demand_annual_t = demands["product_demand_mt"] * 1000
+        demand_annual_t = demands["product_demand_mt"] * 1e6
         hourly_load_t = demand_annual_t / 8760
         results_df.loc[0] = [
             demand_annual_t,
@@ -620,7 +620,7 @@ if __name__ == "__main__":
 
     # Calculate electricity needed for this demand level
     scaled_product_demand_mwh_per_h = (
-        product_demand_mt * electricity_per_product_t / 8760
+        product_demand_mt * 1e6 * electricity_per_product_t / 8760
     )
 
     logger.info(f"Product demand: {product_demand_mt:.1f} Mt/year")

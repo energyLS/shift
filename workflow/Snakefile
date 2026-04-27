@@ -78,8 +78,9 @@ rule build_steel_skeleton:
 rule prepare_regional_network:
     input:
         skeleton="../resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
-        clusters_timeseries="../data/renewable_clusters.nc",
+        renewable_nc="../data/renewable_profiles/renewable_profiles_africa__20260417_155313.nc",
         costs="../resources/technology_data/costs_{cost_year}.csv",
+        local_demand="../data/un_enerdata_demand_2050_final.csv",
     output:
         # KEEP: Good checkpoint, medium regen cost (~2-3 min per region)
         base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
