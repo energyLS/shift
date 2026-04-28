@@ -434,10 +434,12 @@ def solve_network(network, config):
     # Convert arrow strings to regular strings before optimization
     _convert_arrow_strings(network)
 
-    solver_name = config.get("solver", {}).get("name", "glpk")
-    solver_options = config.get("solver_options", {}).get(
-        config.get("solver", {}).get("options", "default"), {}
+    solver_cfg = config.get("solver", {})
+    solver_name = os.getenv("SHIFT_SOLVER", solver_cfg.get("name", "glpk"))
+    solver_options_key = os.getenv(
+        "SHIFT_SOLVER_OPTIONS", solver_cfg.get("options", "default")
     )
+    solver_options = config.get("solver_options", {}).get(solver_options_key, {})
 
     logger.info(f"Solving network with {solver_name}...")
     logger.info(f"Solver options: {solver_options}")

@@ -642,9 +642,10 @@ def normalize_regions(regions, carrier):
 
 
 def solve_network(n, mga=None):
-
-    solver_name = snakemake.config["solver"]["name"]
-    options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
+    solver_cfg = snakemake.config["solver"]
+    solver_name = os.getenv("SHIFT_SOLVER", solver_cfg["name"])
+    options_key = os.getenv("SHIFT_SOLVER_OPTIONS", solver_cfg["options"])
+    options = snakemake.config["solver_options"][options_key]
 
     n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
 

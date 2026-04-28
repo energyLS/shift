@@ -341,17 +341,15 @@ if __name__ == "__main__":
 
     # solving model
     print("solving model")
+    solver_cfg = snakemake.config["solver"]
+    solver_name = os.getenv("SHIFT_SOLVER", solver_cfg["name"])
+    options_key = os.getenv("SHIFT_SOLVER_OPTIONS", solver_cfg["options"])
+    solver_options = snakemake.config["solver_options"][options_key]
+
     network.optimize(
         network.snapshots,
-        solver_name="gurobi",
-        solver_options={
-            "crossover": 0,
-            "method": 2,
-            "BarConvTol": 1.0e-5,
-            "FeasibilityTol": 1.0e-5,
-            "OptimalityTol": 1.0e-5,
-            "barHomogeneous": 1,
-        },
+        solver_name=solver_name,
+        solver_options=solver_options,
     )
     print("network was solved")
 
