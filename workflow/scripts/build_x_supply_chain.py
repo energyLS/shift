@@ -1,8 +1,7 @@
-"""
-Build PyPSA supply chain skeleton for commodity X using technology database.
+"""Build PyPSA supply chain skeleton for commodity X using technology database.
 
 Generic conversion pathway structure (currently configured for steel):
-  Electricity → Electrolyzer → H2 → DRI → HBI → EAF → Commodity Output
+    Electricity → Electrolyzer → H2 → DRI → HBI → EAF → Commodity Output
 
 Module provides functions to construct a PyPSA energy system network representing
 a decarbonized production supply chain. The network includes:
@@ -51,7 +50,7 @@ def _add_carriers(network: pypsa.Network) -> None:
     PyPSA requires explicit Carrier components before buses/generators can reference them.
     """
     carriers = {
-        "electricity": "AC electricity",
+        "renewable_electricity": "Islanded renewable electricity",
         "hydrogen": "Hydrogen gas",
         "battery_elec": "Battery (electrical energy)",
         "iron_ore": "Iron ore (mass)",
@@ -60,6 +59,7 @@ def _add_carriers(network: pypsa.Network) -> None:
         "electrolysis": "Electrolysis process",
         "direct_reduction_furnace": "Direct reduction furnace",
         "electric_arc_furnace": "Electric arc furnace",
+        "grid_electricity": "Grid electricity import",
     }
     for carrier_name, description in carriers.items():
         network.add("Carrier", carrier_name)
@@ -68,7 +68,8 @@ def _add_carriers(network: pypsa.Network) -> None:
 def _add_buses(network: pypsa.Network) -> None:
     """Add energy carrier buses."""
     buses = {
-        "electricity": {"carrier": "electricity", "unit": "MW"},
+        "renewable_electricity": {"carrier": "renewable_electricity", "unit": "MW"},
+        "grid_electricity": {"carrier": "grid_electricity", "unit": "MW"},
         "hydrogen": {"carrier": "hydrogen", "unit": "MW"},
         "battery": {"carrier": "battery_elec", "unit": "MWh"},
         "iron_ore": {"carrier": "iron_ore", "unit": "t/h"},
@@ -77,6 +78,27 @@ def _add_buses(network: pypsa.Network) -> None:
     }
     for name, attrs in buses.items():
         network.add("Bus", name, **attrs)
+
+
+def _add_grid_electricity_supply(network: pypsa.Network, config: dict) -> None:
+    """Add a grid import generator for the EAF when requested.
+
+    The default topology uses grid-connected EAF power. When config sets
+    `eaf_electricity_source` to anything other than `grid`, this helper is a no-op
+    and the EAF remains connected to the local electricity bus.
+    """
+
+    if config.get("eaf_electricity_source", "grid") != "grid":
+        return
+
+    network.add(
+        "Generator",
+        "grid_electricity_import",
+        bus="grid_electricity",
+        carrier="grid_electricity",
+        p_nom=1e10,
+        marginal_cost=config.get("grid_electricity_price", 75.0),
+    )
 
 
 def _add_conversion_chain(
@@ -94,7 +116,7 @@ def _add_conversion_chain(
     network.add(
         "Link",
         "electrolyzer",
-        bus0="electricity",
+        bus0="renewable_electricity",
         bus1="hydrogen",
         carrier="electrolysis",
         efficiency=1.0 / td.get_tech_param(elec_params, "electricity-input", 1.38),
@@ -116,7 +138,7 @@ def _add_conversion_chain(
         bus0="iron_ore",
         bus1="hbi",
         bus2="hydrogen",
-        bus3="electricity",
+        bus3="renewable_electricity",
         carrier="direct_reduction_furnace",
         efficiency=1.0 / td.get_tech_param(dri_params, "ore-input", 1.59),
         efficiency2=-td.get_tech_param(dri_params, "hydrogen-input", 2.1),
@@ -131,6 +153,11 @@ def _add_conversion_chain(
 
     # EAF: HBI + Electricity → Steel
     eaf_params = td.get_tech(tech_costs, "electric arc furnace")
+    eaf_bus2 = (
+        "grid_electricity"
+        if config.get("eaf_electricity_source", "grid") == "grid"
+        else "renewable_electricity"
+    )
 
     eaf_inv_cost = td.get_tech_param(eaf_params, "investment", 2312992.7323)
     network.add(
@@ -138,7 +165,7 @@ def _add_conversion_chain(
         "eaf",
         bus0="hbi",
         bus1="steel",
-        bus2="electricity",
+        bus2=eaf_bus2,
         carrier="electric_arc_furnace",
         efficiency=1.0 / td.get_tech_param(eaf_params, "hbi-input", 1.0),
         efficiency2=-td.get_tech_param(eaf_params, "electricity-input", 0.6395),
@@ -183,7 +210,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
     network.add(
         "Link",
         "batt_charge",
-        bus0="electricity",
+        bus0="renewable_electricity",
         bus1="battery",
         efficiency=np.sqrt(td.get_tech_param(batt_inv_params, "efficiency", 0.96)),
         overnight_cost=batt_inv_cost,  # EUR/kW → EUR/MW
@@ -197,7 +224,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         "Link",
         "batt_discharge",
         bus0="battery",
-        bus1="electricity",
+        bus1="renewable_electricity",
         efficiency=np.sqrt(td.get_tech_param(batt_inv_params, "efficiency", 0.96)),
         overnight_cost=batt_inv_cost,
         lifetime=td.get_tech_param(batt_inv_params, "lifetime", 10.0),
@@ -265,6 +292,7 @@ def build_network(config: dict, tech_costs_path: str, year: int) -> pypsa.Networ
     # Add network components (carriers MUST be added before buses that reference them)
     _add_carriers(network)
     _add_buses(network)
+    _add_grid_electricity_supply(network, config)
     _add_conversion_chain(network, tech_costs, config)
     _add_storage(network, tech_costs, config)
     _add_resources(network, config)

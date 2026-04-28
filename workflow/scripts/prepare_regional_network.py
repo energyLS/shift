@@ -186,10 +186,10 @@ def filter_by_technologies(dataset: xr.Dataset, config: dict) -> xr.Dataset:
 def back_propagate_electricity_need(
     tech_costs: pd.Series, product: str, config: dict
 ) -> float:
-    """Calculate electricity requirement (MWh) per tonne of product.
+    """Calculate renewable electricity requirement (MWh) per tonne of product.
 
     Back-propagates through supply chain efficiency chain:
-    - steel (t): Electrolyzer(elec) + DRI(elec + H2) + EAF(elec)
+    - steel (t): Electrolyzer(elec) + DRI(elec + H2) + optional EAF(elec)
     - hbi (t): Electrolyzer(elec) + DRI(elec + H2)
     - h2 (t): Electrolyzer(elec) only
 
@@ -200,12 +200,14 @@ def back_propagate_electricity_need(
     product : str
         Product: "steel", "hbi", or "h2"
     config : dict
-        Config dict with optional overrides: "electricity_per_tonne_{product}_mwh"
+        Config dict with optional overrides:
+        - "electricity_per_tonne_{product}_mwh"
+        - "eaf_electricity_source" ("grid" by default, "renewable" to include EAF electricity)
 
     Returns
     -------
     float
-        Electricity requirement in MWh per tonne of product
+        Renewable electricity requirement in MWh per tonne of product
     """
     # Check for config override first
     override_key = f"electricity_per_tonne_{product}_mwh"
@@ -262,13 +264,24 @@ def back_propagate_electricity_need(
         )
         logger.debug(f"EAF electricity input: {eaf_elec_per_t_steel:.4f} MWh/t Steel")
 
-        # Steel: H2 production + DRI electricity + EAF electricity
-        elec_need = h2_elec_per_t_hbi + dri_elec_per_t_hbi + eaf_elec_per_t_steel
-        logger.info(
-            f"Back-propagated electricity for Steel: {elec_need:.4f} MWh/t Steel "
-            f"(H2 production: {h2_elec_per_t_hbi:.4f}, DRI: {dri_elec_per_t_hbi:.4f}, "
-            f"EAF: {eaf_elec_per_t_steel:.4f})"
-        )
+        eaf_source = config.get("eaf_electricity_source", "grid")
+
+        # Steel renewable electricity: H2 production + DRI electricity.
+        # If the EAF is configured to run on renewables, include its electricity too.
+        elec_need = h2_elec_per_t_hbi + dri_elec_per_t_hbi
+        if eaf_source == "renewable":
+            elec_need += eaf_elec_per_t_steel
+            logger.info(
+                f"Back-propagated renewable electricity for Steel: {elec_need:.4f} MWh/t Steel "
+                f"(H2 production: {h2_elec_per_t_hbi:.4f}, DRI: {dri_elec_per_t_hbi:.4f}, "
+                f"EAF: {eaf_elec_per_t_steel:.4f})"
+            )
+        else:
+            logger.info(
+                f"Back-propagated renewable electricity for Steel: {elec_need:.4f} MWh/t Steel "
+                f"(H2 production: {h2_elec_per_t_hbi:.4f}, DRI: {dri_elec_per_t_hbi:.4f}; "
+                f"EAF electricity is grid-supplied)"
+            )
         return elec_need
 
     raise ValueError(
@@ -392,7 +405,7 @@ def filter_renewable_generators_by_potential(
     logger.info("TWO-STEP RENEWABLE FILTERING")
     logger.info("=" * 70)
 
-    # Compute product electricity need per tonne
+    # Compute product renewable electricity need per tonne
     product_elec_per_t = back_propagate_electricity_need(tech_costs, product, config)
 
     # Target capacity (MW) for product production
@@ -405,7 +418,7 @@ def filter_renewable_generators_by_potential(
 
     logger.info(f"{product.upper()} demand: {max_product_demand_mt:.1f} Mt")
     logger.info(
-        f"{product.upper()} electricity need: {product_elec_per_t:.4f} MWh/t → {max_product_elec_mw:.1f} MW average"
+        f"{product.upper()} renewable electricity need: {product_elec_per_t:.4f} MWh/t → {max_product_elec_mw:.1f} MW average"
     )
     logger.info(
         f"Target renewable capacity ({multiplier}×): {target_capacity_mw:.1f} MW"
@@ -612,7 +625,7 @@ def extract_incremental_generator_sets(
     logger.info("EXTRACTING INCREMENTAL GENERATOR SETS")
     logger.info("=" * 70)
 
-    # Compute electricity need for this product
+    # Compute renewable electricity need for this product
     elec_per_t = back_propagate_electricity_need(tech_costs, product, config)
     multiplier = config.get("renewable_coverage_multiplier", 5)
 
@@ -708,7 +721,7 @@ def add_renewable_generators(
     # Ensure carriers are defined before adding renewable generators.
     _ensure_carriers(
         network,
-        ["electricity"] + [str(t) for t in dataset.technology.values],
+        ["renewable_electricity"] + [str(t) for t in dataset.technology.values],
     )
 
     # Use the network's discount_rate (which is set regionally in prepare_network)
@@ -760,7 +773,7 @@ def add_renewable_generators(
             network.add(
                 "Generator",
                 gen_name,
-                bus="electricity",
+                bus="renewable_electricity",
                 carrier=tech_str,
                 p_nom_extendable=True,
                 p_nom=0,  # Start with no capacity; optimization will decide
@@ -839,7 +852,7 @@ def add_renewable_generators(
                 network.add(
                     "Generator",
                     gen_name,
-                    bus="electricity",
+                    bus="renewable_electricity",
                     carrier=tech_str,
                     p_nom_extendable=True,
                     p_nom=0,  # Start with no capacity; optimization will decide
