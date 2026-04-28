@@ -618,14 +618,14 @@ if __name__ == "__main__":
     # Preserve discount_rate from base network (needed for cost annuitization)
     network.discount_rate = base_network.discount_rate
 
-    # Calculate electricity needed for this demand level
+    # Calculate renewable electricity needed for this demand level
     scaled_product_demand_mwh_per_h = (
         product_demand_mt * 1e6 * electricity_per_product_t / 8760
     )
 
     logger.info(f"Product demand: {product_demand_mt:.1f} Mt/year")
     logger.info(
-        f"Electricity required: {scaled_product_demand_mwh_per_h * 8760:.1f} MWh/year"
+        f"Renewable electricity required: {scaled_product_demand_mwh_per_h * 8760:.1f} MWh/year"
     )
 
     # Create scaled demands dict for this demand level
