@@ -17,6 +17,8 @@ run:
   disable_progressbar: false
 
 trade:
+  shipping_routes:
+    ports: "predefined"  # "closest": route from region centroid (searoute snaps to nearest sea node); "predefined": route from hand-curated port city coordinates parsed from the notes column in trade_opt.csv
   diversity_factor: False # "False" or float as max constraint for one single hbi supply route in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supply route, etc.
   # Note: The diversity factor constraints the trade route, not the producer itself. (Import from exporter route R <= diversity_factor * demand of importer I.). As a result, if the trade passes through one region, it is limited based on the demand of this particular region * diversity_factor. Therefore the trade routes in a scenario with a diversity_factor of 100% may differ to a scenario where diversity_factor=False.
 
@@ -57,15 +59,6 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         sense: "min"
         carrier: "hbi"
         export: "North_West_Africa"
-  mga-new-indicators:
-    modifiers:
-      cost_penalty:
-      mga:
-        slack: [0.01]
-        sense: "min"
-        carrier: "hbi"
-        indicator: "stability"
-        threshold_value: 30 # Regions with stability index below 30
   mga-stability:
     modifiers:
       cost_penalty:
