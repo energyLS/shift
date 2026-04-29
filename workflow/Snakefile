@@ -75,6 +75,8 @@ rule prepare_political_stability:
 
 
 rule prepare_chokepoints:
+    params:
+        shipping_routes=config["trade"]["shipping_routes"],
     input:
         trade_options = "../data/trade_opt.csv",
         bus_locations = "../data/bus_locations.csv",
@@ -244,7 +246,7 @@ rule model_trade:
 
 rule plot_mga:
     input:
-        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-stability-weighted/network.nc", # TODO update
+        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-stability/network.nc",
         network_mga_chokepoints = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-chokepoints/network.nc",
         network_mga_blocks = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-blocs/network.nc",
         political_stability = "../resources/political_stability_clustered.csv",
