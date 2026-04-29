@@ -662,6 +662,10 @@ def plot_trade_network(
         fig.savefig(
             output_path_png, format="png", bbox_inches="tight", pad_inches=0.1, dpi=300
         )
+
+    # Close figure
+    plt.close(fig)
+
     return
 
 
