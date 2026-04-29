@@ -244,19 +244,23 @@ rule model_trade:
 
 rule plot_mga:
     input:
-        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-new-indicators-multiple/network.nc",
-        network_mga_chokepoints = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-chokepoints/network.nc",
-        network_mga_blocks = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/scenario~mga-blocks/network.nc",
+        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-stability-weighted/network.nc", # TODO update
+        network_mga_chokepoints = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-chokepoints/network.nc",
+        network_mga_blocks = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-blocs/network.nc",
         political_stability = "../resources/political_stability_clustered.csv",
         trade_options_chokepoints = "../resources/trade_opt_chokepoints.csv",
     output:
-        mga_plot = "../results/figures_general/mga/mga_analysis.pdf",
-        mga_plot_png = "../results/figures_general/mga/mga_analysis.png",
+        mga_plot = "../results/figures_general/mga/wacc~{wacc}/mga_analysis.pdf",
+        mga_plot_png = "../results/figures_general/mga/wacc~{wacc}/mga_analysis.png",
     resources:
         mem_mb=4000,
     threads: 2
     notebook:
         "notebooks/plot-mga.ipynb"
+
+rule plot_mga_all:
+    input:
+        expand("../results/figures_general/mga/wacc~{wacc}/mga_analysis.pdf", wacc=["uniform", "regional"], allow_missing=True)
 
 
 # Povide a rule which triggers creation of all scenarios listed (= rows) in 'scenarios/trade_scenarios.csv'
