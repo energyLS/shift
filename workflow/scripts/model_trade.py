@@ -1093,8 +1093,20 @@ def solve_network(n, mga=None, indicators=None):
     # Resolve which links to target via unified dispatcher
     idx = resolve_mga_links(n, mga, indicators)
 
-    # Build MGA weights for all matched links
-    weights = {"Link": {"p_nom": {link: 1 for link in idx}}}
+    # Build MGA weights for all matched links.
+    # If the config provides a 'weighting' dict (region -> float), links whose
+    # source bus starts with that region name receive that weight.
+    # All other links default to weight 1.
+    region_weights = mga.get("weighting") or {}
+
+    def _link_weight(link_name):
+        bus0 = n.links.at[link_name, "bus0"]  # e.g. "North_West_Africa_hbi"
+        for region, w in region_weights.items():
+            if bus0.startswith(region):
+                return float(w)
+        return 1.0
+
+    weights = {"Link": {"p_nom": {link: _link_weight(link) for link in idx}}}
 
     sense = mga["sense"]
     slack_list = mga["slack"]  # Always a list in config
@@ -1149,7 +1161,8 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="mga-new-indicators-multiple",
+            scenario="mga-stability-weighted",
+            wacc="uniform",
         )
 
     final = snakemake.wildcards["final"]
