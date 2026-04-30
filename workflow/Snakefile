@@ -63,7 +63,7 @@ rule prepare_wacc:
 
 rule prepare_political_stability:
     input:
-        political_stability = "../data/political-stability/API_PV.PER.RNK_DS2_en_csv_v2_4585.csv",
+        political_stability = "../data/political-stability/globaleconomy.csv", #https://www.theglobaleconomy.com/rankings/wb_political_stability/
         bus_locations = "../data/bus_locations.csv",
     output:
         political_stability = "../resources/political_stability_clustered.csv"
