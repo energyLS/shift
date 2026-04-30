@@ -67,7 +67,7 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         sense: "min"
         carrier: "hbi"
         indicator: "stability"
-        threshold_value: 30 # Regions with stability index below 30
+        threshold_value: -0.7 # Regions with stability index below -0.7
   mga-stability-weighted:
     modifiers:
       cost_penalty:
@@ -76,7 +76,7 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         sense: "min"
         carrier: "hbi"
         indicator: "stability"
-        threshold_value: 55 #30 # Regions with stability index below 30
+        threshold_value: -0.7 # Regions with stability index below -0.7
         weighting: 
           North_West_Africa: 0.2
           # Eurasia: 0.0
