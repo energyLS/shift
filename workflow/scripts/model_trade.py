@@ -6,8 +6,84 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 import cartopy.crs as ccrs
+import geopandas as gpd
+import pycountry
+import cartopy.io.shapereader as shpreader
 
 plt.style.use("bmh")
+
+
+def build_region_geodataframe(config):
+    """
+    Build a dissolved GeoDataFrame of model regions from the config country lists.
+
+    Each model region (e.g. "Europe", "Middle_East") is formed by dissolving its
+    member countries from the NaturalEarth 110m dataset, so only region borders
+    are visible in the map — not internal country borders.
+    """
+
+    regions = config["regions"]
+
+    # Corrections to align config country names with pycountry lookup names
+    country_name_corrections = {
+        "Democratic Republic of the Congo": "Congo, The Democratic Republic of the",
+        "Turkey": "Türkiye",
+        "Venezuela": "Venezuela, Bolivarian Republic of",
+        "Tanzania": "United Republic of Tanzania",
+        "Bolivia": "Plurinational State of Bolivia",
+        "Vietnam": "Viet Nam",
+        "South Korea": "Korea, Republic of",
+        "North Korea": "Korea, Democratic People's Republic of",
+        "Taiwan": "Taiwan, Province of China",
+        "Laos": "Lao People's Democratic Republic",
+        "Brunei": "Brunei Darussalam",
+        "Equatorial French Guiana": "French Guiana",
+        "Syria": "Syrian Arab Republic",
+        "Palestine": "Palestine, State of",
+        "Moldova": "Republic of Moldova",
+    }
+
+    # Build country name -> ISO A2 mapping via pycountry
+    country_name_to_iso = {}
+    for country in pycountry.countries:
+        country_name_to_iso[country.name] = country.alpha_2
+        if hasattr(country, "official_name"):
+            country_name_to_iso[country.official_name] = country.alpha_2
+
+    # Build ISO A2 -> region mapping
+    iso_to_region = {}
+    for region, countries in regions.items():
+        for country in countries:
+            # Handle entries like "Togo + Algeria" by splitting on +
+            for part in country.split("+"):
+                name = part.strip()
+                name = country_name_corrections.get(name, name)
+                code = country_name_to_iso.get(name)
+                if code:
+                    iso_to_region[code] = region
+
+    # Load NaturalEarth 110m countries shapefile
+    reader = shpreader.natural_earth(
+        resolution="110m", category="cultural", name="admin_0_countries"
+    )
+    world = gpd.read_file(reader)
+
+    # Fix missing ISO_A2 codes (-99 placeholder in NaturalEarth)
+    def _lookup_iso(country_name):
+        try:
+            return pycountry.countries.lookup(country_name).alpha_2
+        except LookupError:
+            return None
+
+    world.loc[world["ISO_A2"] == "-99", "ISO_A2"] = world.loc[
+        world["ISO_A2"] == "-99", "ADMIN"
+    ].apply(_lookup_iso)
+
+    # Assign region and dissolve to remove internal country borders
+    world["region"] = world["ISO_A2"].map(iso_to_region)
+    region_gdf = world.dropna(subset=["region"]).dissolve(by="region").reset_index()
+
+    return region_gdf
 
 
 # inputs are transportation costs, supply curves, trade options and load demand for all regions
@@ -522,7 +598,6 @@ def save_network_collection(nc, output_path, optimal_network=None):
     optimal_network : pypsa.Network, optional
         The optimal network (solved without MGA slack). If provided, saved to output_path.
     """
-    import os
 
     # Create output directory if it doesn't exist
     output_dir = os.path.dirname(output_path)
@@ -556,6 +631,7 @@ def plot_trade_network(
     alpha_demand=1,
     output_path=None,
     output_path_png=None,
+    region_gdf=None,
 ):
     """
     Plot trade network using config-driven colors and sizes.
@@ -604,6 +680,16 @@ def plot_trade_network(
     fig = plt.figure(figsize=(10, 5))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
+    # Draw dissolved region basemap (region borders only, no internal country borders)
+    # color_geomap=False suppresses PyPSA's default NaturalEarth country background
+    if region_gdf is not None:
+        region_gdf.plot(
+            ax=ax,
+            color="lightgrey",
+            edgecolor="white",
+            linewidth=0.5,
+        )
+
     # Plot demand
     n.plot.map(
         ax=ax,
@@ -612,6 +698,7 @@ def plot_trade_network(
         bus_alpha=alpha_demand,
         link_widths=0,
         branch_components=["Link"],
+        geomap=False,
     )
 
     # Plot supply
@@ -623,6 +710,7 @@ def plot_trade_network(
         link_widths=trade * plot_config["link_width"],
         branch_components=["Link"],
         link_colors=link_colors,
+        geomap=False,
     )
 
     ax.set_extent([-180, 180, -60, 85], crs=ccrs.PlateCarree())
@@ -1296,6 +1384,9 @@ if __name__ == "__main__":
     print("saving results as network+csv")
     save_trade_network(n_selected)
 
+    # Build dissolved region GeoDataFrame once for basemap (no internal country borders)
+    region_gdf = build_region_geodataframe(snakemake.config)
+
     # Plot results: consolidate plotting for all networks
     print("saving plots")
 
@@ -1348,4 +1439,5 @@ if __name__ == "__main__":
                 alpha_supply=alpha_supply,
                 output_path=final_output_path,
                 output_path_png=final_output_path_png,
+                region_gdf=region_gdf,
             )
