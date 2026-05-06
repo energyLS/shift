@@ -637,27 +637,8 @@ if __name__ == "__main__":
 
     # Load incremental generator sets and apply filtering
     logger.info("Loading incremental generator sets...")
-    try:
-        import json
-
-        with open(snakemake.input.incremental_sets, "r") as f:
-            incremental_sets_raw = json.load(f)
-        # Convert keys from strings back to floats
-        incremental_sets = {float(k): v for k, v in incremental_sets_raw.items()}
-        logger.info(
-            f"Loaded incremental sets for demand levels: {list(incremental_sets.keys())}"
-        )
-    except Exception as e:
-        logger.error(f"Failed to load incremental sets: {e}")
-        raise
-
-    # Apply incremental generator selection (delete generators outside this demand level)
-    logger.info("Applying incremental generator selection...")
-    selection_info = apply_incremental_generator_selection(
-        network=network,
-        product_demand_mt=product_demand_mt,
-        incremental_sets=incremental_sets,
-    )
+    # Skip incremental filtering: use all generators for all demand levels
+    logger.info("Using all generators (no incremental filtering applied)")
 
     # Add hourly load for steel output
     # (This also sets HBI storage e_initial inside add_loads_to_network)

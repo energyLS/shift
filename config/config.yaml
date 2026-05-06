@@ -3,6 +3,12 @@ enable:
   run_supply_curve: True # Enable for first run
 
 
+# Output toggles for Step 0/1 (greenfield supply curve generation)
+outputs:
+  save_supply_nodemand: True  # Generate reference supply curve (all generators available) alongside main curve
+  keep_optimization_networks: False  # Keep .nc network files from optimization (set False to save disk space)
+
+
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
@@ -20,13 +26,10 @@ run:
 
 # Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
+  "Europe": ["DEU", "FRA", "GBR", "ITA", "ESP", "POL", "NLD", "BEL", "SWE", "NOR"]
   "Africa_West": ["SEN", "GMB", "GIN", "SLE"]          # Senegal, Gambia, Guinea, Sierra Leone
   "Africa_Central": ["GNQ", "GAB", "CMR", "CAF"]       # Equatorial Guinea, Gabon, Cameroon, Central African Republic
   "Africa_East": ["KEN", "UGA", "RWA", "ETH"]          # Kenya, Uganda, Rwanda, Ethiopia
-
-# Renewable technologies to include in filtering
-# Available: ["solar", "onwind", "offwind-ac"]
-renewable_technologies: ["solar", "onwind"]
 
 # countries: [
 #   "BI","KM","DJ","ER","ET","KE","MG","MW","MU","MZ","RW","SC","SO","SS","TZ","UG","ZM","ZW", # Africa — Eastern Africa
@@ -68,8 +71,9 @@ costs:
 
 interest_rate: 
   default: 0.05
-  "Test_1": 0.05
-  "Test_2": 0.06
+  # Regional discount rates (override default for specific regions):
+  # Europe: 0.04
+  # Africa_West: 0.07
   
 
 part_load:

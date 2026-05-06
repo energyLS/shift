@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
@@ -79,8 +80,37 @@ def create_supply_curve():
     print("local el load has been subtracted from global supply")
 
     # saves the merged costs in a supply curve csv
-    df_sub.to_csv(snakemake.output.supply)
-    df_merged.to_csv(snakemake.output.supply_nodemand)
+    # df_sub shows realistic scenario (after local demand reserves generators)
+    # df_merged is reference (all generators available) - optional based on config
+    df_sub.to_csv(snakemake.output.supply, index=False)
+
+    # Only save supply_nodemand if output exists (check against toggle)
+    # If save_supply_nodemand=False in config, this file may be temp and auto-deleted.
+    # However, to avoid Snakemake MissingOutputException if the rule declared
+    # a concrete path but the config changed during runtime, ensure the
+    # declared output file exists by writing a fallback CSV here.
+    try:
+        nodemand_path = snakemake.output.supply_nodemand
+    except Exception:
+        nodemand_path = None
+
+    if nodemand_path and str(nodemand_path).endswith(".csv"):
+        # write the reference (merged) supply curve to the declared path
+        df_merged.to_csv(nodemand_path, index=False)
+        print(f"Saved reference supply curve (all generators): {nodemand_path}")
+    else:
+        print("Skipping supply_nodemand output (save_supply_nodemand=False)")
+
+    # If Snakemake declared a non-temp path but we didn't write it above
+    # for any reason, ensure it exists to prevent MissingOutputException.
+    if nodemand_path:
+        try:
+            if not os.path.exists(nodemand_path):
+                # write a minimal CSV fallback
+                df_merged.to_csv(nodemand_path, index=False)
+                print(f"Wrote fallback supply_nodemand file: {nodemand_path}")
+        except Exception:
+            pass
 
     # creates and saves supply curve plot
     if product in ["steel", "hbi"]:
@@ -103,7 +133,7 @@ def create_supply_curve():
         y_merged,
         linestyle="-",
         marker="o",
-        label="supply",
+        label="supply (all generators available)",
     )
 
     # the subtracted plot
@@ -114,12 +144,12 @@ def create_supply_curve():
         color="C1",
         marker="o",
         markerfacecolor="none",
-        label="supply w. local el. demand subtracted",
+        label="supply (after local el. demand reserved)",
     )
 
     plt.axvline(
         product_subtract / (1e6),
-        label="local energy demand for el.",
+        label="local electricity demand (converted to product)",
         linestyle="--",
         color="C1",
     )
@@ -156,41 +186,42 @@ def create_supply_curve():
     return
 
 
+# Setup columns and product before function execution (needed for both Snakemake and main)
+if "snakemake" not in globals():
+    from _helpers import mock_snakemake
+
+    snakemake = mock_snakemake(
+        "create_supply_curve",
+        cost_year="2030",
+        region="South_South_America",
+        product="steel",
+    )
+
+product = snakemake.wildcards["product"]
+if product == "hydrogen":
+    columns = {
+        "demand factor": "demand factor [%]",
+        "demand": "demand [t]",
+        "load": "load [MW]",
+        "total cost": "cost [EUR]",
+        "cost per unit": "lcox [EUR/MWh]",
+        "xlabel": "Demand in TWh",
+        "product_unit": "MWh",
+        "ylim": (0, 100),
+    }
+elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
+    columns = {
+        "demand factor": "demand factor [%]",
+        "demand": "demand [t]",
+        "load": "load [t/h]",
+        "total cost": "cost [EUR]",
+        "cost per unit": "lcox [EUR/t]",
+        "xlabel": "Demand in Mt",
+        "product_unit": "t",
+        "ylim": (0, 900),
+    }
+else:
+    raise ValueError(f"product {product} not recognized for supply curve plotting")
+
 if __name__ == "__main__":
-    if "snakemake" not in globals():
-        from _helpers import mock_snakemake
-
-        snakemake = mock_snakemake(
-            "create_supply_curve",
-            cost_year="2030",
-            region="South_South_America",
-            product="steel",
-        )
-
-    product = snakemake.wildcards["product"]
-    if product == "hydrogen":
-        columns = {
-            "demand factor": "demand factor [%]",
-            "demand": "demand [t]",
-            "load": "load [MW]",
-            "total cost": "cost [EUR]",
-            "cost per unit": "lcox [EUR/MWh]",
-            "xlabel": "Demand in TWh",
-            "product_unit": "MWh",
-            "ylim": (0, 100),
-        }
-    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
-        columns = {
-            "demand factor": "demand factor [%]",
-            "demand": "demand [t]",
-            "load": "load [t/h]",
-            "total cost": "cost [EUR]",
-            "cost per unit": "lcox [EUR/t]",
-            "xlabel": "Demand in Mt",
-            "product_unit": "t",
-            "ylim": (0, 900),
-        }
-    else:
-        raise ValueError(f"product {product} not recognized for supply curve plotting")
-
     create_supply_curve()

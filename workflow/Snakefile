@@ -49,10 +49,9 @@ wildcard_constraints:
 rule retrieve_cost_data:
     output:
         costs="../resources/technology_data/costs_{cost_year}.csv",
-    retries: 2
-    threads: 2
+    threads: 1
     resources:
-        mem_mb=1000,
+        mem_mb=500,
     params:
         version=config["costs"]["version"],
     script:
@@ -64,37 +63,37 @@ rule build_steel_skeleton:
     input:
         costs="../resources/technology_data/costs_{cost_year}.csv",
     output:
-        # [DELETION FLAG] Post-development: can regenerate in <1 min if needed
-        # Keep during development for checkpoint validation
+        # Reusable skeleton for all regional networks - shared across supply chains
+        # Keep as persistent resource for consistency when extending to multiple products
         skeleton="../resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
     threads: 1
     resources:
-        mem_mb=2000,
+        mem_mb=1000,
     script:
         "scripts/build_x_supply_chain.py"
 
 
-# Prepare regional PyPSA network with renewable generators and product-specific cutoff
+# Prepare regional PyPSA network with consolidated renewable generators
+# INPUT: consolidated renewable profiles (region, technology, class, time)
+# OUTPUT: PyPSA network with renewables + supply chain for target product
 rule prepare_regional_network:
     input:
         skeleton="../resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
-        renewable_nc="../data/renewable_profiles/renewable_profiles_africa__20260417_155313.nc",
-        costs="../resources/technology_data/costs_{cost_year}.csv",
-        local_demand="../data/un_enerdata_demand_2050_final.csv",
+        renewables="../data/new_renewables_consolidated.nc",  # Consolidated file: (region, technology, class, time)
+        tech_costs="../resources/technology_data/costs_{cost_year}.csv",
     output:
-        # KEEP: Good checkpoint, medium regen cost (~2-3 min per region)
-        base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
-        audit="../resources/networks/.audit_{cost_year}_{region}_{product}.json",
-        incremental_sets="../resources/networks/.incremental_sets_{cost_year}_{region}_{product}.json",
+        network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
     log:
         "../logs/prepare_regional_network_{cost_year}_{region}_{product}.log",
-    threads: 2
+    threads: 1
     resources:
-        mem_mb=4000,
+        mem_mb=2000,
     params:
+        region="{region}",
+        product="{product}",
         config=config,
     message:
-        "Preparing regional network for {wildcards.region} → {wildcards.product} "
+        "Preparing regional network: {wildcards.region} → {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
     script:
         "scripts/prepare_regional_network.py"
@@ -106,15 +105,22 @@ if config["enable"].get("run_supply_chain", True):
         input:
             base_network="../resources/networks/base_{cost_year}_{region}_{product}.nc",
             local_demand="../data/un_enerdata_demand_2050_final.csv",
-            incremental_sets="../resources/networks/.incremental_sets_{cost_year}_{region}_{product}.json",
         output:
             results="../resources/lco-{product}/cost_year~{cost_year}/{region}/results_{product_demand_mt}.csv",
-            network="../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{product_demand_mt}.nc",
+            network=(
+                temp(
+                    "../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{product_demand_mt}.nc"
+                )
+                if not config.get("outputs", {}).get(
+                    "keep_optimization_networks", False
+                )
+                else "../resources/lco-{product}/cost_year~{cost_year}/{region}/network_{product_demand_mt}.nc"
+            ),
         wildcard_constraints:
             product_demand_mt=r"\d+",
-        threads: 4
+        threads: 2
         resources:
-            mem_mb=8000,
+            mem_mb=4000,
         params:
             product_demand_mt="{product_demand_mt}",
             compute_iis=config.get("solver", {}).get("compute_iis", False),
@@ -141,12 +147,18 @@ if config["enable"].get("run_supply_curve", True):
             steel_demand="../resources/steel_production_clustered.csv",
         output:
             supply="../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            # [DELETION FLAG] Post-development: supply_nodemand CSVs are reference copies for comparison only
-            # Keep during development for validation/debugging
-            supply_nodemand="../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv",
-            # KEEP: PDF plots low disk cost, high validation value
+            # Toggleable reference: supply curve with all generators available (no local demand constraint)
+            # Set save_supply_nodemand=True in config to generate for validation/comparison
+            supply_nodemand=(
+                "../resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv"
+                if config.get("outputs", {}).get("save_supply_nodemand", True)
+                else temp(
+                    "../resources/supply_curves_nodemand_tmp/{region}_{product}.csv"
+                )
+            ),
+            # PDF plots: low disk cost, high validation value - always generated
             supply_curve="../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
-        threads: 2
+        threads: 1
         message:
             "Combining LCo{wildcards.product[0]} results (all product demand levels) to create supply curve for {wildcards.region}."
         script:
@@ -157,7 +169,7 @@ rule create_all_supply_curves:
     input:
         expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            cost_year=[2030, 2050],
+            cost_year=[2050],
             region=config["regions"],
             product=[
                 "steel"
@@ -179,11 +191,13 @@ rule model_trade:
         supply_curves_interone=expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
             allow_missing=True,
+            cost_year=[2050],
             region=config["regions"],
         ),
         supply_curves_intertwo=expand(
             "../resources/supply_curves/cost_year~{cost_year}/{region}_{intertwo}.csv",
             allow_missing=True,
+            cost_year=[2050],
             region=config["regions"],
         ),
         # supply_curves_final = expand(
