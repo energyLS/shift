@@ -1,0 +1,64 @@
+metadata:
+  describtion: "This file defines the bloc and region definitions for the friendshoring analysis. Bloc alignments are adapted from the classifications in Javorcik et al. (2024) to fit the corresponding regions."
+  source: "Javorcik, B., Kitzmüller, L., Schweiger, H., & Yıldırım, M. A. (2024). Economic costs of friendshoring. The World Economy, 47, 2871–2908. https://doi.org/10.1111/twec.13555"
+
+regions:
+  Europe:
+    country_members: [AL, AT, BY, BE, BA, BG, HR, CY, CZ, DK, EE, FI, DE, GR, HU, IT, XK, LV, LT, LU, MK, MD, ME, NL, NO, PL, RO, RS, SK, SI, SE, CH, TR, UA]
+    bloc_alignment: {A: 1, B: 1, C: 1, D: 1}
+
+  Far_West_Europe:
+    country_members: [FR, GL, IS, IE, PT, ES, GB]
+    bloc_alignment: {A: 1, B: 1, C: 1, D: 1}
+
+  Middle_East:
+    country_members: [BH, IR, IQ, IL, JO, KW, LB, OM, PS, QA, SA, SY, AE, YE]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 3}
+
+  North_West_Africa:
+    country_members: [BJ, BF, CI, GM, GH, GN, GW, LR, NG, SN, SL, TG, DZ, TD, EG, ER, LY, ML, MR, MA, NE, SD, TN, EH]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 3}
+
+  Subsaharan_Africa:
+    country_members: [AO, BW, BI, CM, CF, CD, ET, KE, GA, MG, MW, MZ, NA, CG, RW, SO, ZA, SS, TZ, UG, ZM, ZW]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 3}
+
+  North_America:
+    country_members: [CA, US]
+    bloc_alignment: {A: 1, B: 1, C: 1, D: 1}
+
+  Eurasia:
+    country_members: [AM, AZ, GE, KZ, KG, TJ, TM, UZ, RU]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 3}
+
+  South_America:
+    country_members: [BO, BR, CO, EC, GF, GY, PY, PE, SR, VE]
+    bloc_alignment: {A: 1, B: 2, C: 2, D: 2}
+
+  South_South_America:
+    country_members: [AR, CL, UY]
+    bloc_alignment: {A: 1, B: 2, C: 2, D: 2}
+
+  Central_America:
+    country_members: [CR, SV, GT, HN, MX, NI, PA, CU, DO, JM, HT]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 3}
+
+  West_Asia:
+    country_members: [AF, BD, BT, IN, NP, PK, LK]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 3}
+
+  East_Asia:
+    country_members: [CN, HK, MN, TW]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 2}
+
+  Pacific_Asia:
+    country_members: [BN, KH, ID, LA, MY, MM, PG, PH, SG, TH, VN]
+    bloc_alignment: {A: 2, B: 2, C: 2, D: 2}
+
+  East_East_Asia:
+    country_members: [JP, KR, KP]
+    bloc_alignment: {A: 1, B: 1, C: 3, D: 3}
+
+  Oceania:
+    country_members: [AU, NZ]
+    bloc_alignment: {A: 1, B: 1, C: 3, D: 3}
