@@ -27,9 +27,12 @@ Outputs (generated for each demand level):
 import logging
 import os
 from pathlib import Path
+from typing import Any
 import pypsa
 import pandas as pd
 import numpy as np
+
+snakemake: Any = globals().get("snakemake")
 
 # ============================================================================
 # LOGGING SETUP
@@ -552,7 +555,7 @@ def extract_lcox(network, product, demands):
 
 
 if __name__ == "__main__":
-    if "snakemake" not in globals():
+    if snakemake is None:
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(

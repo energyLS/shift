@@ -27,6 +27,7 @@ Modify TECH_ASSUMPTIONS, bus definitions, and links to adapt to different commod
 """
 
 import logging
+from typing import Any
 import pandas as pd
 import numpy as np
 import pypsa
@@ -35,6 +36,8 @@ import tech_database as td
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+snakemake: Any = globals().get("snakemake")
 
 
 # Technology parameters with no database source (assumed values)
@@ -306,7 +309,7 @@ def build_network(config: dict, tech_costs_path: str, year: int) -> pypsa.Networ
 
 
 if __name__ == "__main__":
-    if "snakemake" not in globals():
+    if snakemake is None:
         raise RuntimeError(
             "This script must be run via Snakemake with cost_year wildcard"
         )

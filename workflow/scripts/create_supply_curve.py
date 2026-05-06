@@ -1,7 +1,10 @@
 import os
+from typing import Any
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
+
+snakemake: Any = globals().get("snakemake")
 
 matplotlib.use("Agg")
 
@@ -187,7 +190,7 @@ def create_supply_curve():
 
 
 # Setup columns and product before function execution (needed for both Snakemake and main)
-if "snakemake" not in globals():
+if snakemake is None:
     from _helpers import mock_snakemake
 
     snakemake = mock_snakemake(

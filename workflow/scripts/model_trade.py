@@ -1,11 +1,14 @@
 import pypsa
 import pandas as pd
 import matplotlib
+from typing import Any
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 import cartopy.crs as ccrs
+
+snakemake: Any = globals().get("snakemake")
 
 plt.style.use("bmh")
 
@@ -703,7 +706,7 @@ def solve_network(n, mga=None):
 
 
 if __name__ == "__main__":
-    if "snakemake" not in globals():
+    if snakemake is None:
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(

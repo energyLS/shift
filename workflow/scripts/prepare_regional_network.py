@@ -24,7 +24,7 @@ Usage (Snakemake rule):
 """
 
 import logging
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+
+snakemake: Any = globals().get("snakemake")
 
 
 def load_region_renewables_consolidated(
@@ -500,7 +502,7 @@ def prepare_network(
 
 if __name__ == "__main__":
     # Check if running from Snakemake
-    if "snakemake" in dir():
+    if snakemake is not None:
         # Snakemake inputs/outputs
         skeleton_path = snakemake.input.skeleton
         renewables_path = snakemake.input.renewables
@@ -517,7 +519,7 @@ if __name__ == "__main__":
         output_path = snakemake.output[0]
 
         # Load config (if available)
-        config_dict = snakemake.config if "snakemake" in dir() else {}
+        config_dict = snakemake.config if snakemake is not None else {}
     else:
         # Fallback for manual execution
         import sys

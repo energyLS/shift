@@ -2,6 +2,11 @@ import sys
 from snakemake.utils import Paramspace
 import pandas as pd
 
+
+# Root-only usage: call Snakemake from repository root.
+workdir: "workflow"
+
+
 # HTTP = HTTPRemoteProvider()
 sys.path.append("./scripts")
 

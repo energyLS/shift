@@ -9,10 +9,13 @@ Dual-purpose module: Snakemake rule for downloading tech costs + importable util
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+snakemake: Any = globals().get("snakemake")
 
 
 def download_tech_database(
@@ -69,7 +72,7 @@ def get_tech_param(
 
 # Snakemake integration: Allow direct execution as rule
 if __name__ == "__main__":
-    if "snakemake" not in globals():
+    if snakemake is None:
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake("retrieve_cost_data", year=2030)
