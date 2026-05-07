@@ -246,7 +246,7 @@ rule model_trade:
 
 rule plot_mga:
     input:
-        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-stability/network.nc",
+        network_mga_production = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-stability-weighted/network.nc",
         network_mga_chokepoints = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-chokepoints/network.nc",
         network_mga_blocks = "../results/cost_year~2050/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~mga-blocs/network.nc",
         political_stability = "../resources/political_stability_clustered.csv",
@@ -262,7 +262,7 @@ rule plot_mga:
 
 rule plot_mga_all:
     input:
-        expand("../results/figures_general/mga/wacc~{wacc}/mga_analysis.pdf", wacc=["uniform", "regional"], allow_missing=True)
+        expand("../results/figures_general/mga/wacc~{wacc}/mga_analysis.pdf", wacc=["regional"], allow_missing=True) #wacc=["uniform", "regional"]
 
 
 # Povide a rule which triggers creation of all scenarios listed (= rows) in 'scenarios/trade_scenarios.csv'
@@ -289,10 +289,34 @@ rule plot_trade_today:
     script:
         "notebooks/plot_todays-trade.py"
 
+
+rule plot_global_supply:
+    input:
+        trade_network="../results/cost_year~{cost_year}/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~{scenario}/network.nc",
+        # supply = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+        # supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
+        supply_curves_interone = expand(
+            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
+            allow_missing=True, region=config["regions"]),
+        supply_curves_interone_nodemand = expand(
+            "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
+            allow_missing=True, region=config["regions"]),
+    output:
+        network_curve="../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
+        network_curve_png="../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
+        # supply_curves
+    notebook:
+        "notebooks/analysis-globalsupplycurve.ipynb"
+
+rule plot_global_supply_all:
+        input:
+            expand("../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", cost_year=[2050], wacc=["regional"], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
+
+
 rule collect_figures:
     input:
-        global_supply_curve = "../results/figures_general/{scenario}/global_supply_curve_{sort}_demand_{demand}.pdf", #workflow/notebooks/analysis-coststructure.ipynb
-        global_supply_curve_png = "../results/figures_general/{scenario}/global_supply_curve_{sort}_demand_{demand}.png", #workflow/notebooks/analysis-coststructure.ipynb
+        global_supply_curve = "../results/figures_general/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", #workflow/notebooks/analysis-coststructure.ipynb
+        global_supply_curve_png = "../results/figures_general/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png", #workflow/notebooks/analysis-coststructure.ipynb
         electricity_demand = "../results/figures_general/electricity_demand.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
         electricity_demand_png = "../results/figures_general/electricity_demand.png", #workflow/notebooks/analysis-electricity-demand.ipynb
         electricity_demand_steel = "../results/figures_general/electricity_demand_in_steel.pdf", #workflow/notebooks/analysis-electricity-demand.ipynb
