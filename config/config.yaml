@@ -17,6 +17,8 @@ run:
   disable_progressbar: false
 
 trade:
+  shipping_routes:
+    ports: "predefined"  # "closest": route from region centroid (searoute snaps to nearest sea node); "predefined": route from hand-curated port city coordinates parsed from the notes column in trade_opt.csv
   diversity_factor: False # "False" or float as max constraint for one single hbi supply route in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supply route, etc.
   # Note: The diversity factor constraints the trade route, not the producer itself. (Import from exporter route R <= diversity_factor * demand of importer I.). As a result, if the trade passes through one region, it is limited based on the demand of this particular region * diversity_factor. Therefore the trade routes in a scenario with a diversity_factor of 100% may differ to a scenario where diversity_factor=False.
 
@@ -57,38 +59,45 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
         sense: "min"
         carrier: "hbi"
         export: "North_West_Africa"
-  mga-new-indicators:
+  mga-stability:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.01]
+        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03]
         sense: "min"
         carrier: "hbi"
         indicator: "stability"
-        threshold_value: 30 # Regions with stability index below 30
-  mga-new-indicators-multiple:
+        threshold_value: -0.5 # Regions with stability index below -0.5
+  mga-stability-weighted:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03]
         sense: "min"
         carrier: "hbi"
         indicator: "stability"
-        threshold_value: 30 # Regions with stability index below 30
+        threshold_value: -0.5 # Regions with stability index below -0.5
+        weighting: # Use `workflow/notebooks/utility-weighted-mga.ipynb` to define the weights based on the political stability index, if desired
+          North_West_Africa: 1.00
+          Subsaharan_Africa: 0.87
+          West_Asia: 0.81
+          Eurasia: 0.70
+          South_America: 0.59
+          Middle_East: 0.51
   mga-chokepoints:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05]
+        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03]
         sense: "min"
         carrier: "hbi"
         indicator: "chokepoint"
         threshold_value: ["babalmandab", "bosporus", "gibraltar", "suez", "panama", "ormuz", "malacca", "south_africa"] # Primary chokepoints according to https://porteconomicsmanagement.org/pemp/contents/part1/interoceanic-passages/main-maritime-shipping-routes/  # Secondary chokepoints: ["northwest", "sunda", "chili"], Primary chokepoints not in searoutes: ["Oresund"]
-  mga-blocks:
+  mga-blocs:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05] #[0.01, 0.02, 0.03]
+        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03] #[0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05] 
         sense: "min"
         carrier: "hbi"
         indicator: "blocks"
