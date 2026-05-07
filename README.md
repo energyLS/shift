@@ -52,14 +52,13 @@ For details, see https://pixi.prefix.dev/latest/ (or your local PIXI docs).
 In the workspace root:
 
 ```sh
-cd workflow
-pixi run snakemake -call model_trade_all
+pixi run snakemake model_trade_all
 ```
 
 To collect all figures (under development):
 
 ```sh
-pixi run snakemake -call collect_figures
+pixi run snakemake collect_figures
 ```
 
 
