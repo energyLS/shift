@@ -46,7 +46,7 @@ rule prepare_regional_network:
         product="{product}",
         config=config,
     message:
-        "Preparing regional network: {wildcards.region} → {wildcards.product} "
+        "Preparing regional network: {wildcards.region} -> {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
     script:
         str(SCRIPT_DIR / "prepare_regional_network.py")

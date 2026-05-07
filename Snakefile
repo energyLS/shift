@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 from snakemake.utils import Paramspace
 
-WORKFLOW_DIR = Path("workflow")
+WORKFLOW_DIR = Path(workflow.basedir) / "workflow"
 SCRIPT_DIR = WORKFLOW_DIR / "scripts"
 
 
