@@ -74,6 +74,28 @@ rule prepare_political_stability:
         "notebooks/prepare-political-stability.ipynb"
 
 
+rule download_labour_data:
+    output:
+        merged = "../resources/merged_labour_inputs.csv",
+    resources:
+        mem_mb=2000,
+    threads: 1
+    script:
+        "scripts/download_labour_data.py"
+
+
+rule prepare_labour_cost:
+    input:
+        merged = "../resources/merged_labour_inputs.csv",
+    output:
+        labour_cost = "../resources/labour_cost_clustered.csv",
+    resources:
+        mem_mb=2000,
+    threads: 1
+    script:
+        "scripts/prepare_labour_cost.py"
+
+
 rule prepare_chokepoints:
     params:
         shipping_routes=config["trade"]["shipping_routes"],
@@ -160,6 +182,7 @@ if config["enable"].get("run_supply_chain", True):
             costs = "../resources/technology_data/costs_{cost_year}.csv",
             trace = "../resources/trace/steel_{cost_year}.nc",
             wacc = "../resources/wacc-clustered.csv",
+            labour_cost = "../resources/labour_cost_clustered.csv",
         output:
             results="../resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}/results_{demand_factor}.csv",
             network="../resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}/network_{demand_factor}.nc",
