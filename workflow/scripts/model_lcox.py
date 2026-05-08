@@ -114,7 +114,9 @@ def building_model(n, region, ds, dw, dc, load, h_cost, iron_ore_cost):
         elif snakemake.wildcards.wacc == "uniform":
             interest_rate = base_interest_rate
         else:
-            raise ValueError("wacc wildcard not recognized, choose 'regional' or 'uniform'")
+            raise ValueError(
+                "wacc wildcard not recognized, choose 'regional' or 'uniform'"
+            )
 
         # adding wind and solar generators on el bus
         wind_cost = calc_cap_cost(dc, "onwind", interest_rate)
@@ -469,6 +471,53 @@ def adjust_part_load(n):
     return n
 
 
+def add_labour_cost(n, labour_cost):
+
+    print(f"adding labour cost")
+
+    carrier_labour_cost_dict = {
+        "electrolysis": "ely_intensity in h/kW_ely",
+        "hydrogen direct iron reduction furnace": "dri_intensity in h/t_dri",
+        "electric arc furnace": "eaf_intensity in h/t_steel",
+    }
+
+    regional_labour_cost = labour_cost.loc[snakemake.wildcards.region]
+    wage = regional_labour_cost["steelworker_wage in euro/h"]
+
+    for carrier in carrier_labour_cost_dict.keys():
+        if carrier in n.links.carrier.values:
+            if carrier == "electrolysis":
+                n.links.loc[n.links.carrier == carrier, "capital_cost"] += (
+                    wage
+                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
+                    * 1000
+                )  # Wage in €/h * intensity in h/kW_ely * 1000 kW/MW = € / MW, added to capital cost
+            else:
+                pass
+
+            if carrier == "hydrogen direct iron reduction furnace":
+                n.links.loc[n.links.carrier == carrier, "marginal_cost"] += (
+                    wage
+                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
+                    * n.links.loc[n.links.carrier == carrier, "efficiency"]
+                )  # Wage in €/h * intensity in h/t_dri * effiency_ironore_dri = € / t_dri, added to marginal cost
+            else:
+                pass
+
+            if carrier == "electric arc furnace":
+                n.links.loc[n.links.carrier == carrier, "marginal_cost"] += (
+                    wage
+                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
+                    * n.links.loc[n.links.carrier == carrier, "efficiency"]
+                )  # Wage in €/h * intensity in h/t_steel * effiency_input_output = € / t_steel, added to marginal cost
+            else:
+                pass
+        else:
+            print(
+                f"carrier {carrier} not in network, skipping labour cost addition for this carrier"
+            )
+
+
 if __name__ == "__main__":
 
     if "snakemake" not in globals():
@@ -477,8 +526,8 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "model_lcox",
             cost_year="2050",
-            region="Middle_East",
-            product="eaf-grid",
+            region="Oceania",
+            product="steel",
             demand_factor=10,
             wacc="regional",
         )
@@ -486,6 +535,9 @@ if __name__ == "__main__":
     # making dataframes from inputs
     dc = pd.read_csv(snakemake.input.costs, header=0)
     d = xr.open_dataset(snakemake.input.supply_data)
+
+    # Load labour cost
+    labour_cost = pd.read_csv(snakemake.input.labour_cost, header=0, index_col=0)
 
     # load TRACE steel model
     n = pypsa.Network(snakemake.input.trace)
@@ -517,6 +569,9 @@ if __name__ == "__main__":
         snakemake.config["hydrogen_storage_cost"],
         snakemake.config["iron_ore_cost_in_supply_chain"],
     )
+
+    if snakemake.config["labour_cost"]:
+        add_labour_cost(n, labour_cost)
 
     # solving model
     n = solve_network(n)
