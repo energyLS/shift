@@ -117,6 +117,8 @@ costs:
   version: v0.12.0
   eur_usd: 1.15 # 1 Euro equals 1.15 USD
 
+labour_cost: True
+
 interest_rate: 0.07 # This should align with the TRACE model input WACC. To use a regional interest rate, set the wildcard wacc="regional" in the `config/trade_scenarios.csv`. Caveat: this does not change the WACC for storages. For uniform interest rate, set wacc="uniform" in the `config/trade_scenarios.csv`.
 
 grid_electricity:
