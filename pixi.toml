@@ -10,44 +10,31 @@ version = "0.1.0"
 snakemake = "snakemake"
 
 [dependencies]
-# Core Python
-python = ">=3.12"
-
-# Inhouse packages - energy system modeling
-pypsa = ">=0.32.1"
-atlite = ">=0.3"
-linopy = ">=0.4.4"
-
-# Workflow orchestration
+atlite = ">=0.3,!=0.5.0"
+cartopy = ">=0.25.0"
+geojson = ">=3.2.0"
+geohash2 = "*"
+geopandas = ">=1"
+geopy = ">=2.4.1"
+libgdal-netcdf = ">=3.10.3"
+linopy = ">=0.6.1"
+matplotlib = ">=3.10.7"
+netcdf4 = ">=1.7.2,!=1.7.4"
+networkx = ">=3.5"
+numpy = ">=1.26.4"
+pandas = ">=2.1"
+pycountry = ">=24.6.1"
+pypsa = ">=1.1.2"
+python = ">=3.10"
+pyyaml = "*"
+scipy = ">=1.16.3"
+seaborn = ">=0.13.2"
+snakemake-executor-plugin-cluster-generic = ">=1.0.9"
+snakemake-executor-plugin-slurm = "*"
 snakemake-minimal = ">=9"
 snakemake-storage-plugin-http = ">=0.3"
-snakemake-executor-plugin-slurm = "*"
-snakemake-executor-plugin-cluster-generic = "*"
-
-# Data processing and I/O
-pandas = ">=2.1"
-numpy = "*"
-xarray = ">=2024.03.0"
-netcdf4 = "*"
-libgdal-netcdf = "*"
-
-# Geospatial and mapping
-geopandas = ">=1"
-pycountry = "*"
-geohash2 = "*"
-cartopy = "*"
-
-# Scientific computing
-scipy = "*"
-networkx = "*"
-seaborn = "*"
-matplotlib = "*"
-
-# Utilities
-pyyaml = "*"
 tqdm = "*"
-geopy = "*"
-geojson = "*"
+xarray = ">=2026.0.0"
 
 [pypi-dependencies]
 # pip-installable packages (always included)
