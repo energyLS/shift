@@ -8,11 +8,20 @@ outputs:
   save_supply_nodemand: True  # Generate reference supply curve (all generators available) alongside main curve
   keep_optimization_networks: False  # Keep .nc network files from optimization (set False to save disk space)
 
+# Supply curve scenario configuration
+# Two scenarios are supported:
+#   - reserved (DEFAULT): highest-performing (best CF) renewable generators reserved for domestic
+#     electricity demand; export/HBI supply stack reduced before optimization. Requires electricity demand data.
+#   - unconstrained (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
+#     Can be generated without electricity demand data when demand data unavailable.
+supply_curve:
+  generate_unconstrained: True  # Set to True to generate unconstrained scenario as fallback
+
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [10, 200, 1000]  # Mt/year
+steel_demand_levels: [0.762, 10, 200, 1000]  # Mt/year
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
@@ -26,10 +35,21 @@ run:
 
 # Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
-  "Europe": ["DEU", "FRA", "GBR", "ITA", "ESP", "POL", "NLD", "BEL", "SWE", "NOR"]
-  "Africa_West": ["SEN", "GMB", "GIN", "SLE"]          # Senegal, Gambia, Guinea, Sierra Leone
-  "Africa_Central": ["GNQ", "GAB", "CMR", "CAF"]       # Equatorial Guinea, Gabon, Cameroon, Central African Republic
-  "Africa_East": ["KEN", "UGA", "RWA", "ETH"]          # Kenya, Uganda, Rwanda, Ethiopia
+  "Europe": ["ALB","AUT","BLR","BEL","BIH","BGR","HRV","CYP","CZE","DNK","EST","FIN","DEU","GRC","HUN","ITA","XKX","LVA","LTU","LUX","MKD","MDA","MNE","NLD","NOR","POL","ROU","SRB","SVK","SVN","SWE","CHE","TUR","UKR"]
+  "Far_West_Europe": ["FRA","GRL","ISL","IRL","PRT","ESP","GBR"]
+  "Middle_East": ["BHR","IRN","IRQ","ISR","JOR","KWT","LBN","OMN","PSE","QAT","SAU","SYR","ARE","YEM"]
+  "North_West_Africa": ["BEN","BFA","CIV","GMB","GHA","GIN","GNB","LBR","NGA","SEN","SLE","TGO","DZA","TCD","EGY","ERI","LBY","MLI","MRT","MAR","NER","SDN","TUN","ESH"]
+  "Subsaharan_Africa": ["AGO","BWA","BDI","CMR","CAF","COD","ETH","KEN","GAB","MDG","MWI","MOZ","NAM","COG","RWA","SOM","ZAF","SSD","TZA","UGA","ZMB","ZWE"]
+  "North_America": ["CAN","USA"]
+  "Eurasia": ["ARM","AZE","GEO","KAZ","KGZ","TJK","TKM","UZB","RUS"]
+  "South_America": ["BOL","BRA","COL","ECU","GUF","GUY","PRY","PER","SUR","VEN"]
+  "South_South_America": ["ARG","CHL","URY"]
+  "Central_America": ["CRI","SLV","GTM","HND","MEX","NIC","PAN","CUB","DOM","JAM","HTI"]
+  "West_Asia": ["AFG","BGD","BTN","IND","NPL","PAK","LKA"]
+  "East_Asia": ["CHN","HKG","MNG","TWN"]
+  "Pacific_Asia": ["BRN","KHM","IDN","LAO","MYS","MMR","PNG","PHL","SGP","THA","VNM"]
+  "East_East_Asia": ["JPN","KOR","PRK"]
+  "Oceania": ["AUS","NZL"]
 
 # countries: [
 #   "BI","KM","DJ","ER","ET","KE","MG","MW","MU","MZ","RW","SC","SO","SS","TZ","UG","ZM","ZW", # Africa — Eastern Africa

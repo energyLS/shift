@@ -24,6 +24,7 @@ Usage (Snakemake rule):
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Tuple
 import numpy as np
 import pandas as pd
@@ -33,11 +34,24 @@ import pypsa
 import tech_database as td
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
 
 snakemake: Any = globals().get("snakemake")
+
+if snakemake is not None and getattr(snakemake, "log", None):
+    log_path = Path(snakemake.log[0])
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
 
 def load_region_renewables_consolidated(
@@ -109,42 +123,105 @@ def load_region_renewables_consolidated(
     return technologies_dict, cf_ts, metadata
 
 
-def reserve_top_sites_by_capacity(
+def load_local_electricity_demand_mw(
+    local_demand_path: str,
+    region: str,
+) -> float:
+    """Load regional electricity demand and convert it to average MW."""
+
+    try:
+        local_df = pd.read_csv(local_demand_path)
+        region_mask = local_df["region"].str.lower() == region.lower()
+        if not region_mask.any():
+            logger.warning(f"Region '{region}' not found in local demand data")
+            return 0.0
+
+        total_energy_mwh = float(local_df[region_mask]["demand"].values[0])
+        el_share = float(local_df[region_mask]["el_share"].values[0]) / 100.0
+        local_el_demand_mwh = total_energy_mwh * el_share
+        return local_el_demand_mwh / 8760.0
+    except Exception as exc:
+        logger.warning(f"Could not load local demand for {region}: {exc}")
+        return 0.0
+
+
+def reserve_top_sites_by_highest_cf(
     technologies_dict: Dict[str, np.ndarray],
     cf_ts: xr.DataArray,
     reserve_capacity_mw: float,
+    scenario: str = "reserved",
 ) -> Dict[str, np.ndarray]:
     """
-    Reserve top sites (highest capacity) for local demand.
+    Reserve top sites (highest average capacity factor) for local demand.
 
-    Returns dict of same structure as technologies_dict, with NaN for non-reserved sites.
+    Parameters
+    ----------
+    technologies_dict : dict
+        {tech_name: capacity_array}
+    cf_ts : xr.DataArray
+        Capacity factor time series with dims (technology, class, time)
+    reserve_capacity_mw : float
+        Target MW capacity to reserve
+    scenario : str
+        "reserved" (default): apply reservation logic
+        "unconstrained": skip reservation, return None
+
+    Returns
+    -------
+    dict or None
+        Dict of same structure as technologies_dict, with NaN for non-reserved sites.
+        If scenario="unconstrained", returns None (no reservation).
     """
-    # Flatten all capacities with (tech, site) index
+    if scenario == "unconstrained":
+        logger.info(
+            "Scenario=unconstrained: skipping site reservation (all generators available)"
+        )
+        return None
+
+    if reserve_capacity_mw <= 0:
+        logger.info(
+            "No reservation applied: reserve_capacity_mw <= 0 for reserved scenario"
+        )
+        return None
+
+    # Flatten all sites with (tech, site, capacity, avg_cf) index
     reserved = {}
     total_reserved_mw = 0
 
     all_sites = []
     for tech, caps in technologies_dict.items():
         for site_idx, cap in enumerate(caps):
-            all_sites.append((tech, site_idx, cap))
+            # Calculate average capacity factor for this site
+            if tech in cf_ts.coords.get("technology", []):
+                cf_data = cf_ts.sel(technology=tech).isel({"class": site_idx})
+                avg_cf = float(cf_data.mean().values)
+            else:
+                avg_cf = 0
+            all_sites.append((tech, site_idx, cap, avg_cf))
 
-    # Sort by capacity descending
-    all_sites.sort(key=lambda x: x[2], reverse=True)
+    # Sort by average capacity factor (descending) — highest CF first
+    all_sites.sort(key=lambda x: x[3], reverse=True)
 
-    # Reserve until target capacity
+    # Reserve until target capacity (allow partial reservation on the last site)
     reserved_set = set()
-    for tech, site_idx, cap in all_sites:
+    reserved_amounts = {}
+    for tech, site_idx, cap, avg_cf in all_sites:
         if total_reserved_mw >= reserve_capacity_mw:
             break
+        remaining_mw = max(reserve_capacity_mw - total_reserved_mw, 0)
+        reserve_mw = min(cap, remaining_mw)
+        if reserve_mw <= 0:
+            continue
         reserved_set.add((tech, site_idx))
-        total_reserved_mw += cap
+        reserved_amounts[(tech, site_idx)] = reserve_mw
+        total_reserved_mw += reserve_mw
 
     # Create reserved arrays (copy dict structure, mask non-reserved with NaN)
     for tech, caps in technologies_dict.items():
         reserved_array = np.full_like(caps, np.nan, dtype=np.float32)
         for site_idx, cap in enumerate(caps):
             if (tech, site_idx) in reserved_set:
-                reserved_array[site_idx] = cap
+                reserved_array[site_idx] = reserved_amounts[(tech, site_idx)]
         reserved[tech] = reserved_array
 
     logger.info(
@@ -235,6 +312,7 @@ def add_renewable_generators(
                 continue
 
             gen_name = f"renewable_{region}_{tech}_{site_idx}"
+            reserved_cap = 0.0
             is_reserved = False
 
             # Check if this site is reserved for local demand
@@ -243,6 +321,12 @@ def add_renewable_generators(
                 if not np.isnan(reserved_cap) and reserved_cap > 0:
                     is_reserved = True
                     n_reserved += 1
+
+            # If reserved, remove reserved capacity from export supply
+            if is_reserved:
+                if reserved_cap >= p_nom_max:
+                    continue
+                p_nom_max = p_nom_max - reserved_cap
 
             # Get time series for this site
             p_max_pu = cf_data[site_idx, :]  # (time,)
@@ -373,10 +457,12 @@ def prepare_network(
     skeleton_network_path: str,
     consolidated_renewables_path: str,
     tech_costs_path: str,
+    local_demand_path: str,
     region: str,
     product: str,
     cost_year: int = 2030,
     config: dict = None,
+    scenario: str = "reserved",
 ) -> Tuple[pypsa.Network, Dict]:
     """
     Prepare regional network with consolidated renewables.
@@ -397,6 +483,9 @@ def prepare_network(
         Cost year for technology parameters
     config : dict
         Configuration dict
+    scenario : str
+        "reserved" (default): apply high-CF site reservation for domestic demand
+        "unconstrained": no reservation; full renewable stack available (fallback scenario)
 
     Returns
     -------
@@ -452,12 +541,24 @@ def prepare_network(
     )
 
     # Apply local demand reservation if configured
+    # For scenario="reserved", reserve high-CF sites; for "unconstrained", skip reservation
     reserved_techs = None
     reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
-    if reserve_capacity_mw > 0:
-        logger.info(f"Applying local demand reservation: {reserve_capacity_mw} MW")
-        reserved_techs = reserve_top_sites_by_capacity(
-            techs_dict, cf_ts, reserve_capacity_mw
+    if reserve_capacity_mw <= 0 and scenario == "reserved":
+        reserve_capacity_mw = load_local_electricity_demand_mw(
+            local_demand_path, region
+        )
+        logger.info(
+            f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
+        )
+    logger.info(f"Scenario: {scenario} (scenario flag passed from Snakemake rule)")
+    if reserve_capacity_mw > 0 or scenario == "reserved":
+        logger.info(
+            f"Applying local demand reservation for scenario={scenario}: "
+            f"target {reserve_capacity_mw} MW"
+        )
+        reserved_techs = reserve_top_sites_by_highest_cf(
+            techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
         )
 
     # Add renewable generators
@@ -475,6 +576,7 @@ def prepare_network(
         "region": region,
         "product": product,
         "cost_year": cost_year,
+        "scenario": scenario,
         "discount_rate": discount_rate,
         "renewables_metadata": metadata,
         "generators_audit": gen_audit,
@@ -507,6 +609,7 @@ if __name__ == "__main__":
         skeleton_path = snakemake.input.skeleton
         renewables_path = snakemake.input.renewables
         tech_costs_path = snakemake.input.tech_costs
+        local_demand_path = snakemake.input.local_demand
 
         region = snakemake.params.region
         product = snakemake.params.product
@@ -514,6 +617,11 @@ if __name__ == "__main__":
             snakemake.wildcards.cost_year
             if hasattr(snakemake.wildcards, "cost_year")
             else 2030
+        )
+        scenario = (
+            snakemake.wildcards.scenario
+            if hasattr(snakemake.wildcards, "scenario")
+            else "reserved"
         )
 
         output_path = snakemake.output[0]
@@ -532,6 +640,7 @@ if __name__ == "__main__":
             product = sys.argv[5]
             output_path = sys.argv[6]
             cost_year = int(sys.argv[7]) if len(sys.argv) > 7 else 2030
+            local_demand_path = None
             config_dict = {}
         else:
             raise ValueError("Provide paths and region/product as arguments")
@@ -541,14 +650,16 @@ if __name__ == "__main__":
         skeleton_network_path=skeleton_path,
         consolidated_renewables_path=renewables_path,
         tech_costs_path=tech_costs_path,
+        local_demand_path=local_demand_path,
         region=region,
         product=product,
         cost_year=cost_year,
         config=config_dict,
+        scenario=scenario,
     )
 
     # Save network
     logger.info(f"Saving network to {output_path}")
     network.export_to_netcdf(output_path)
 
-    logger.info("✓ Network preparation complete")
+    logger.info("Network preparation complete")

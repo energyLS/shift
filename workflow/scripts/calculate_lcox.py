@@ -31,6 +31,7 @@ from typing import Any
 import pypsa
 import pandas as pd
 import numpy as np
+import xarray as xr
 
 snakemake: Any = globals().get("snakemake")
 
@@ -41,15 +42,22 @@ snakemake: Any = globals().get("snakemake")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Create logs directory if it doesn't exist
-log_dir = Path("../logs")
-log_dir.mkdir(parents=True, exist_ok=True)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
-# Add file handler (writes to ../logs/calculate_lcox.log)
-file_handler = logging.FileHandler(log_dir / "calculate_lcox.log")
+stream_handler = logging.StreamHandler()
+stream_handler.setLevel(logging.INFO)
+stream_handler.setFormatter(formatter)
+logger.addHandler(stream_handler)
+
+if snakemake is not None and getattr(snakemake, "log", None):
+    log_path = Path(snakemake.log[0])
+else:
+    log_path = Path("../logs") / "calculate_lcox.log"
+
+log_path.parent.mkdir(parents=True, exist_ok=True)
+file_handler = logging.FileHandler(log_path)
 file_handler.setLevel(logging.DEBUG)
-file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(file_formatter)
+file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 # ============================================================================
@@ -345,6 +353,44 @@ def _convert_bool_attrs_to_int(network):
             attr_container[key] = int(value)
 
 
+def _patch_linopy_dataset_compat():
+    """Patch linopy's local Dataset alias to tolerate Dataset inputs.
+
+    Newer xarray releases reject `xr.Dataset(data_vars=<Dataset>)` during
+    linopy model construction. Linopy still performs this conversion when
+    transposing expressions, so we intercept xarray's Dataset constructor and
+    reinterpret `Dataset(ds)` as a Dataset copy.
+    """
+
+    try:
+        import xarray.core.dataset as xarray_dataset_module
+    except Exception as exc:
+        logger.warning(
+            f"Could not import xarray.Dataset for compatibility patch: {exc}"
+        )
+        return
+
+    dataset_cls = getattr(xarray_dataset_module, "Dataset", None)
+    if dataset_cls is None or getattr(dataset_cls, "_shift_compat_patched", False):
+        return
+
+    original_init = dataset_cls.__init__
+
+    def _dataset_init_compat(self, *args, **kwargs):
+        if args and isinstance(args[0], xr.Dataset):
+            source_ds = args[0]
+            args = ()
+            kwargs = dict(kwargs)
+            kwargs.setdefault("data_vars", source_ds.data_vars)
+            kwargs.setdefault("coords", source_ds.coords)
+            kwargs.setdefault("attrs", source_ds.attrs)
+        return original_init(self, *args, **kwargs)
+
+    _dataset_init_compat._shift_compat_patched = True  # type: ignore[attr-defined]
+    dataset_cls.__init__ = _dataset_init_compat
+    logger.info("Applied linopy/xarray Dataset compatibility patch")
+
+
 def _compute_infeasibility_diagnostics(network, output_dir):
     """Compute infeasibility diagnostics for an infeasible network and write IIS if available."""
 
@@ -436,6 +482,7 @@ def solve_network(network, config):
     """
     # Convert arrow strings to regular strings before optimization
     _convert_arrow_strings(network)
+    _patch_linopy_dataset_compat()
 
     solver_cfg = config.get("solver", {})
     solver_name = os.getenv("SHIFT_SOLVER", solver_cfg.get("name", "glpk"))
@@ -462,7 +509,9 @@ def solve_network(network, config):
 
         logger.info(f"Optimization status: {status}")
 
-        if status != 0:
+        status_ok = status == 0 or status == ("ok", "optimal") or status == "optimal"
+
+        if not status_ok:
             logger.warning(f"Non-optimal status ({status})")
             if network.objective is not None:
                 logger.info(f"  Objective value: {network.objective}")
@@ -569,9 +618,15 @@ if __name__ == "__main__":
     logger.info("=" * 70)
     # Get the specific demand level for THIS invocation (passed by Snakemake)
     product_demand_mt = float(snakemake.params.product_demand_mt)
+    scenario = (
+        snakemake.wildcards.scenario
+        if hasattr(snakemake.wildcards, "scenario")
+        else "reserved"
+    )
     logger.info(
         f"LCOX Calculation: region={snakemake.wildcards.region}, "
         f"product={snakemake.wildcards.product}, "
+        f"scenario={scenario}, "
         f"demand={product_demand_mt} Mt/year."
     )
     logger.info("=" * 70)

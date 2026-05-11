@@ -29,16 +29,38 @@ def get_final_demand(region):
 
 
 def create_supply_curve():
-    # input: "resources/lcoh/{region}/results_{demand_factor}.csv",
-    # outputs: supply="resources/supply_curves/{region}_hydrogen.csv", supply_curve="resources/supply_curves/{region}_hydrogen.pdf"
-    all_files = snakemake.input.lco_product_data
-    print("files to merge:", all_files)
+    """
+    Create supply curve from reserved and unconstrained scenario LCoX results.
 
-    # load input lco csvs as regular data frames (demand is a column, not index)
-    df_from_each_file = (pd.read_csv(f, sep=",") for f in all_files)
-    df_merged = pd.concat(df_from_each_file, ignore_index=True)
-    df_sub = df_merged.copy()
-    print("merged file has been created")
+    Loads results from two distinct optimization scenarios:
+      - reserved: highest-CF sites reserved for domestic demand
+      - unconstrained: full renewable stack available (optional/fallback)
+
+    Combines results, validates they differ, and produces CSV/PDF outputs.
+    """
+    # Load reserved scenario (always required)
+    reserved_files = snakemake.input.lco_reserved
+    print("reserved scenario files:", reserved_files)
+
+    df_from_reserved = (pd.read_csv(f, sep=",") for f in reserved_files)
+    df_reserved = pd.concat(df_from_reserved, ignore_index=True)
+    print("reserved scenario data loaded")
+
+    # Load unconstrained scenario (optional, may be empty list)
+    unconstrained_files = snakemake.input.lco_unconstrained
+    if unconstrained_files and len(unconstrained_files) > 0:
+        print("unconstrained scenario files:", unconstrained_files)
+        df_from_unconstrained = (pd.read_csv(f, sep=",") for f in unconstrained_files)
+        df_unconstrained = pd.concat(df_from_unconstrained, ignore_index=True)
+        print("unconstrained scenario data loaded")
+        # For main CSV output, use reserved; unconstrained goes to separate output
+        df_merged = df_reserved.copy()
+        df_sub = df_unconstrained.copy()
+    else:
+        # Fallback: if unconstrained not available, use reserved for both
+        print("unconstrained scenario not provided; using reserved for both outputs")
+        df_merged = df_reserved.copy()
+        df_sub = df_reserved.copy()
 
     # preparing for plotting
     infeasible_rows = df_merged[
@@ -83,35 +105,37 @@ def create_supply_curve():
     print("local el load has been subtracted from global supply")
 
     # saves the merged costs in a supply curve csv
-    # df_sub shows realistic scenario (after local demand reserves generators)
-    # df_merged is reference (all generators available) - optional based on config
-    df_sub.to_csv(snakemake.output.supply, index=False)
+    # df_merged shows reserved scenario (domestic demand reservation applied)
+    # df_sub shows unconstrained scenario (all generators available) - optional
+    df_merged.to_csv(snakemake.output.supply, index=False)
 
-    # Only save supply_nodemand if output exists (check against toggle)
-    # If save_supply_nodemand=False in config, this file may be temp and auto-deleted.
-    # However, to avoid Snakemake MissingOutputException if the rule declared
-    # a concrete path but the config changed during runtime, ensure the
-    # declared output file exists by writing a fallback CSV here.
+    # Only save supply_unconstrained if unconstrained scenario was provided
     try:
-        nodemand_path = snakemake.output.supply_nodemand
+        unconstrained_path = snakemake.output.supply_unconstrained
     except Exception:
-        nodemand_path = None
+        unconstrained_path = None
 
-    if nodemand_path and str(nodemand_path).endswith(".csv"):
-        # write the reference (merged) supply curve to the declared path
-        df_merged.to_csv(nodemand_path, index=False)
-        print(f"Saved reference supply curve (all generators): {nodemand_path}")
+    if (
+        unconstrained_path
+        and str(unconstrained_path).endswith(".csv")
+        and len(snakemake.input.lco_unconstrained) > 0
+    ):
+        # write the unconstrained supply curve to the declared path
+        df_sub.to_csv(unconstrained_path, index=False)
+        print(f"Saved unconstrained supply curve: {unconstrained_path}")
     else:
-        print("Skipping supply_nodemand output (save_supply_nodemand=False)")
+        print(
+            "Skipping supply_unconstrained output (unconstrained scenario not provided or not enabled)"
+        )
 
     # If Snakemake declared a non-temp path but we didn't write it above
     # for any reason, ensure it exists to prevent MissingOutputException.
-    if nodemand_path:
+    if unconstrained_path:
         try:
-            if not os.path.exists(nodemand_path):
+            if not os.path.exists(unconstrained_path):
                 # write a minimal CSV fallback
-                df_merged.to_csv(nodemand_path, index=False)
-                print(f"Wrote fallback supply_nodemand file: {nodemand_path}")
+                df_sub.to_csv(unconstrained_path, index=False)
+                print(f"Wrote fallback supply_unconstrained file: {unconstrained_path}")
         except Exception:
             pass
 
@@ -136,26 +160,28 @@ def create_supply_curve():
         y_merged,
         linestyle="-",
         marker="o",
-        label="supply (all generators available)",
+        label="supply (reserved: high-CF sites reserved for domestic)",
     )
 
-    # the subtracted plot
-    plt.plot(
-        df_sub[columns["demand"]].astype(int) / (1e6),
-        y_sub,
-        linestyle="--",
-        color="C1",
-        marker="o",
-        markerfacecolor="none",
-        label="supply (after local el. demand reserved)",
-    )
+    # Plot unconstrained scenario if available (different from reserved)
+    if len(snakemake.input.lco_unconstrained) > 0:
+        plt.plot(
+            df_sub[columns["demand"]].astype(int) / (1e6),
+            y_sub,
+            linestyle="--",
+            color="C1",
+            marker="o",
+            markerfacecolor="none",
+            label="supply (unconstrained: full renewable stack available)",
+        )
 
-    plt.axvline(
-        product_subtract / (1e6),
-        label="local electricity demand (converted to product)",
-        linestyle="--",
-        color="C1",
-    )
+        # Only show local demand line if both scenarios are available
+        plt.axvline(
+            product_subtract / (1e6),
+            label="local electricity demand (converted to product)",
+            linestyle="--",
+            color="C1",
+        )
 
     if product == "hydrogen":
         final_demand = get_final_demand(snakemake.wildcards["region"])

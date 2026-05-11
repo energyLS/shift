@@ -34,10 +34,13 @@ rule prepare_regional_network:
         skeleton="resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
         renewables="data/new_renewables_consolidated.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
+        local_demand="data/un_enerdata_demand_2050_final.csv",
     output:
-        network="resources/networks/base_{cost_year}_{region}_{product}.nc",
+        network="resources/networks/base_{cost_year}_{region}_{product}_{scenario}.nc",
     log:
-        "logs/prepare_regional_network_{cost_year}_{region}_{product}.log",
+        "logs/prepare_regional_network_{cost_year}_{region}_{product}_{scenario}.log",
+    wildcard_constraints:
+        scenario="reserved|unconstrained",
     threads: 1
     resources:
         mem_mb=2000,
@@ -46,7 +49,7 @@ rule prepare_regional_network:
         product="{product}",
         config=config,
     message:
-        "Preparing regional network: {wildcards.region} -> {wildcards.product} "
+        "Preparing {wildcards.scenario} regional network: {wildcards.region} -> {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
     script:
         str(SCRIPT_DIR / "prepare_regional_network.py")
@@ -56,21 +59,24 @@ if config["enable"].get("run_supply_chain", True):
 
     rule calculate_regional_lcox:
         input:
-            base_network="resources/networks/base_{cost_year}_{region}_{product}.nc",
+            base_network="resources/networks/base_{cost_year}_{region}_{product}_{scenario}.nc",
             local_demand="data/un_enerdata_demand_2050_final.csv",
         output:
-            results="resources/lco-{product}/cost_year~{cost_year}/{region}/results_{product_demand_mt}.csv",
+            results="resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/results_{product_demand_mt}.csv",
             network=(
                 temp(
-                    "resources/lco-{product}/cost_year~{cost_year}/{region}/network_{product_demand_mt}.nc"
+                    "resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
                 )
                 if not config.get("outputs", {}).get(
                     "keep_optimization_networks", False
                 )
-                else "resources/lco-{product}/cost_year~{cost_year}/{region}/network_{product_demand_mt}.nc"
+                else "resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
             ),
+        log:
+            "logs/calculate_regional_lcox_{cost_year}_{region}_{product}_{scenario}_{product_demand_mt}.log",
         wildcard_constraints:
             product_demand_mt=r"\d+(?:\.\d+)?",
+            scenario="reserved|unconstrained",
         threads: 2
         resources:
             mem_mb=4000,
@@ -78,8 +84,8 @@ if config["enable"].get("run_supply_chain", True):
             product_demand_mt="{product_demand_mt}",
             compute_iis=config.get("solver", {}).get("compute_iis", False),
         message:
-            "Calculating LCoX for {wildcards.product} in region {wildcards.region} "
-            "(product_demand={wildcards.product_demand_mt} Mt/year)."
+            "Calculating LCoX ({wildcards.scenario}) for {wildcards.product} in {wildcards.region} "
+            "(demand={wildcards.product_demand_mt} Mt/year)."
         script:
             str(SCRIPT_DIR / "calculate_lcox.py")
 
@@ -88,25 +94,35 @@ if config["enable"].get("run_supply_curve", True):
 
     rule create_supply_curve:
         input:
-            lco_product_data=lambda wildcards: expand(
-                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}/results_{{product_demand_mt}}.csv",
+            lco_reserved=lambda wildcards: expand(
+                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
                 product_demand_mt=config.get("steel_demand_levels"),
+            ),
+            lco_unconstrained=lambda wildcards: (
+                expand(
+                    f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_unconstrained/results_{{product_demand_mt}}.csv",
+                    product_demand_mt=config.get("steel_demand_levels"),
+                )
+                if config.get("supply_curve", {}).get("generate_unconstrained", False)
+                else []
             ),
             local_demand="data/un_enerdata_demand_2050_final.csv",
             steel_demand="resources/steel_production_clustered.csv",
         output:
             supply="resources/supply_curves/cost_year~{cost_year}/{region}_{product}.csv",
-            supply_nodemand=(
-                "resources/supply_curves_nodemand/cost_year~{cost_year}/{region}_{product}.csv"
-                if config.get("outputs", {}).get("save_supply_nodemand", True)
+            supply_unconstrained=(
+                "resources/supply_curves_unconstrained/cost_year~{cost_year}/{region}_{product}.csv"
+                if config.get("supply_curve", {}).get("generate_unconstrained", False)
                 else temp(
-                    "resources/supply_curves_nodemand_tmp/{region}_{product}.csv"
+                    "resources/supply_curves_unconstrained_tmp/cost_year~{cost_year}/{region}_{product}.csv"
                 )
             ),
             supply_curve="resources/supply_curves/cost_year~{cost_year}/{region}_{product}.pdf",
+        log:
+            "logs/create_supply_curve_{cost_year}_{region}_{product}.log",
         threads: 1
         message:
-            "Combining LCo{wildcards.product[0]} results (all product demand levels) to create supply curve for {wildcards.region}."
+            "Combining LCo{wildcards.product[0]} results (reserved + unconstrained scenarios) to create supply curve for {wildcards.region}."
         script:
             str(SCRIPT_DIR / "create_supply_curve.py")
 
