@@ -16,7 +16,56 @@ SCRIPT_DIR = WORKFLOW_DIR / "scripts"
 configfile: "config/config.yaml"
 
 
-trade_scenarios = Paramspace(pd.read_csv("config/trade_scenarios.csv", dtype=str))
+def _load_trade_scenarios():
+    trade_chains = config.get("trade_chains")
+    if trade_chains:
+        rows = []
+        for chain in trade_chains:
+            stages = chain.get("stages", [])
+            if len(stages) < 2:
+                raise ValueError(
+                    f"Trade chain '{chain.get('id', '<unnamed>')}' needs at least 2 stages"
+                )
+            stages_sorted = sorted(stages, key=lambda stage: int(stage.get("order", 0)))
+            rows.append(
+                {
+                    "chain_id": str(chain["id"]),
+                    "cost_year": str(chain["cost_year"]),
+                    "interone": str(stages_sorted[0]["output_commodity"]),
+                    "intertwo": str(
+                        stages_sorted[1].get(
+                            "process_label", stages_sorted[1]["output_commodity"]
+                        )
+                    ),
+                    "final": str(chain["final_product"]),
+                    "scenario": str(chain.get("scenario", "default")),
+                }
+            )
+        return Paramspace(pd.DataFrame(rows, dtype=str))
+
+    return Paramspace(pd.read_csv("config/trade_scenarios.csv", dtype=str))
+
+
+trade_scenarios = _load_trade_scenarios()
+
+
+def _derive_supply_curve_products():
+    trade_chains = config.get("trade_chains")
+    if not trade_chains:
+        return ["steel"]
+
+    products = set()
+    for chain in trade_chains:
+        for stage in chain.get("stages", []):
+            output_commodity = stage.get("output_commodity")
+
+            if output_commodity:
+                products.add(str(output_commodity))
+
+    return sorted(products) if products else ["steel"]
+
+
+SUPPLY_CURVE_PRODUCTS = _derive_supply_curve_products()
 
 
 wildcard_constraints:

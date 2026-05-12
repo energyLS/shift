@@ -24,6 +24,7 @@ Outputs (generated for each demand level):
   - network_{demand_level}.nc: Optimized network
 """
 
+import copy
 import logging
 import os
 from pathlib import Path
@@ -59,6 +60,84 @@ file_handler = logging.FileHandler(log_path)
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
+
+# ============================================================================
+# STAGE SLICING (for independent per-stage solves, Option B semantics)
+# ============================================================================
+
+
+def build_stage_subnetwork(n: pypsa.Network, process_carrier: str) -> pypsa.Network:
+    """Return a deep copy of the network pruned to links with carrier == process_carrier.
+
+    Keeps:
+    - Links whose `carrier` equals `process_carrier`.
+    - Generators/stores attached to buses referenced by those links (e.g., raw resource suppliers).
+    - Removes other conversion links and any isolated buses.
+
+    The returned subnetwork is suitable for independent per-stage marginal solves (Option B semantics).
+    No upstream pricing is performed; upstream inputs are treated as free resources or absent.
+    """
+    sub = copy.deepcopy(n)
+
+    # Remove links that are not the target process carrier
+    for link_name in list(sub.links.index):
+        carrier = sub.links.loc[link_name, "carrier"]
+        if carrier != process_carrier:
+            sub.remove("Link", link_name)
+
+    # Remove generators not attached to remaining buses
+    for gen_name in list(sub.generators.index):
+        gen_bus = sub.generators.loc[gen_name, "bus"]
+        if gen_bus not in sub.buses.index:
+            try:
+                sub.remove("Generator", gen_name)
+            except Exception:
+                pass
+
+    # Remove stores not attached to remaining buses
+    for store_name in list(sub.stores.index):
+        store_bus = sub.stores.loc[store_name, "bus"]
+        if store_bus not in sub.buses.index:
+            try:
+                sub.remove("Store", store_name)
+            except Exception:
+                pass
+
+    # Remove isolated buses (no generators, no links, no stores)
+    for bus_name in list(sub.buses.index):
+        has_gen = (
+            len(sub.generators.index[sub.generators["bus"] == bus_name]) > 0
+            if len(sub.generators) > 0
+            else False
+        )
+        has_store = (
+            len(sub.stores.index[sub.stores["bus"] == bus_name]) > 0
+            if len(sub.stores) > 0
+            else False
+        )
+        has_link = False
+        if len(sub.links) > 0:
+            for link_name in sub.links.index:
+                row = sub.links.loc[link_name]
+                for bcol in ["bus0", "bus1", "bus2", "bus3"]:
+                    if bcol in row.index and row.get(bcol) == bus_name:
+                        has_link = True
+                        break
+                if has_link:
+                    break
+
+        if not (has_gen or has_store or has_link):
+            try:
+                sub.remove("Bus", bus_name)
+            except Exception:
+                pass
+
+    logger.info(
+        f"Stage subnetwork for process={process_carrier}: {len(sub.buses)} buses, "
+        f"{len(sub.generators)} gens, {len(sub.links)} links, {len(sub.stores)} stores"
+    )
+    return sub
+
 
 # ============================================================================
 # DEMAND LOADING
@@ -623,16 +702,20 @@ if __name__ == "__main__":
         if hasattr(snakemake.wildcards, "scenario")
         else "reserved"
     )
+
+    # Get process_label from params (network is already sliced at preparation stage)
+    process_label = snakemake.params.process_label
+
     logger.info(
         f"LCOX Calculation: region={snakemake.wildcards.region}, "
-        f"product={snakemake.wildcards.product}, "
+        f"process_label={process_label}, "
         f"scenario={scenario}, "
         f"demand={product_demand_mt} Mt/year."
     )
     logger.info("=" * 70)
 
-    # Load pre-prepared base network once
-    logger.info("Loading base network...")
+    # Load pre-prepared base network (already sliced to stage at preparation)
+    logger.info("Loading base network (pre-sliced to stage)...")
     base_network = pypsa.Network(snakemake.input.base_network)
     logger.info(
         f"Network loaded: {len(base_network.buses)} buses, "
@@ -658,7 +741,9 @@ if __name__ == "__main__":
     # ==================== NETWORK SETUP ====================
     # Create a copy of base network
     network = base_network.copy()
-    network.name = f"LCOX-{snakemake.wildcards.region}-{snakemake.wildcards.product}-{product_demand_mt}"
+    network.name = (
+        f"LCOX-{snakemake.wildcards.region}-{process_label}-{product_demand_mt}"
+    )
 
     # Ensure snapshot year is set by upstream network preparation;
     # do not override if already set.
@@ -701,9 +786,7 @@ if __name__ == "__main__":
     # Add hourly load for steel output
     # (This also sets HBI storage e_initial inside add_loads_to_network)
     logger.info("Adding hourly load to network...")
-    add_loads_to_network(
-        network=network, product=snakemake.wildcards.product, demands=scaled_demands
-    )
+    add_loads_to_network(network=network, product=process_label, demands=scaled_demands)
 
     # Debug: Print network structure
     logger.info(
@@ -726,7 +809,7 @@ if __name__ == "__main__":
     # Solve
     logger.info("Optimizing network...")
     if snakemake.config.get("debug_network_inspection", False):
-        inspect_network(network, snakemake.wildcards.product)  # Debug inspection
+        inspect_network(network, process_label)  # Debug inspection
     try:
         solve_network(network, snakemake.config)
         optimization_status = (
@@ -749,7 +832,7 @@ if __name__ == "__main__":
     logger.info("Extracting results...")
     results_df = extract_lcox(
         network=network,
-        product=snakemake.wildcards.product,
+        product=process_label,
         demands=scaled_demands,
     )
 
@@ -761,18 +844,13 @@ if __name__ == "__main__":
     results_df.to_csv(result_file, index=False)
     logger.info(f"Results saved: {result_file}")
 
-    # Save network only if optimization succeeded
-    if optimization_status == "optimal":
-        try:
-            _convert_bool_attrs_to_int(network)
-            network.export_to_netcdf(network_file)
-            logger.info(f"Network saved: {network_file}")
-        except Exception as e:
-            logger.warning(f"Could not save network: {e}")
-    else:
-        logger.warning(
-            f"Skipping network export due to solver status: {optimization_status}"
-        )
+    # Always export network (Snakemake requires output files to exist)
+    try:
+        _convert_bool_attrs_to_int(network)
+        network.export_to_netcdf(network_file)
+        logger.info(f"Network saved: {network_file}")
+    except Exception as e:
+        logger.warning(f"Could not save network: {e}")
 
     logger.info("=" * 70)
 

@@ -164,17 +164,17 @@ def reserve_top_sites_by_highest_cf(
         Target MW capacity to reserve
     scenario : str
         "reserved" (default): apply reservation logic
-        "unconstrained": skip reservation, return None
+        "unreserved": skip reservation, return None
 
     Returns
     -------
     dict or None
         Dict of same structure as technologies_dict, with NaN for non-reserved sites.
-        If scenario="unconstrained", returns None (no reservation).
+        If scenario="unreserved", returns None (no reservation).
     """
-    if scenario == "unconstrained":
+    if scenario == "unreserved":
         logger.info(
-            "Scenario=unconstrained: skipping site reservation (all generators available)"
+            "Scenario=unreserved: skipping site reservation (all generators available)"
         )
         return None
 
@@ -463,9 +463,9 @@ def prepare_network(
     cost_year: int = 2030,
     config: dict = None,
     scenario: str = "reserved",
+    process_label: str = None,
 ) -> Tuple[pypsa.Network, Dict]:
-    """
-    Prepare regional network with consolidated renewables.
+    """Prepare regional network with consolidated renewables.
 
     Parameters
     ----------
@@ -485,7 +485,10 @@ def prepare_network(
         Configuration dict
     scenario : str
         "reserved" (default): apply high-CF site reservation for domestic demand
-        "unconstrained": no reservation; full renewable stack available (fallback scenario)
+        "unreserved": no reservation; full renewable stack available (fallback scenario)
+    process_label : str, optional
+        If provided, slice skeleton to this stage only (e.g., "hbi", "steel")
+        This enables independent per-stage solves for Option B semantics.
 
     Returns
     -------
@@ -498,7 +501,9 @@ def prepare_network(
         config = {}
 
     logger.info("=" * 70)
-    logger.info(f"Preparing network: region={region}, product={product}")
+    logger.info(
+        f"Preparing network: region={region}, product={product}, process_label={process_label}"
+    )
     logger.info("=" * 70)
 
     # Load skeleton
@@ -506,9 +511,74 @@ def prepare_network(
     network = pypsa.Network(skeleton_network_path)
     network.name = f"base_{cost_year}_{region}_{product}"
 
+    # STAGE SLICING: if process_label provided, slice skeleton to that stage only
+    # Note: previously we skipped slicing when product == process_label (because
+    # Snakemake params set `product` to the same value). Always slice when a
+    # `process_label` is supplied to ensure per-stage networks are produced.
+    if process_label:
+        logger.info(f"Slicing skeleton to process_label={process_label}")
+
+        # Define which links/stores to keep for each stage
+        stage_components = {
+            "hbi": {
+                "keep_links": ["electrolyzer", "dri"],
+                "keep_stores": ["h2_storage", "hbi_storage"],
+                "remove_links": ["eaf"],
+                "add_hbi_input": False,
+            },
+            "steel": {
+                "keep_links": ["eaf"],
+                "keep_stores": [],
+                "remove_links": ["electrolyzer", "dri"],
+                "add_hbi_input": True,  # Add HBI as external free input
+            },
+        }
+
+        if process_label in stage_components:
+            spec = stage_components[process_label]
+
+            # Remove links not in keep_links
+            for link_name in list(network.links.index):
+                if link_name not in spec["keep_links"]:
+                    try:
+                        network.remove("Link", link_name)
+                        logger.info(f"Removed link: {link_name}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove link {link_name}: {e}")
+
+            # Remove stores not in keep_stores
+            for store_name in list(network.stores.index):
+                if store_name not in spec["keep_stores"]:
+                    try:
+                        network.remove("Store", store_name)
+                        logger.info(f"Removed store: {store_name}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove store {store_name}: {e}")
+
+            # Add HBI as free input if this is steel stage
+            if spec["add_hbi_input"]:
+                if "hbi" not in network.buses.index:
+                    network.add("Bus", "hbi", carrier="hbi", unit="t/h")
+                network.add(
+                    "Generator",
+                    "hbi_input",
+                    bus="hbi",
+                    carrier="hbi",
+                    p_nom=1e10,  # Unlimited
+                    marginal_cost=0,  # Free for stage solve
+                )
+                logger.info("Added HBI as free external input (steel stage)")
+
+            logger.info(
+                f"Skeleton sliced to {process_label}: {len(network.links)} links, {len(network.stores)} stores"
+            )
+        else:
+            logger.warning(
+                f"process_label={process_label} not recognized; keeping full skeleton"
+            )
+
     # Set region-specific discount rate
     interest_rates = config.get("interest_rate", {})
-
     # Get region-specific rate, or fall back to default
     if isinstance(interest_rates.get(region), dict):
         # Handle legacy component-level structure (flatten to use default)
@@ -534,14 +604,22 @@ def prepare_network(
     logger.info("Loading technology costs...")
     tech_costs = td.load_tech_costs(tech_costs_path)
 
-    # Load consolidated renewables for region
-    logger.info("Loading consolidated renewables...")
-    techs_dict, cf_ts, metadata = load_region_renewables_consolidated(
-        consolidated_renewables_path, region
-    )
-
+    # Load consolidated renewables for region (only if this stage needs renewables)
+    # HBI stage needs renewables; steel stage does not (uses grid)
+    if process_label == "steel":
+        logger.info(
+            "Steel stage detected: skipping renewable generators (uses grid electricity)"
+        )
+        techs_dict = {}
+        cf_ts = None
+        metadata = {}
+    else:
+        logger.info("Loading consolidated renewables...")
+        techs_dict, cf_ts, metadata = load_region_renewables_consolidated(
+            consolidated_renewables_path, region
+        )
     # Apply local demand reservation if configured
-    # For scenario="reserved", reserve high-CF sites; for "unconstrained", skip reservation
+    # For scenario="reserved", reserve high-CF sites; for "unreserved", skip reservation
     reserved_techs = None
     reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
     if reserve_capacity_mw <= 0 and scenario == "reserved":
@@ -561,12 +639,21 @@ def prepare_network(
             techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
         )
 
-    # Add renewable generators
+    # Add renewable generators (only if techs_dict is not empty)
     logger.info("Adding renewable generators...")
-    gen_audit = add_renewable_generators(
-        network, region, techs_dict, cf_ts, tech_costs, config, reserved_techs
-    )
-
+    if techs_dict:
+        gen_audit = add_renewable_generators(
+            network, region, techs_dict, cf_ts, tech_costs, config, reserved_techs
+        )
+    else:
+        logger.info(
+            "Skipping renewable generator addition (no technologies for this stage)"
+        )
+        gen_audit = {
+            "n_generators_added": 0,
+            "total_capacity_mw": 0,
+            "n_reserved": 0,
+        }
     # Apply product cutoff
     logger.info(f"Applying product cutoff for {product}...")
     apply_product_cutoff(network, product)
@@ -595,6 +682,136 @@ def prepare_network(
     logger.info(f"  - Capacity: {gen_audit['total_capacity_mw']:.0f} MW")
     logger.info("=" * 70)
 
+    # Stage-slicing helper: produce a subnetwork containing only the specified process carrier
+    def build_stage_subnetwork(n: pypsa.Network, process_carrier: str) -> pypsa.Network:
+        """Return a deep copy of the network pruned to links with carrier == process_carrier
+
+        Keeps:
+        - Links whose `carrier` equals `process_carrier`.
+        - Generators/stores attached to buses referenced by those links (e.g., raw resource suppliers).
+        - Removes other conversion links and any isolated buses.
+
+        The returned subnetwork is suitable for independent per-stage marginal solves (Option B semantics).
+        """
+        import copy
+
+        sub = copy.deepcopy(n)
+
+        # Remove links that are not the target process carrier
+        for link_name in list(sub.links.index):
+            carrier = sub.links.loc[link_name, "carrier"]
+            if carrier != process_carrier:
+                sub.remove("Link", link_name)
+
+        # Remove generators not attached to remaining buses
+        for gen_name in list(sub.generators.index):
+            gen_bus = sub.generators.loc[gen_name, "bus"]
+            if gen_bus not in sub.buses.index:
+                try:
+                    sub.remove("Generator", gen_name)
+                except Exception:
+                    pass
+
+        # Remove stores not attached to remaining buses
+        for store_name in list(sub.stores.index):
+            store_bus = sub.stores.loc[store_name, "bus"]
+            if store_bus not in sub.buses.index:
+                try:
+                    sub.remove("Store", store_name)
+                except Exception:
+                    pass
+
+        # Remove isolated buses (no generators, no links, no stores)
+        for bus_name in list(sub.buses.index):
+            has_gen = (
+                len(sub.generators.index[sub.generators["bus"] == bus_name]) > 0
+                if len(sub.generators) > 0
+                else False
+            )
+            has_store = (
+                len(sub.stores.index[sub.stores["bus"] == bus_name]) > 0
+                if len(sub.stores) > 0
+                else False
+            )
+            has_link = False
+            if len(sub.links) > 0:
+                # check bus presence in any of the bus columns
+                for link_name in sub.links.index:
+                    row = sub.links.loc[link_name]
+                    for bcol in ["bus0", "bus1", "bus2", "bus3"]:
+                        if bcol in row.index and row.get(bcol) == bus_name:
+                            has_link = True
+                            break
+                    if has_link:
+                        break
+
+            if not (has_gen or has_store or has_link):
+                try:
+                    sub.remove("Bus", bus_name)
+                except Exception:
+                    pass
+
+        return sub
+
+    # Validate carrier semantics before returning (buses ≠ process carriers; links == process carriers)
+    def validate_network_carriers(n: pypsa.Network):
+        """Validate that buses are commodity carriers and links are process carriers.
+
+        Raises ValueError on semantic violations to prevent accidental upstream pricing.
+        """
+        # Define expected process carriers (conversion technologies)
+        process_carriers = set(
+            [
+                "electrolysis",
+                "direct_reduction_furnace",
+                "electric_arc_furnace",
+            ]
+        )
+
+        # Buses must not use process carriers
+        invalid_buses = []
+        for bus_name, row in n.buses.iterrows():
+            carrier = row.get("carrier")
+            if carrier in process_carriers:
+                invalid_buses.append((bus_name, carrier))
+
+        if invalid_buses:
+            msgs = ", ".join([f"{b}({c})" for b, c in invalid_buses])
+            raise ValueError(
+                f"Invalid bus carriers found (process carriers on buses): {msgs}"
+            )
+
+        # Links should use process carriers; flag links that look like conversions but use commodity carriers.
+        # Exclude storage-related links (charge/discharge) which legitimately use commodity carriers.
+        storage_link_keywords = ("charge", "discharge", "storage")
+        invalid_links = []
+        for link_name, row in n.links.iterrows():
+            carrier = row.get("carrier")
+            # Skip storage-related links (e.g., batt_charge, batt_discharge)
+            if any(kw in link_name.lower() for kw in storage_link_keywords):
+                continue
+            if carrier not in process_carriers:
+                # A link that looks like a conversion should be a process carrier.
+                # We conservatively flag any link that has multiple buses (bus0 and bus1) and isn't a process.
+                n_buses = 0
+                for bcol in ("bus0", "bus1", "bus2", "bus3"):
+                    if bcol in row and not pd.isna(row.get(bcol)):
+                        n_buses += 1
+                if n_buses >= 2:
+                    invalid_links.append((link_name, carrier))
+
+        if invalid_links:
+            msgs = ", ".join([f"{link}({carrier})" for link, carrier in invalid_links])
+            raise ValueError(
+                f"Invalid link carriers found (conversion links missing process carriers): {msgs}"
+            )
+
+    try:
+        validate_network_carriers(network)
+    except Exception as exc:
+        logger.error(f"Carrier validation failed: {exc}")
+        raise
+
     return network, audit_info
 
 
@@ -613,6 +830,11 @@ if __name__ == "__main__":
 
         region = snakemake.params.region
         product = snakemake.params.product
+        process_label = (
+            snakemake.params.process_label
+            if hasattr(snakemake.params, "process_label")
+            else None
+        )
         cost_year = (
             snakemake.wildcards.cost_year
             if hasattr(snakemake.wildcards, "cost_year")
@@ -640,6 +862,7 @@ if __name__ == "__main__":
             product = sys.argv[5]
             output_path = sys.argv[6]
             cost_year = int(sys.argv[7]) if len(sys.argv) > 7 else 2030
+            process_label = sys.argv[8] if len(sys.argv) > 8 else None
             local_demand_path = None
             config_dict = {}
         else:
@@ -656,6 +879,7 @@ if __name__ == "__main__":
         cost_year=cost_year,
         config=config_dict,
         scenario=scenario,
+        process_label=process_label,
     )
 
     # Save network

@@ -65,7 +65,7 @@ def _add_carriers(network: pypsa.Network) -> None:
         "grid_electricity": "Grid electricity import",
     }
     for carrier_name, description in carriers.items():
-        network.add("Carrier", carrier_name)
+        network.add("Carrier", carrier_name, description=description)
 
 
 def _add_buses(network: pypsa.Network) -> None:

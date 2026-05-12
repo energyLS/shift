@@ -12,16 +12,41 @@ outputs:
 # Two scenarios are supported:
 #   - reserved (DEFAULT): highest-performing (best CF) renewable generators reserved for domestic
 #     electricity demand; export/HBI supply stack reduced before optimization. Requires electricity demand data.
-#   - unconstrained (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
+#   - unreserved (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
 #     Can be generated without electricity demand data when demand data unavailable.
 supply_curve:
-  generate_unconstrained: True  # Set to True to generate unconstrained scenario as fallback
+  generate_unreserved: False  # Set to True to generate unreserved scenario as fallback
+
+
+# Config-native trade chain definitions (lean migration path).
+# This seeds the workflow with an explicit chain model while keeping legacy
+# Snakefile downstream wiring functional for now.
+trade_chains:
+  - id: default_2050
+    cost_year: 2050
+    scenario: default
+    final_product: steel
+    stages:
+      - order: 1
+        input_commodity: iron_ore
+        output_commodity: hbi
+        process_label: dri
+        assumptions:
+          - iron_ore_is_traded
+          - hbi_is_traded
+      - order: 2
+        input_commodity: hbi
+        output_commodity: steel
+        process_label: eaf-grid
+        assumptions:
+          - hbi_is_traded
+          - steel_is_final_sink
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.762, 10, 200, 1000]  # Mt/year
+steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
 hydrogen_storage_cost: False
 iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
