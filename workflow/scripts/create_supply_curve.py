@@ -1,9 +1,15 @@
 import os
+import sys
 from typing import Any
 import pandas as pd
 import matplotlib
 import matplotlib.pyplot as plt
 import pypsa
+
+# Add workflow/scripts to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+
+from trade_chain_utils import route_label_for_product
 
 snakemake: Any = globals().get("snakemake")
 
@@ -97,22 +103,8 @@ def create_supply_curve():
     stage_ratios = get_stage_ratios_from_skeleton()
     stage_meta = get_stage_metadata(product, stage_ratios)
 
-    def find_process_label_for_product(config, product_name):
-        chains = config.get("trade_chains") or []
-        for chain in chains:
-            for stage in chain.get("stages", []):
-                if stage.get("output_commodity") == product_name:
-                    return stage.get("process_label")
-        return None
-
-    # process_label derived from config (which stage produces this product)
-    process_label_config = (
-        find_process_label_for_product(snakemake.config, product) or product
-    )
-    # detect whether this script was invoked per-stage (Snakemake wildcard `process_label`) or as full-product
-    invoked_with_process_label = hasattr(snakemake.wildcards, "process_label")
-    # For later tagging use the config-derived label
-    process_label = process_label_config
+    # route_label is derived from config to locate upstream LCoX files for this product
+    route_label = route_label_for_product(snakemake.config, product) or product
 
     reserved_files = snakemake.input.lco_reserved
     print("reserved scenario files:", reserved_files)
@@ -142,43 +134,15 @@ def create_supply_curve():
     df_sub = df_sub.drop(infeasible_rows)
     print("deleted infeasible rows to prepare for plotting")
 
-    df_all_demand = pd.read_csv(snakemake.input.local_demand, header=0)
-    df_local_demand = df_all_demand.loc[
-        df_all_demand["region"] == snakemake.wildcards["region"]
-    ]
-
-    if product == "hydrogen":
-        conversion_factor = 0.75
-    elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
-        conversion_factor = 1 / snakemake.config["electricity_steel_ratio"]
-    else:
-        raise ValueError(f"product {product} not recognized for supply curve plotting")
-
-    local_load = float(
-        df_local_demand["demand"].values[0]
-        * df_local_demand["el_share"].values[0]
-        / 100
-    )
-    product_subtract = local_load * conversion_factor
-
-    print(f"local el load is: {local_load} MWh")
-    print(
-        f"product substraction due to local el load is: {product_subtract} {columns['product_unit']}"
-    )
-
-    df_sub[columns["demand"]] = df_sub[columns["demand"]].subtract(product_subtract)
-    df_sub.loc[df_sub[columns["demand"]] < 0, columns["demand"]] = 0
-    print("local el load has been subtracted from global supply")
-
     df_merged["stage_input_commodity"] = stage_meta["stage_input_commodity"]
     df_merged["stage_output_commodity"] = stage_meta["stage_output_commodity"]
     df_merged["stage_input_per_output"] = stage_meta["stage_input_per_output"]
-    df_merged["process_label"] = process_label
+    df_merged["route_label"] = route_label
 
     df_sub["stage_input_commodity"] = stage_meta["stage_input_commodity"]
     df_sub["stage_output_commodity"] = stage_meta["stage_output_commodity"]
     df_sub["stage_input_per_output"] = stage_meta["stage_input_per_output"]
-    df_sub["process_label"] = process_label
+    df_sub["route_label"] = route_label
 
     df_merged["stage_marginal_cost_per_unit"] = df_merged[
         columns["cost per unit"]
@@ -187,33 +151,10 @@ def create_supply_curve():
         float
     )
 
-    # For per-stage runs (when invoked with Snakemake wildcard `process_label`)
-    # we must NOT include upstream input prices. Those are only for full-chain product
-    # aggregation. If this script is invoked as a stage, set upstream input costs
-    # to zero to preserve Option B semantics.
-    if invoked_with_process_label:
-        iron_ore_total_cost = 0
-    else:
-        if product == "steel":
-            ore_ratio = stage_ratios["ore_per_steel"]
-            if ore_ratio is None:
-                ore_ratio = snakemake.config["iron_ore"]["ore_to_steel_ratio"]
-            iron_ore_total_cost = (
-                snakemake.config["iron_ore"]["marginal_cost"] * ore_ratio
-            )
-        elif product == "hbi":
-            ore_ratio = stage_ratios["ore_per_hbi"]
-            if ore_ratio is None:
-                ore_ratio = snakemake.config["iron_ore"]["ore_to_steel_ratio"]
-            iron_ore_total_cost = (
-                snakemake.config["iron_ore"]["marginal_cost"] * ore_ratio
-            )
-        elif product in ["hydrogen", "eaf", "eaf-grid"]:
-            iron_ore_total_cost = 0
-        else:
-            raise ValueError(
-                f"product {product} not recognized for supply curve plotting"
-            )
+    # Supply curves are stage-marginal only; no upstream pricing is included.
+    # This preserves Option B semantics where each stage is independently cost-optimized
+    # and the trade model assembles the full chain cost.
+    iron_ore_total_cost = 0
 
     df_merged["iron_ore_cost_per_unit"] = iron_ore_total_cost
     df_sub["iron_ore_cost_per_unit"] = iron_ore_total_cost
@@ -274,12 +215,6 @@ def create_supply_curve():
             marker="o",
             markerfacecolor="none",
             label="supply (unreserved)",
-        )
-        plt.axvline(
-            product_subtract / (1e6),
-            label="local electricity demand (converted to product)",
-            linestyle="--",
-            color="C1",
         )
 
     if product == "steel":
@@ -355,29 +290,9 @@ if snakemake is None:
     )
 
 
-# Derive product from process_label (new approach)
-def _derive_product_from_process_label(process_label, config):
-    """Reverse-lookup: process_label → output_commodity (product)."""
-    chains = config.get("trade_chains") or []
-    for chain in chains:
-        stages = chain.get("stages", [])
-        for s in stages:
-            if s.get("process_label") == process_label:
-                return s.get("output_commodity")
-    # Fallback: if no chain found, assume process_label is product
-    return process_label
-
-
-# Get process_label from wildcards; fallback to product for backward compatibility
-if hasattr(snakemake.wildcards, "process_label"):
-    process_label = snakemake.wildcards["process_label"]
-    product = _derive_product_from_process_label(process_label, snakemake.config)
-    print(f"Using process_label={process_label}, derived product={product}")
-else:
-    # Backward compatibility: use product wildcard
-    product = snakemake.wildcards["product"]
-    process_label = None
-    print(f"Using product={product} (no process_label provided)")
+# Get product from wildcards (product-labeled contract)
+product = snakemake.wildcards["product"]
+print(f"Creating supply curve for product={product}")
 
 if product == "hydrogen":
     columns = {

@@ -6,7 +6,7 @@ enable:
 # Output toggles for Step 0/1 (greenfield supply curve generation)
 outputs:
   save_supply_nodemand: True  # Generate reference supply curve (all generators available) alongside main curve
-  keep_optimization_networks: False  # Keep .nc network files from optimization (set False to save disk space)
+  keep_optimization_networks: True  # Keep .nc network files from optimization (set False to save disk space)
 
 # Supply curve scenario configuration
 # Two scenarios are supported:
@@ -18,29 +18,30 @@ supply_curve:
   generate_unreserved: False  # Set to True to generate unreserved scenario as fallback
 
 
-# Config-native trade chain definitions (lean migration path).
-# This seeds the workflow with an explicit chain model while keeping legacy
-# Snakefile downstream wiring functional for now.
+# Config-native trade chain definitions
+# Defines the commodity transformation chain with ordered stages and process labels
 trade_chains:
-  - id: default_2050
-    cost_year: 2050
-    scenario: default
-    final_product: steel
-    stages:
-      - order: 1
-        input_commodity: iron_ore
-        output_commodity: hbi
-        process_label: dri
-        assumptions:
-          - iron_ore_is_traded
-          - hbi_is_traded
-      - order: 2
-        input_commodity: hbi
-        output_commodity: steel
-        process_label: eaf-grid
-        assumptions:
-          - hbi_is_traded
-          - steel_is_final_sink
+  id: default_2050
+  cost_year: 2050
+  scenario: default
+  final_product: steel
+  tradeable_commodities: [iron_ore, hbi]
+  stages:
+    1:
+      material_inputs: []
+      energy_inputs: [renewable_electricity]
+      output_commodity: hydrogen
+      process_label: electrolysis
+    2:
+      material_inputs: [iron_ore, H2]
+      energy_inputs: [renewable_electricity]
+      output_commodity: hbi
+      process_label: dri
+    3:
+      material_inputs: [hbi]
+      energy_inputs: [grid_electricity]
+      output_commodity: steel
+      process_label: eaf-grid
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
@@ -48,7 +49,6 @@ trade_chains:
 # Values represent different production scales
 steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
 hydrogen_storage_cost: False
-iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
 
 run:
   # prefix: ""
@@ -117,20 +117,28 @@ costs:
 interest_rate: 
   default: 0.05
   # Regional discount rates (override default for specific regions):
-  # Europe: 0.04
-  # Africa_West: 0.07
+  Central_America: 0.11
+  East_Asia: 0.09
+  East_East_Asia: 0.08
+  Eurasia: 0.10
+  Europe: 0.10
+  Far_West_Europe: 0.08
+  Middle_East: 0.12
+  North_America: 0.08
+  North_West_Africa: 0.12
+  Oceania: 0.07
+  Pacific_Asia: 0.10
+  South_America: 0.11
+  South_South_America: 0.10
+  Subsaharan_Africa: 0.11
+  West_Asia: 0.11
   
 
 part_load:
   electrolysis: 0.0
-  direct reduction furnace: 0.0
+  direct reduction furnace: 0.9
   electric arc furnace: 0.0
   # add part load limitations by naming the carrier of links
-
-electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
-embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
-pv_p_nom_max_cor: 0.1
-onwind_p_nom_max_cor: 0.1
 
 iron_ore:
   marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)

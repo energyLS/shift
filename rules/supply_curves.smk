@@ -4,44 +4,57 @@ Builds technology inputs, prepares regional PyPSA networks, solves regional LCoX
 problems, and aggregates the resulting supply curves.
 """
 
+from trade_chain_utils import route_label_for_product, get_stage_groups, get_trade_chain
 
-# Helper: find the process_label for a product from config trade_chains
+
+# Helper: find the internal route label for a product from config trade_chains
 def _process_label_for_product(product):
-    chains = config.get("trade_chains") or []
-    for chain in chains:
-        stages = chain.get("stages", [])
-        for s in stages:
-            if s.get("output_commodity") == product:
-                return s.get("process_label")
-    return product
+    return route_label_for_product(config, product)
 
 
-# Helper: find the product that a process_label stage belongs to
-def _product_for_process_label(process_label):
-    """Return the product (output_commodity) for a given process_label."""
-    chains = config.get("trade_chains") or []
-    for chain in chains:
-        stages = chain.get("stages", [])
-        for s in stages:
-            if s.get("process_label") == process_label:
-                return s.get("output_commodity")
-    # Fallback: treat process_label as product itself
-    return process_label
+def _wacc_for_region(region):
+    interest_rates = config.get("interest_rate", {})
+    if isinstance(interest_rates.get(region), dict):
+        rate = interest_rates[region].get(
+            "default", interest_rates.get("default", 0.07)
+        )
+    else:
+        rate = interest_rates.get(region, interest_rates.get("default", 0.07))
+    return f"{float(rate):.2f}"
 
 
-# Helper: get all process_labels (stages) for a given product
-def _process_labels_for_product(product_name):
-    """Return list of process_labels that output to product_name."""
-    chains = config.get("trade_chains") or []
-    labels = []
-    for chain in chains:
-        stages = chain.get("stages", [])
-        for s in stages:
-            if s.get("output_commodity") == product_name:
-                labels.append(s.get("process_label"))
-    return (
-        labels if labels else [product_name]
-    )  # Fallback: if no chain, use product name
+def _product_uses_renewables(product):
+    """Check if a product's stage group uses renewable_electricity.
+
+    Products with renewable inputs should generate reserved/unreserved scenarios.
+    Products with only grid electricity should skip the unreserved variant.
+    """
+    chain = get_trade_chain(config)
+    route_label = route_label_for_product(config, product)
+
+    # Find the stage group for this product
+    for group in get_stage_groups(chain):
+        if group["label"] == route_label:
+            # Check if any stage in the group uses renewable_electricity
+            for stage in group["stages"]:
+                energy_inputs = stage.get("energy_inputs", [])
+                if "renewable_electricity" in energy_inputs:
+                    return True
+            return False
+
+    # Default to True if product not found (conservative)
+    return True
+
+
+def _all_supply_curve_targets():
+    targets = []
+    for region in config["regions"]:
+        wacc = _wacc_for_region(region)
+        for product in SUPPLY_CURVE_PRODUCTS:
+            targets.append(
+                f"resources/supply_curves/cost_year~2050/{region}_wacc_{wacc}_marginal_cost_{product}.csv"
+            )
+    return targets
 
 
 rule retrieve_cost_data:
@@ -56,11 +69,16 @@ rule retrieve_cost_data:
         str(SCRIPT_DIR / "tech_database.py")
 
 
-rule build_steel_skeleton:
+rule build_generic_model:
     input:
         costs="resources/technology_data/costs_{cost_year}.csv",
     output:
-        skeleton="resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
+        skeleton="resources/generic_production_model/generic_model_{cost_year}.nc",
+        # Also produce one skeleton per detected stage-group so Snakemake tracks them
+        group_skeletons=[
+            f"resources/generic_production_model/generic_model_{{cost_year}}_{(g.get('label') or 'group')}.nc"
+            for g in get_stage_groups(get_trade_chain(config))
+        ],
     threads: 1
     resources:
         mem_mb=1000,
@@ -70,28 +88,34 @@ rule build_steel_skeleton:
 
 rule prepare_regional_network:
     input:
-        skeleton="resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
+        # Prefer a per-stage-group skeleton when a route_label exists for the product;
+        # otherwise fall back to the legacy full skeleton.
+        skeleton=lambda wildcards: (
+            f"resources/generic_production_model/generic_model_{wildcards.cost_year}_{_process_label_for_product(wildcards.product)}.nc"
+            if _process_label_for_product(wildcards.product)
+            else f"resources/generic_production_model/generic_model_{wildcards.cost_year}.nc"
+        ),
         renewables="data/new_renewables_consolidated.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
     output:
-        network="resources/networks/base_{cost_year}_{region}_{process_label}_{scenario}.nc",
+        # Output keyed by product; route_label is internal to the script
+        network="resources/networks/base_{cost_year}_{region}_{product}_{scenario}.nc",
     log:
-        "logs/prepare_regional_network_{cost_year}_{region}_{process_label}_{scenario}.log",
+        "logs/prepare_regional_network_{cost_year}_{region}_{product}_{scenario}.log",
     wildcard_constraints:
         scenario="reserved|unreserved",
-        process_label="hbi|steel",
+        product="hbi|steel",
     threads: 1
     resources:
         mem_mb=2000,
     params:
         region="{region}",
-        # Derive product from process_label (hbi → hbi, steel → steel)
-        product=lambda wildcards: wildcards.process_label,
-        process_label="{process_label}",
+        product="{product}",
+        route_label=lambda wildcards: _process_label_for_product(wildcards.product),
         config=config,
     message:
-        "Preparing {wildcards.scenario} regional network: {wildcards.region} -> {wildcards.process_label} "
+        "Preparing {wildcards.scenario} regional network: {wildcards.region} -> {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
     script:
         str(SCRIPT_DIR / "prepare_regional_network.py")
@@ -101,34 +125,36 @@ if config["enable"].get("run_supply_chain", True):
 
     rule calculate_regional_lcox:
         input:
-            base_network="resources/networks/base_{cost_year}_{region}_{process_label}_{scenario}.nc",
+            base_network="resources/networks/base_{cost_year}_{region}_{product}_{scenario}.nc",
             local_demand="data/un_enerdata_demand_2050_final.csv",
         output:
-            results="resources/lco-{process_label}/cost_year~{cost_year}/{region}_{scenario}/results_{product_demand_mt}.csv",
+            # Internal cache keyed by route_label for reuse; only products matter for supply curves
+            results="resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/results_{product_demand_mt}.csv",
             network=(
                 temp(
-                    "resources/lco-{process_label}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
+                    "resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
                 )
                 if not config.get("outputs", {}).get(
                     "keep_optimization_networks", False
                 )
-                else "resources/lco-{process_label}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
+                else "resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
             ),
         log:
-            "logs/calculate_regional_lcox_{cost_year}_{region}_{process_label}_{scenario}_{product_demand_mt}.log",
+            "logs/calculate_regional_lcox_{cost_year}_{region}_{product}_{scenario}_{product_demand_mt}.log",
         wildcard_constraints:
             product_demand_mt=r"\d+(?:\.\d+)?",
             scenario="reserved|unreserved",
-            process_label="hbi|steel",
+            product="hbi|steel",
         threads: 2
         resources:
             mem_mb=4000,
         params:
             product_demand_mt="{product_demand_mt}",
             compute_iis=config.get("solver", {}).get("compute_iis", False),
-            process_label="{process_label}",
+            product="{product}",
+            route_label=lambda wildcards: _process_label_for_product(wildcards.product),
         message:
-            "Calculating LCoX ({wildcards.scenario}) for {wildcards.process_label} in {wildcards.region} "
+            "Calculating LCoX ({wildcards.scenario}) for {wildcards.product} in {wildcards.region} "
             "(demand={wildcards.product_demand_mt} Mt/year)."
         script:
             str(SCRIPT_DIR / "calculate_lcox.py")
@@ -139,52 +165,45 @@ if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         input:
             lco_reserved=lambda wildcards: expand(
-                f"resources/lco-{wildcards.process_label}/cost_year~{wildcards.cost_year}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
+                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
                 product_demand_mt=config.get("steel_demand_levels"),
             ),
             lco_unreserved=lambda wildcards: (
                 expand(
-                    f"resources/lco-{wildcards.process_label}/cost_year~{wildcards.cost_year}/{wildcards.region}_unreserved/results_{{product_demand_mt}}.csv",
+                    f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_unreserved/results_{{product_demand_mt}}.csv",
                     product_demand_mt=config.get("steel_demand_levels"),
                 )
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
+                and _product_uses_renewables(wildcards.product)
                 else []
             ),
-            skeleton="resources/steel_skeleton/steel_skeleton_{cost_year}.nc",
-            local_demand="data/un_enerdata_demand_2050_final.csv",
+            skeleton="resources/generic_production_model/generic_model_{cost_year}.nc",
             steel_demand="resources/steel_production_clustered.csv",
         output:
-            # Output files now use process_label instead of product
-            supply="resources/supply_curves/cost_year~{cost_year}/{region}_marginal_cost_{process_label}.csv",
+            # Public supply-curve artifact is product-labeled; the stage label
+            # is only used to locate the correct upstream LCoX runs.
+            supply="resources/supply_curves/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}.csv",
             supply_unreserved=(
-                "resources/supply_curves/cost_year~{cost_year}/{region}_marginal_cost_{process_label}__unreserved.csv"
+                "resources/supply_curves/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}__unreserved.csv"
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
+                and _product_uses_renewables("{product}")
                 else temp(
-                    "resources/supply_curves_unreserved_tmp/cost_year~{cost_year}/{region}_marginal_cost_{process_label}__unreserved.csv"
+                    "resources/supply_curves_unreserved_tmp/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}__unreserved.csv"
                 )
             ),
-            supply_curve="resources/supply_curves/cost_year~{cost_year}/{region}_marginal_cost_{process_label}.pdf",
+            supply_curve="resources/supply_curves/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}.pdf",
         log:
-            "logs/create_supply_curve_{cost_year}_{region}_{process_label}.log",
+            "logs/create_supply_curve_{cost_year}_{region}_{product}_{wacc}.log",
         wildcard_constraints:
-            process_label="hbi|steel",
+            product="hbi|steel",
+            wacc=r"[0-9]+(?:\.[0-9]+)?",
         threads: 1
         message:
-            "Combining LCo results (reserved + unreserved scenarios) to create supply curve for {wildcards.region} {wildcards.process_label}."
+            "Combining LCo results (reserved + unreserved scenarios) to create supply curve for {wildcards.region} {wildcards.product}."
         script:
             str(SCRIPT_DIR / "create_supply_curve.py")
 
 
 rule create_all_supply_curves:
     input:
-        lambda wildcards: expand(
-            "resources/supply_curves/cost_year~{cost_year}/{region}_marginal_cost_{process_label}.csv",
-            cost_year=[2050],
-            region=config["regions"],
-            process_label=[
-                pl
-                for product in SUPPLY_CURVE_PRODUCTS
-                for pl in _process_labels_for_product(product)
-            ],
-            allow_missing=True,
-        ),
+        _all_supply_curve_targets(),

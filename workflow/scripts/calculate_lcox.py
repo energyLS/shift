@@ -298,14 +298,6 @@ def add_loads_to_network(network, product, demands):
         hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
         unit_str = "t/h"
 
-    elif product == "h2":
-        bus_name = "hydrogen"
-        # H2 is measured in MWh/year, convert to MW (hourly average)
-        hourly_demand_mwh = demands[
-            "product_demand_mwh_per_h"
-        ]  # Already hourly average
-        unit_str = "MW"
-
     elif product in ["eaf", "eaf-grid"]:
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
@@ -320,10 +312,7 @@ def add_loads_to_network(network, product, demands):
 
     # Add constant hourly load to the bus
     load_name = f"{product}_demand"
-    if product == "h2":
-        p_set = hourly_demand_mwh
-    else:
-        p_set = hourly_demand_t
+    p_set = hourly_demand_t
 
     network.add(
         "Load",
@@ -703,12 +692,13 @@ if __name__ == "__main__":
         else "reserved"
     )
 
-    # Get process_label from params (network is already sliced at preparation stage)
-    process_label = snakemake.params.process_label
+    # Get route_label from params (network is already sliced at preparation stage)
+    route_label = snakemake.params.route_label
+    product = snakemake.params.product
 
     logger.info(
         f"LCOX Calculation: region={snakemake.wildcards.region}, "
-        f"process_label={process_label}, "
+        f"product={product}, route_label={route_label}, "
         f"scenario={scenario}, "
         f"demand={product_demand_mt} Mt/year."
     )
@@ -733,17 +723,12 @@ if __name__ == "__main__":
         f"Local electricity demand: {demands['local_el_demand_mwh']:.1f} MWh/year"
     )
 
-    # ==================== PROCESS SINGLE DEMAND LEVEL ====================
-    electricity_per_product_t = snakemake.config.get("electricity_steel_ratio", 5.25)
-
     logger.info(f"Processing: {product_demand_mt} Mt/year")
 
     # ==================== NETWORK SETUP ====================
     # Create a copy of base network
     network = base_network.copy()
-    network.name = (
-        f"LCOX-{snakemake.wildcards.region}-{process_label}-{product_demand_mt}"
-    )
+    network.name = f"LCOX-{snakemake.wildcards.region}-{product}-{product_demand_mt}"
 
     # Ensure snapshot year is set by upstream network preparation;
     # do not override if already set.
@@ -763,20 +748,11 @@ if __name__ == "__main__":
     # Preserve discount_rate from base network (needed for cost annuitization)
     network.discount_rate = base_network.discount_rate
 
-    # Calculate renewable electricity needed for this demand level
-    scaled_product_demand_mwh_per_h = (
-        product_demand_mt * 1e6 * electricity_per_product_t / 8760
-    )
-
     logger.info(f"Product demand: {product_demand_mt:.1f} Mt/year")
-    logger.info(
-        f"Renewable electricity required: {scaled_product_demand_mwh_per_h * 8760:.1f} MWh/year"
-    )
 
     # Create scaled demands dict for this demand level
     scaled_demands = demands.copy()
     scaled_demands["product_demand_mt"] = product_demand_mt
-    scaled_demands["product_demand_mwh_per_h"] = scaled_product_demand_mwh_per_h
 
     # Load incremental generator sets and apply filtering
     logger.info("Loading incremental generator sets...")
@@ -786,7 +762,7 @@ if __name__ == "__main__":
     # Add hourly load for steel output
     # (This also sets HBI storage e_initial inside add_loads_to_network)
     logger.info("Adding hourly load to network...")
-    add_loads_to_network(network=network, product=process_label, demands=scaled_demands)
+    add_loads_to_network(network=network, product=product, demands=scaled_demands)
 
     # Debug: Print network structure
     logger.info(
@@ -809,7 +785,7 @@ if __name__ == "__main__":
     # Solve
     logger.info("Optimizing network...")
     if snakemake.config.get("debug_network_inspection", False):
-        inspect_network(network, process_label)  # Debug inspection
+        inspect_network(network, product)  # Debug inspection
     try:
         solve_network(network, snakemake.config)
         optimization_status = (
@@ -832,9 +808,49 @@ if __name__ == "__main__":
     logger.info("Extracting results...")
     results_df = extract_lcox(
         network=network,
-        product=process_label,
+        product=product,
         demands=scaled_demands,
     )
+
+    # Attach provenance so downstream supply curves can trace each row back to
+    # the config inputs and the applied PyPSA network state.
+    interest_rates = snakemake.config.get("interest_rate", {})
+    if isinstance(interest_rates.get(snakemake.wildcards.region), dict):
+        config_discount_rate = interest_rates[snakemake.wildcards.region].get(
+            "default", interest_rates.get("default", np.nan)
+        )
+    else:
+        config_discount_rate = interest_rates.get(
+            snakemake.wildcards.region, interest_rates.get("default", np.nan)
+        )
+
+    applied_discount_rate = float(getattr(network, "discount_rate", np.nan))
+    discount_rate_matches = bool(
+        np.isfinite(applied_discount_rate)
+        and np.isfinite(config_discount_rate)
+        and np.isclose(applied_discount_rate, config_discount_rate)
+    )
+
+    if not discount_rate_matches:
+        logger.warning(
+            "Discount rate mismatch for region %s: network=%s config=%s",
+            snakemake.wildcards.region,
+            applied_discount_rate,
+            config_discount_rate,
+        )
+
+    results_df["region"] = snakemake.wildcards.region
+    results_df["product"] = product
+    results_df["scenario"] = scenario
+    results_df["route_label"] = route_label
+    results_df["cost_year"] = int(snakemake.wildcards.cost_year)
+    results_df["product_demand_mt"] = product_demand_mt
+    results_df["discount_rate_config_key"] = (
+        f"interest_rate.{snakemake.wildcards.region}"
+    )
+    results_df["discount_rate_config"] = config_discount_rate
+    results_df["discount_rate_network"] = applied_discount_rate
+    results_df["discount_rate_matches_config"] = discount_rate_matches
 
     # Save results for this demand level
     result_file = snakemake.output.results

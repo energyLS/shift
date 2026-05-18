@@ -25,13 +25,20 @@ Usage (Snakemake rule):
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple, Iterable, cast
+import sys
 import numpy as np
 import pandas as pd
 import xarray as xr
 import pypsa
 
 import tech_database as td
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from trade_chain_utils import build_product_components  # noqa: E402
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -79,55 +86,56 @@ def load_region_renewables_consolidated(
     metadata : dict
         Summary info (n_classes, n_time, technologies, etc.)
     """
-    ds = xr.open_dataset(consolidated_path)
+    with xr.open_dataset(consolidated_path) as ds:
+        if region not in ds.region.values:
+            available = ", ".join(ds.region.values)
+            raise ValueError(f"Region '{region}' not found. Available: {available}")
 
-    if region not in ds.region.values:
-        available = ", ".join(ds.region.values)
-        raise ValueError(f"Region '{region}' not found. Available: {available}")
+        logger.info(f"Loading consolidated renewables for {region}")
 
-    logger.info(f"Loading consolidated renewables for {region}")
+        # Select region (dims: technology, class)
+        region_cap = ds["capacity"].sel(region=region)  # (tech, class)
+        region_cf = ds["capacity_factor"].sel(region=region)  # (tech, class, time)
 
-    # Select region (dims: technology, class)
-    region_cap = ds["capacity"].sel(region=region)  # (tech, class)
-    region_cf = ds["capacity_factor"].sel(region=region)  # (tech, class, time)
+        # Extract technology names and data
+        techs = list(region_cap.technology.values)
+        technologies_dict = {}
 
-    # Extract technology names and data
-    techs = list(region_cap.technology.values)
-    technologies_dict = {}
+        for tech in techs:
+            cap = region_cap.sel(technology=tech).values  # (class,)
+            technologies_dict[tech] = cap
+            logger.info(f"  {tech}: {len(cap)} sites, {cap.sum():.0f} MW total")
 
-    for tech in techs:
-        cap = region_cap.sel(technology=tech).values  # (class,)
-        technologies_dict[tech] = cap
-        logger.info(f"  {tech}: {len(cap)} sites, {cap.sum():.0f} MW total")
+        # Capacity factor time series (keep full structure for now)
+        cf_ts = region_cf  # (tech, class, time)
 
-    # Capacity factor time series (keep full structure for now)
-    cf_ts = region_cf  # (tech, class, time)
+        metadata = {
+            "region": region,
+            "n_classes": region_cap.sizes["class"],
+            "n_time": region_cf.sizes["time"],
+            "n_technologies": len(techs),
+            "technologies": techs,
+            "time_start": pd.Timestamp(ds["time"].values[0]),
+            "time_end": pd.Timestamp(ds["time"].values[-1]),
+            "total_capacity_mw": float(region_cap.sum().values),
+        }
 
-    metadata = {
-        "region": region,
-        "n_classes": region_cap.sizes["class"],
-        "n_time": region_cf.sizes["time"],
-        "n_technologies": len(techs),
-        "technologies": techs,
-        "time_start": pd.Timestamp(ds["time"].values[0]),
-        "time_end": pd.Timestamp(ds["time"].values[-1]),
-        "total_capacity_mw": float(region_cap.sum().values),
-    }
+        logger.info(
+            f"  Total capacity: {metadata['total_capacity_mw']:.0f} MW, "
+            f"{metadata['n_time']} timesteps, {metadata['n_technologies']} technologies"
+        )
 
-    logger.info(
-        f"  Total capacity: {metadata['total_capacity_mw']:.0f} MW, "
-        f"{metadata['n_time']} timesteps, {metadata['n_technologies']} technologies"
-    )
-
-    ds.close()
     return technologies_dict, cf_ts, metadata
 
 
 def load_local_electricity_demand_mw(
-    local_demand_path: str,
+    local_demand_path: Optional[str],
     region: str,
 ) -> float:
     """Load regional electricity demand and convert it to average MW."""
+
+    if not local_demand_path:
+        return 0.0
 
     try:
         local_df = pd.read_csv(local_demand_path)
@@ -150,7 +158,7 @@ def reserve_top_sites_by_highest_cf(
     cf_ts: xr.DataArray,
     reserve_capacity_mw: float,
     scenario: str = "reserved",
-) -> Dict[str, np.ndarray]:
+) -> Optional[Dict[str, np.ndarray]]:
     """
     Reserve top sites (highest average capacity factor) for local demand.
 
@@ -237,7 +245,7 @@ def add_renewable_generators(
     cf_ts: xr.DataArray,
     tech_costs: pd.Series,
     config: dict,
-    reserved_techs: Dict[str, np.ndarray] = None,
+    reserved_techs: Optional[Dict[str, np.ndarray]] = None,
 ) -> Dict:
     """
     Add renewable generators to PyPSA network.
@@ -273,10 +281,10 @@ def add_renewable_generators(
     total_p_nom_max = 0
     n_reserved = 0
 
-    # Ensure electricity bus exists
+    # Ensure electricity bus exists (umbrella renewable carrier)
     elec_bus = "renewable_electricity"
     if elec_bus not in network.buses.index:
-        network.add("Bus", elec_bus, carrier="AC", v_nom=1)
+        network.add("Bus", elec_bus, carrier="renewable_electricity", unit="MW")
 
     # Get discount rate
     discount_rate = network.discount_rate if hasattr(network, "discount_rate") else 0.07
@@ -331,14 +339,25 @@ def add_renewable_generators(
             # Get time series for this site
             p_max_pu = cf_data[site_idx, :]  # (time,)
 
+            # Determine tech-specific carrier while keeping generators on the
+            # shared `renewable_electricity` bus. This preserves per-tech
+            # statistics while modelling a common electricity bus.
+            tech_to_carrier = {
+                "pvplant": "renewable_pv",
+                "windonshore": "renewable_wind_onshore",
+                "windoffshore": "renewable_wind_offshore",
+            }
+            carrier_name = tech_to_carrier.get(tech, f"renewable_{tech}")
+
             # Add generator (extendable with ceiling)
             network.add(
                 "Generator",
                 gen_name,
                 bus=elec_bus,
-                carrier=tech,
+                carrier=carrier_name,
                 p_nom_extendable=True,
                 p_nom=0,  # Start with no capacity; optimization will decide
+                p_nom_min=0,
                 p_nom_max=p_nom_max,  # Upper ceiling from dataset (MW)
                 p_max_pu=p_max_pu,  # Hourly capacity factor (0-1)
                 overnight_cost=overnight_cost,
@@ -347,6 +366,7 @@ def add_renewable_generators(
                 fom_cost=fom_cost,
                 tags={
                     "technology": tech,
+                    "resource_tech": tech,
                     "region": region,
                     "local_priority": is_reserved,
                     "site_id": site_idx,
@@ -372,98 +392,210 @@ def add_renewable_generators(
     }
 
 
-def back_propagate_electricity_need(
-    tech_costs: pd.Series,
-    product: str,
-    config: dict,
-) -> float:
+def _product_has_renewables(config: dict, product: str) -> bool:
+    """Check if a product uses renewable electricity in its network.
+
+    Returns True if the product should have renewable generators and reservation logic applied.
+    Returns False if the product uses grid electricity only.
     """
-    Calculate renewable electricity requirement (MWh) per tonne of product.
+    try:
+        return bool(
+            build_product_components(config, product).get("has_renewables", False)
+        )
+    except Exception:
+        return False
 
-    Paths:
-    - steel (t): Electrolyzer(elec) + DRI(elec + H2) + optional EAF(elec)
-    - hbi (t): Electrolyzer(elec) + DRI(elec + H2)
-    - h2 (t): Electrolyzer(elec) only
+
+def sanitize_and_fix(
+    network: pypsa.Network, logger: Optional[logging.Logger] = None
+) -> None:
+    """Run `network.sanitize()` and apply small, safe fixes.
+
+    Fixes applied:
+    - Ensure renewable generators have `p_nom_min = 0`.
+    - Clamp `p_nom_min` to `p_nom_max` when inconsistent.
+    - Logs a summary of applied fixes.
     """
-    # Check for config override
-    override_key = f"electricity_per_tonne_{product}_mwh"
-    if override_key in config:
-        value = config[override_key]
-        logger.info(f"Using config override: {product} requires {value} MWh/t")
-        return value
-
-    # Electrolyzer: Electricity → H2
-    elec_params = td.get_tech(tech_costs, "Alkaline electrolyzer large size")
-    elec_mwh_per_mwh_h2 = td.get_tech_param(elec_params, "electricity-input", 1.38)
-
-    if product == "h2":
-        return elec_mwh_per_mwh_h2
-
-    # DRI Furnace: Iron ore + Hydrogen + Electricity → HBI
-    dri_params = td.get_tech(tech_costs, "hydrogen direct iron reduction furnace")
-    h2_per_t_hbi = td.get_tech_param(dri_params, "hydrogen-input", 2.1)
-    dri_elec_per_t_hbi = td.get_tech_param(dri_params, "electricity-input", 1.03)
-    h2_elec_per_t_hbi = h2_per_t_hbi * elec_mwh_per_mwh_h2
-
-    if product == "hbi":
-        return h2_elec_per_t_hbi + dri_elec_per_t_hbi
-
-    if product == "steel":
-        # Add EAF if configured, otherwise just HBI path
-        eaf_source = config.get("eaf_electricity_source", "grid")
-        if eaf_source == "renewable":
-            eaf_params = td.get_tech(tech_costs, "electric arc furnace")
-            eaf_elec_per_t_steel = td.get_tech_param(
-                eaf_params, "electricity-input", 0.5
-            )
-            return h2_elec_per_t_hbi + dri_elec_per_t_hbi + eaf_elec_per_t_steel
-        else:
-            return h2_elec_per_t_hbi + dri_elec_per_t_hbi
-
-    raise ValueError(f"Product '{product}' not recognized. Choose: h2, hbi, steel")
-
-
-def apply_product_cutoff(network: pypsa.Network, product: str) -> None:
-    """Remove supply chain components after the target product."""
-    if product == "h2":
-        # Keep only: electricity -> electrolyzer -> H2 storage
-        # Remove: DRI, HBI, EAF, steel
-        components_to_remove = [
-            ("Link", "link_dri_furnace"),
-            ("Link", "link_eaf"),
-            ("Store", "store_hbi"),
-            ("Store", "store_steel"),
-        ]
-    elif product == "hbi":
-        # Keep: electricity -> electrolyzer -> H2 -> DRI -> HBI
-        # Remove: EAF, steel
-        components_to_remove = [
-            ("Link", "link_eaf"),
-            ("Store", "store_steel"),
-        ]
-    elif product == "steel":
-        # Keep all: electricity -> electrolyzer -> H2 -> DRI -> HBI -> EAF -> steel
-        components_to_remove = []
+    if logger is None:
+        _logger = logging.getLogger(__name__)
     else:
-        raise ValueError(f"Product '{product}' not recognized")
+        _logger = logger
 
-    for comp_type, comp_name in components_to_remove:
-        if comp_name in getattr(network, comp_type.lower() + "s", {}).index:
-            logger.info(f"Removing {comp_type} {comp_name}")
-            network.remove(comp_type, comp_name)
+    _logger.info("Sanitizing network (PyPSA sanitize + post-fix checks)...")
+    try:
+        network.sanitize()
+    except Exception as exc:
+        _logger.warning(f"network.sanitize() raised an exception: {exc}")
+
+    fixes = []
+    # operate on a snapshot of the generators DataFrame to avoid SettingWithCopy
+    if len(network.generators) == 0:
+        _logger.info("No generators to check during sanitize_and_fix.")
+        return
+
+    gens = network.generators
+    for gen in gens.index:
+        try:
+            carrier = gens.loc[gen, "carrier"]
+        except Exception:
+            carrier = None
+
+        # Ensure renewable generators have zero minimum
+        if isinstance(carrier, str) and carrier.startswith("renewable_"):
+            try:
+                current_pmin = (
+                    gens.loc[gen, "p_nom_min"] if "p_nom_min" in gens.columns else None
+                )
+            except Exception:
+                current_pmin = None
+            # Set p_nom_min to 0 if not set or positive
+            try:
+                if current_pmin is None or (
+                    pd.notna(current_pmin) and float(current_pmin) != 0.0
+                ):
+                    network.generators.loc[gen, "p_nom_min"] = 0.0
+                    fixes.append(f"set p_nom_min=0 for {gen}")
+            except Exception:
+                # best-effort; continue
+                pass
+
+        # Clamp p_nom_min <= p_nom_max
+        try:
+            pmin = (
+                network.generators.loc[gen, "p_nom_min"]
+                if "p_nom_min" in network.generators.columns
+                else None
+            )
+            pmax = (
+                network.generators.loc[gen, "p_nom_max"]
+                if "p_nom_max" in network.generators.columns
+                else None
+            )
+            if pd.notna(pmin) and pd.notna(pmax):
+                # If pmax < pmin, reduce pmin to pmax
+                if float(pmax) < float(pmin):
+                    network.generators.loc[gen, "p_nom_min"] = float(pmax)
+                    fixes.append(f"clamped p_nom_min to p_nom_max for {gen}")
+        except Exception:
+            pass
+
+    if fixes:
+        _logger.info(f"sanitize_and_fix applied {len(fixes)} fixes: {fixes[:10]}")
+    else:
+        _logger.info("sanitize_and_fix applied no fixes")
+
+
+def _get_components_for_product(config: dict, product: str) -> Tuple[set, set, set]:
+    """Get links, stores, and buses for a product from the configured stage groups.
+
+    Returns (keep_links, keep_stores, keep_buses) sets.
+    """
+    comp = build_product_components(config, product)
+    keep_links = set(cast(Iterable[str], comp.get("links") or []))
+    keep_stores = set(cast(Iterable[str], comp.get("stores") or []))
+    keep_buses = set(cast(Iterable[str], comp.get("buses") or []))
+
+    logger.info(
+        f"Components for product={product}: links={keep_links}, stores={keep_stores}, buses={keep_buses}"
+    )
+    return keep_links, keep_stores, keep_buses
+
+
+def apply_product_cutoff(
+    network: pypsa.Network, product: str, config: Optional[dict] = None
+) -> None:
+    """Remove supply chain components beyond the target product.
+
+    Uses config.product_components to determine which components to keep.
+    Removes all links and stores not needed for the target product.
+    Preserves the output buses for the product (e.g., 'steel' for steel product).
+    Also removes orphaned buses (buses with no connected components).
+    """
+    if config is None:
+        config = {}
+
+    # Get the set of links, stores, and buses to keep for this product
+    keep_links, keep_stores, keep_buses = _get_components_for_product(config, product)
+
+    # Remove links not in the keep set
+    for link_name in list(network.links.index):
+        if link_name not in keep_links:
+            try:
+                network.remove("Link", link_name)
+                logger.info(
+                    f"Removed Link: {link_name} (not needed for product={product})"
+                )
+            except Exception as e:
+                logger.warning(f"Could not remove Link {link_name}: {e}")
+
+    # Remove stores not in the keep set
+    for store_name in list(network.stores.index):
+        if store_name not in keep_stores:
+            try:
+                network.remove("Store", store_name)
+                logger.info(
+                    f"Removed Store: {store_name} (not needed for product={product})"
+                )
+            except Exception as e:
+                logger.warning(f"Could not remove Store {store_name}: {e}")
+
+    # Remove orphaned buses (buses not connected to any remaining component)
+    # BUT preserve buses listed in keep_buses (output bus for this product)
+    for bus_name in list(network.buses.index):
+        # Skip essential supply buses and product output buses
+        if (
+            bus_name in ["renewable_electricity", "grid_electricity"]
+            or bus_name in keep_buses
+        ):
+            continue
+
+        has_connection = False
+
+        # Check if bus is used by any link (bus0, bus1, bus2, bus3)
+        if len(network.links) > 0:
+            for bcol in ["bus0", "bus1", "bus2", "bus3"]:
+                if (
+                    bcol in network.links.columns
+                    and (network.links[bcol] == bus_name).any()
+                ):
+                    has_connection = True
+                    break
+
+        # Check generators
+        if not has_connection and len(network.generators) > 0:
+            if (network.generators["bus"] == bus_name).any():
+                has_connection = True
+
+        # Check stores
+        if not has_connection and len(network.stores) > 0:
+            if (network.stores["bus"] == bus_name).any():
+                has_connection = True
+
+        # Check loads
+        if not has_connection and len(network.loads) > 0:
+            if (network.loads["bus"] == bus_name).any():
+                has_connection = True
+
+        # Remove if orphaned
+        if not has_connection:
+            try:
+                network.remove("Bus", bus_name)
+                logger.info(f"Removed orphaned Bus: {bus_name}")
+            except Exception as e:
+                logger.warning(f"Could not remove Bus {bus_name}: {e}")
 
 
 def prepare_network(
     skeleton_network_path: str,
     consolidated_renewables_path: str,
     tech_costs_path: str,
-    local_demand_path: str,
+    local_demand_path: Optional[str],
     region: str,
     product: str,
     cost_year: int = 2030,
-    config: dict = None,
+    config: Optional[dict] = None,
     scenario: str = "reserved",
-    process_label: str = None,
+    route_label: Optional[str] = None,
 ) -> Tuple[pypsa.Network, Dict]:
     """Prepare regional network with consolidated renewables.
 
@@ -481,12 +613,12 @@ def prepare_network(
         Target product (h2, hbi, steel)
     cost_year : int
         Cost year for technology parameters
-    config : dict
+    config : dict, optional
         Configuration dict
     scenario : str
         "reserved" (default): apply high-CF site reservation for domestic demand
         "unreserved": no reservation; full renewable stack available (fallback scenario)
-    process_label : str, optional
+    route_label : str, optional
         If provided, slice skeleton to this stage only (e.g., "hbi", "steel")
         This enables independent per-stage solves for Option B semantics.
 
@@ -502,40 +634,63 @@ def prepare_network(
 
     logger.info("=" * 70)
     logger.info(
-        f"Preparing network: region={region}, product={product}, process_label={process_label}"
+        f"Preparing network: region={region}, product={product}, route_label={route_label}"
     )
     logger.info("=" * 70)
 
-    # Load skeleton
+    # Load skeleton (prefer stage-group specific skeleton when available)
     logger.info("Loading skeleton network...")
-    network = pypsa.Network(skeleton_network_path)
+    skeleton_to_load = skeleton_network_path
+    if route_label:
+        try:
+            from pathlib import Path
+
+            p = Path(skeleton_network_path)
+            stem = p.stem
+            suffix = p.suffix
+            # Expect group-specific files like 'generic_model_2050_hbi.nc'
+            candidate = p.with_name(f"{stem}_{route_label}{suffix}")
+            if candidate.exists():
+                logger.info(
+                    f"Found group-specific skeleton for route_label={route_label}: {candidate}"
+                )
+                skeleton_to_load = str(candidate)
+            else:
+                logger.info(
+                    f"No group-specific skeleton found for {route_label}; using {skeleton_network_path}"
+                )
+        except Exception:
+            # Fallback to provided skeleton path
+            skeleton_to_load = skeleton_network_path
+
+    network = pypsa.Network(skeleton_to_load)
     network.name = f"base_{cost_year}_{region}_{product}"
 
-    # STAGE SLICING: if process_label provided, slice skeleton to that stage only
-    # Note: previously we skipped slicing when product == process_label (because
+    # STAGE SLICING: if route_label provided, slice skeleton to that stage only
+    # Note: previously we skipped slicing when product == route_label (because
     # Snakemake params set `product` to the same value). Always slice when a
-    # `process_label` is supplied to ensure per-stage networks are produced.
-    if process_label:
-        logger.info(f"Slicing skeleton to process_label={process_label}")
+    # `route_label` is supplied to ensure per-stage networks are produced.
+    if route_label:
+        logger.info(f"Slicing skeleton to route_label={route_label}")
 
         # Define which links/stores to keep for each stage
         stage_components = {
             "hbi": {
-                "keep_links": ["electrolyzer", "dri"],
+                "keep_links": ["electrolysis", "dri"],
                 "keep_stores": ["h2_storage", "hbi_storage"],
-                "remove_links": ["eaf"],
+                "remove_links": ["eaf-grid"],
                 "add_hbi_input": False,
             },
             "steel": {
-                "keep_links": ["eaf"],
-                "keep_stores": [],
-                "remove_links": ["electrolyzer", "dri"],
+                "keep_links": ["eaf-grid"],
+                "keep_stores": ["steel_storage"],
+                "remove_links": ["electrolysis", "dri"],
                 "add_hbi_input": True,  # Add HBI as external free input
             },
         }
 
-        if process_label in stage_components:
-            spec = stage_components[process_label]
+        if route_label in stage_components:
+            spec = stage_components[route_label]
 
             # Remove links not in keep_links
             for link_name in list(network.links.index):
@@ -570,11 +725,11 @@ def prepare_network(
                 logger.info("Added HBI as free external input (steel stage)")
 
             logger.info(
-                f"Skeleton sliced to {process_label}: {len(network.links)} links, {len(network.stores)} stores"
+                f"Skeleton sliced to {route_label}: {len(network.links)} links, {len(network.stores)} stores"
             )
         else:
             logger.warning(
-                f"process_label={process_label} not recognized; keeping full skeleton"
+                f"route_label={route_label} not recognized; keeping full skeleton"
             )
 
     # Set region-specific discount rate
@@ -605,10 +760,13 @@ def prepare_network(
     tech_costs = td.load_tech_costs(tech_costs_path)
 
     # Load consolidated renewables for region (only if this stage needs renewables)
-    # HBI stage needs renewables; steel stage does not (uses grid)
-    if process_label == "steel":
+    # Check product_components config to see if product uses renewable_electricity
+    product_uses_renewables = _product_has_renewables(config, route_label or product)
+
+    if not product_uses_renewables:
         logger.info(
-            "Steel stage detected: skipping renewable generators (uses grid electricity)"
+            f"Product '{route_label}' does not use renewable_electricity: "
+            f"skipping renewable generator loading"
         )
         techs_dict = {}
         cf_ts = None
@@ -618,25 +776,30 @@ def prepare_network(
         techs_dict, cf_ts, metadata = load_region_renewables_consolidated(
             consolidated_renewables_path, region
         )
-    # Apply local demand reservation if configured
+    # Apply local demand reservation if configured (only for products with renewable_electricity)
     # For scenario="reserved", reserve high-CF sites; for "unreserved", skip reservation
     reserved_techs = None
-    reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
-    if reserve_capacity_mw <= 0 and scenario == "reserved":
-        reserve_capacity_mw = load_local_electricity_demand_mw(
-            local_demand_path, region
-        )
+    if product_uses_renewables:
+        reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
+        if reserve_capacity_mw <= 0 and scenario == "reserved":
+            reserve_capacity_mw = load_local_electricity_demand_mw(
+                local_demand_path, region
+            )
+            logger.info(
+                f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
+            )
+        logger.info(f"Scenario: {scenario} (scenario flag passed from Snakemake rule)")
+        if reserve_capacity_mw > 0 or scenario == "reserved":
+            logger.info(
+                f"Applying local demand reservation for scenario={scenario}: "
+                f"target {reserve_capacity_mw} MW"
+            )
+            reserved_techs = reserve_top_sites_by_highest_cf(
+                techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
+            )
+    else:
         logger.info(
-            f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
-        )
-    logger.info(f"Scenario: {scenario} (scenario flag passed from Snakemake rule)")
-    if reserve_capacity_mw > 0 or scenario == "reserved":
-        logger.info(
-            f"Applying local demand reservation for scenario={scenario}: "
-            f"target {reserve_capacity_mw} MW"
-        )
-        reserved_techs = reserve_top_sites_by_highest_cf(
-            techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
+            f"Skipping reservation: product '{route_label}' does not use renewables"
         )
 
     # Add renewable generators (only if techs_dict is not empty)
@@ -654,9 +817,16 @@ def prepare_network(
             "total_capacity_mw": 0,
             "n_reserved": 0,
         }
-    # Apply product cutoff
-    logger.info(f"Applying product cutoff for {product}...")
-    apply_product_cutoff(network, product)
+    # Apply product cutoff only when using full skeleton.
+    # When route_label is provided (dedicated stage-group skeleton), the network
+    # is already scoped to the correct components, so cutoff is redundant.
+    if route_label:
+        logger.info(
+            f"Using dedicated stage-group skeleton for {route_label}; skipping product cutoff"
+        )
+    else:
+        logger.info(f"Applying product cutoff for {product}...")
+        apply_product_cutoff(network, product, config=config)
 
     # Build audit info
     audit_info = {
@@ -681,6 +851,9 @@ def prepare_network(
     logger.info(f"  - Generators: {len(network.generators)}")
     logger.info(f"  - Capacity: {gen_audit['total_capacity_mw']:.0f} MW")
     logger.info("=" * 70)
+
+    # Run centralized sanitization and small automatic fixes
+    sanitize_and_fix(network, logger=logger)
 
     # Stage-slicing helper: produce a subnetwork containing only the specified process carrier
     def build_stage_subnetwork(n: pypsa.Network, process_carrier: str) -> pypsa.Network:
@@ -830,11 +1003,11 @@ if __name__ == "__main__":
 
         region = snakemake.params.region
         product = snakemake.params.product
-        process_label = (
-            snakemake.params.process_label
-            if hasattr(snakemake.params, "process_label")
+        route_label = (
+            snakemake.params.route_label
+            if hasattr(snakemake.params, "route_label")
             else None
-        )
+        )  # route_label is the process stage name (e.g., "hbi", "steel")
         cost_year = (
             snakemake.wildcards.cost_year
             if hasattr(snakemake.wildcards, "cost_year")
@@ -862,7 +1035,7 @@ if __name__ == "__main__":
             product = sys.argv[5]
             output_path = sys.argv[6]
             cost_year = int(sys.argv[7]) if len(sys.argv) > 7 else 2030
-            process_label = sys.argv[8] if len(sys.argv) > 8 else None
+            route_label = sys.argv[8] if len(sys.argv) > 8 else None
             local_demand_path = None
             config_dict = {}
         else:
@@ -879,7 +1052,7 @@ if __name__ == "__main__":
         cost_year=cost_year,
         config=config_dict,
         scenario=scenario,
-        process_label=process_label,
+        route_label=route_label,
     )
 
     # Save network
