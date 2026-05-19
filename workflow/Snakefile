@@ -56,7 +56,7 @@ def _load_trade_scenarios():
                 ),
                 "wacc": str(chain.get("wacc", "regional")),
                 "final": str(chain.get("final_product", "steel")),
-                "scenario": str(chain.get("scenario", "default")),
+                "scenario": str(chain.get("trade_scenarios", "default")),
             }
         )
         return Paramspace(pd.DataFrame(rows, dtype=str))
@@ -66,6 +66,7 @@ def _load_trade_scenarios():
 
 trade_scenarios = _load_trade_scenarios()
 
+print(f"Loaded trade scenarios:\n{trade_scenarios}")
 
 def _derive_supply_curve_products():
     return derive_supply_curve_products(config)
