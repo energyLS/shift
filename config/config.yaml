@@ -33,7 +33,7 @@ trade_chains:
       output_commodity: hydrogen
       process_label: electrolysis
     2:
-      material_inputs: [iron_ore, H2]
+      material_inputs: [iron_ore, hydrogen]
       energy_inputs: [renewable_electricity]
       output_commodity: hbi
       process_label: dri

@@ -1,142 +1,45 @@
-"""
-Calculate regional Levelized Cost of X (LCOX) for a single product demand level.
+"""calculate_lcox
 
-Supports: steel, hbi, h2 (flexible product support)
+Compute the Levelized Cost of X (LCOX) for a single product demand level
+(e.g., `hbi`, `steel`, `h2`).
 
-Workflow (single demand level per invocation):
-  1. Load base_network (renewables + product already configured)
-  2. Load product-specific demands
-  3. Apply incremental generator selection (delete generators outside demand level set)
-  4. Add hourly loads based on demand
-  5. Solve optimization
-  6. Extract LCOX and save results_{demand_level}.csv
-  7. Export solved network_{demand_level}.nc
+This module provides utilities to:
+- load region-specific demands,
+- add constant hourly product loads to a PyPSA network,
+- solve the network optimization for a fixed demand profile, and
+- extract and save a single-row LCOX result with provenance metadata.
 
-Parallelization: Each demand level is a separate Snakemake job, enabling parallel execution.
-
-Inputs (from Snakemake):
-  - base_network: PyPSA network with renewables, prepared per region (netCDF)
-  - incremental_sets: Pre-filtered generator sets per demand level (JSON)
-  - local_demand: Regional local electricity demand [MWh/year] (CSV)
-
-Outputs (generated for each demand level):
-  - results_{demand_level}.csv: LCOX point for that demand level
-  - network_{demand_level}.nc: Optimized network
+The script entry point is intended to be invoked from Snakemake. Functions are
+kept small and testable where practical.
 """
 
-import copy
-import logging
 import os
-from pathlib import Path
 from typing import Any
 import pypsa
 import pandas as pd
 import numpy as np
 import xarray as xr
 
+from _helpers import setup_logging
+
 snakemake: Any = globals().get("snakemake")
+
+# Hours per year constant used across the codebase
+HOURS_PER_YEAR = 8760
 
 # ============================================================================
 # LOGGING SETUP
 # ============================================================================
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.INFO)
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-
-if snakemake is not None and getattr(snakemake, "log", None):
-    log_path = Path(snakemake.log[0])
-else:
-    log_path = Path("../logs") / "calculate_lcox.log"
-
-log_path.parent.mkdir(parents=True, exist_ok=True)
-file_handler = logging.FileHandler(log_path)
-file_handler.setLevel(logging.DEBUG)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+logger = setup_logging(__name__, snakemake=snakemake, log_filename="calculate_lcox.log")
 
 # ============================================================================
-# STAGE SLICING (for independent per-stage solves, Option B semantics)
+# STAGE SLICING (legacy helpers removed)
 # ============================================================================
 
-
-def build_stage_subnetwork(n: pypsa.Network, process_carrier: str) -> pypsa.Network:
-    """Return a deep copy of the network pruned to links with carrier == process_carrier.
-
-    Keeps:
-    - Links whose `carrier` equals `process_carrier`.
-    - Generators/stores attached to buses referenced by those links (e.g., raw resource suppliers).
-    - Removes other conversion links and any isolated buses.
-
-    The returned subnetwork is suitable for independent per-stage marginal solves (Option B semantics).
-    No upstream pricing is performed; upstream inputs are treated as free resources or absent.
-    """
-    sub = copy.deepcopy(n)
-
-    # Remove links that are not the target process carrier
-    for link_name in list(sub.links.index):
-        carrier = sub.links.loc[link_name, "carrier"]
-        if carrier != process_carrier:
-            sub.remove("Link", link_name)
-
-    # Remove generators not attached to remaining buses
-    for gen_name in list(sub.generators.index):
-        gen_bus = sub.generators.loc[gen_name, "bus"]
-        if gen_bus not in sub.buses.index:
-            try:
-                sub.remove("Generator", gen_name)
-            except Exception:
-                pass
-
-    # Remove stores not attached to remaining buses
-    for store_name in list(sub.stores.index):
-        store_bus = sub.stores.loc[store_name, "bus"]
-        if store_bus not in sub.buses.index:
-            try:
-                sub.remove("Store", store_name)
-            except Exception:
-                pass
-
-    # Remove isolated buses (no generators, no links, no stores)
-    for bus_name in list(sub.buses.index):
-        has_gen = (
-            len(sub.generators.index[sub.generators["bus"] == bus_name]) > 0
-            if len(sub.generators) > 0
-            else False
-        )
-        has_store = (
-            len(sub.stores.index[sub.stores["bus"] == bus_name]) > 0
-            if len(sub.stores) > 0
-            else False
-        )
-        has_link = False
-        if len(sub.links) > 0:
-            for link_name in sub.links.index:
-                row = sub.links.loc[link_name]
-                for bcol in ["bus0", "bus1", "bus2", "bus3"]:
-                    if bcol in row.index and row.get(bcol) == bus_name:
-                        has_link = True
-                        break
-                if has_link:
-                    break
-
-        if not (has_gen or has_store or has_link):
-            try:
-                sub.remove("Bus", bus_name)
-            except Exception:
-                pass
-
-    logger.info(
-        f"Stage subnetwork for process={process_carrier}: {len(sub.buses)} buses, "
-        f"{len(sub.generators)} gens, {len(sub.links)} links, {len(sub.stores)} stores"
-    )
-    return sub
+# The stage-slicing helper and incremental-selection utilities were used in an
+# older workflow. They are no longer invoked by the main driver but kept in
+# history; they have been removed to simplify the codebase. If you need them
+# for advanced per-stage analyses, reintroduce a tested implementation.
 
 
 # ============================================================================
@@ -184,94 +87,11 @@ def load_demands_for_region(region, config):
 # ============================================================================
 
 
-def apply_incremental_generator_selection(network, product_demand_mt, incremental_sets):
-    """Delete renewable generators NOT in the incremental set for this demand level.
-
-    NEW WORKFLOW (Phase 3):
-    - Base network contains ALL generators from max-demand filtering
-    - Incremental sets pre-computed in prepare_regional_network.py
-    - For each demand level, delete generators outside that level's set
-
-    OLD WORKFLOW (Phase 2) REMOVED:
-    - apply_renewable_constraint() - blocked highest-CF for local demand
-    - Now: filtering done once upstream, no per-demand redundancy
-
-    Parameters
-    ----------
-    network : pypsa.Network
-        Network with full renewable set (from filtering at max demand)
-    product_demand_mt : float
-        Current product demand level in Mt/year
-    incremental_sets : dict
-        Mapping: {demand_mt: [selected_generators]}
-        Each generator dict has: bus_id, technology, p_nom_max, avg_cf
-
-    Returns
-    -------
-    dict
-        Audit info with generator deletion stats
-    """
-    logger.info("=" * 70)
-    logger.info("APPLYING INCREMENTAL GENERATOR SELECTION")
-    logger.info("=" * 70)
-
-    # Get the selected generators for this demand level
-    if product_demand_mt not in incremental_sets:
-        logger.warning(
-            f"Demand level {product_demand_mt} Mt not in incremental sets: {list(incremental_sets.keys())}"
-        )
-        return {
-            "total_generators_before": len(network.generators),
-            "generators_deleted": 0,
-            "generators_kept": len(network.generators),
-            "selected_for_demand": 0,
-        }
-
-    selected_generators = incremental_sets[product_demand_mt]
-
-    # Build set of generator names for this demand level
-    # Generator names are formatted as: renewable_{bus_id}_{technology}
-    selected_gen_names = set()
-    for gen_dict in selected_generators:
-        gen_name = f"renewable_{gen_dict['bus_id']}_{gen_dict['technology']}"
-        selected_gen_names.add(gen_name)
-
-    logger.info(
-        f"Selected generators for {product_demand_mt} Mt: {len(selected_gen_names)}"
-    )
-
-    # Get all renewable generators in network
-    renewable_gens = network.generators[
-        network.generators.index.str.startswith("renewable_")
-    ]
-
-    # Find generators to delete (those NOT in selected set)
-    generators_to_delete = [
-        gen_name
-        for gen_name in renewable_gens.index
-        if gen_name not in selected_gen_names
-    ]
-
-    logger.info(
-        f"Deleting {len(generators_to_delete)} generators not in incremental set"
-    )
-
-    # Delete generators
-    for gen_name in generators_to_delete:
-        network.remove("Generator", gen_name)
-        logger.debug(f"Deleted generator: {gen_name}")
-
-    logger.info(
-        f"Kept {len(selected_gen_names)} generators for demand level {product_demand_mt} Mt"
-    )
-    logger.info("=" * 70)
-
-    return {
-        "total_generators_before": len(renewable_gens),
-        "generators_deleted": len(generators_to_delete),
-        "generators_kept": len(selected_gen_names),
-        "selected_for_demand": len(selected_gen_names),
-    }
+# NOTE: incremental generator selection was part of an older workflow where
+# incremental_sets were precomputed per demand level. The current driver skips
+# per-demand incremental filtering and therefore this function has been removed
+# to reduce maintenance burden. Reintroduce with tests if needed for custom
+# workflows.
 
 
 # ============================================================================
@@ -282,26 +102,32 @@ def apply_incremental_generator_selection(network, product_demand_mt, incrementa
 def add_loads_to_network(network, product, demands):
     """Add hourly Load components for fixed product demand.
 
-    Converts annual demand to hourly load: hourly_load = annual_demand / 8760
+    Converts annual demand to hourly load: hourly_load = annual_demand / HOURS_PER_YEAR
     This represents a constant hourly demand throughout the year.
     """
 
     if product == "steel":
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
+        hourly_demand_t = (
+            demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
+        )  # Mt/year → t/h
         unit_str = "t/h"
 
     elif product == "hbi":
         bus_name = "hbi"
         # HBI is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
+        hourly_demand_t = (
+            demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
+        )  # Mt/year → t/h
         unit_str = "t/h"
 
     elif product in ["eaf", "eaf-grid"]:
         bus_name = "steel"
         # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = demands["product_demand_mt"] * 1e6 / 8760  # Mt/year → t/h
+        hourly_demand_t = (
+            demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
+        )  # Mt/year → t/h
         unit_str = "t/h"
 
     else:
@@ -545,8 +371,17 @@ def _compute_infeasibility_diagnostics(network, output_dir):
 def solve_network(network, config):
     """Solve the PyPSA optimization with hourly fixed demand.
 
-    The network has hourly Load components with constant p_set.
-    Solver minimizes cost to satisfy these fixed hourly demands.
+    Parameters
+    ----------
+    network : pypsa.Network
+        The prepared PyPSA network with hourly `Load` components.
+    config : dict
+        Configuration dictionary (used to read solver options).
+
+    Notes
+    -----
+    - When invoked from the script entry point, `snakemake.params.compute_iis`
+      may be consulted to run infeasibility diagnostics for Gurobi.
     """
     # Convert arrow strings to regular strings before optimization
     _convert_arrow_strings(network)
@@ -614,9 +449,22 @@ def solve_network(network, config):
 
 
 def extract_lcox(network, product, demands):
-    """Extract LCOX from optimized network.
+    """Extract LCOX from an optimized network.
 
-    Returns DataFrame with product-specific columns for supply curve.
+    Parameters
+    ----------
+    network : pypsa.Network
+        Solved PyPSA network. `network.objective` is used as total annual cost.
+    product : str
+        Product identifier, used to set units (e.g., 'hbi', 'steel', 'h2').
+    demands : dict
+        Must include key `'product_demand_mt'` (float, Mt/year) used to
+        compute annual production and per-unit LCOX.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Single-row DataFrame with demand, hourly load, total cost and LCOX.
     """
     # Define product-specific column names
     if product.lower() in ["steel", "hbi"]:
@@ -644,7 +492,7 @@ def extract_lcox(network, product, demands):
             raise ValueError("Optimization failed to return valid objective")
 
         demand_annual_t = demands["product_demand_mt"] * 1e6  # Mt → t
-        hourly_load_t = demand_annual_t / 8760
+        hourly_load_t = demand_annual_t / HOURS_PER_YEAR
         lcox = obj_value / demand_annual_t if demand_annual_t > 0 else np.inf
 
         results_df.loc[0] = [
@@ -660,7 +508,7 @@ def extract_lcox(network, product, demands):
     except Exception as e:
         logger.error(f"Optimization infeasible or failed: {e}")
         demand_annual_t = demands["product_demand_mt"] * 1e6
-        hourly_load_t = demand_annual_t / 8760
+        hourly_load_t = demand_annual_t / HOURS_PER_YEAR
         results_df.loc[0] = [
             demand_annual_t,
             hourly_load_t,
@@ -735,7 +583,7 @@ if __name__ == "__main__":
     if network.snapshots is None or len(network.snapshots) == 0:
         cost_year = int(snakemake.wildcards.cost_year)
         network.set_snapshots(
-            pd.date_range(f"{cost_year}-01-01", periods=8760, freq="h")
+            pd.date_range(f"{cost_year}-01-01", periods=HOURS_PER_YEAR, freq="h")
         )
         logger.info(
             f"Set snapshots for cost_year={cost_year} (fallback in calculate_lcox)"

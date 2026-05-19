@@ -39,26 +39,11 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from trade_chain_utils import build_product_components  # noqa: E402
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-
-stream_handler = logging.StreamHandler()
-stream_handler.setLevel(logging.INFO)
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
+from _helpers import setup_logging  # noqa: E402
 
 snakemake: Any = globals().get("snakemake")
 
-if snakemake is not None and getattr(snakemake, "log", None):
-    log_path = Path(snakemake.log[0])
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(log_path)
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+logger = setup_logging(__name__, snakemake=snakemake)
 
 
 def load_region_renewables_consolidated(

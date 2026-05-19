@@ -9,11 +9,16 @@ import pypsa
 # Add workflow/scripts to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
 
+from _helpers import setup_logging
 from trade_chain_utils import route_label_for_product
 
 snakemake: Any = globals().get("snakemake")
 
 matplotlib.use("Agg")
+
+logger = setup_logging(
+    __name__, snakemake=snakemake, log_filename="create_supply_curve.log"
+)
 
 
 def get_steel_demand(region):
@@ -107,23 +112,23 @@ def create_supply_curve():
     route_label = route_label_for_product(snakemake.config, product) or product
 
     reserved_files = snakemake.input.lco_reserved
-    print("reserved scenario files:", reserved_files)
+    logger.info("reserved scenario files: %s", reserved_files)
     df_reserved = pd.concat(
         (pd.read_csv(f, sep=",") for f in reserved_files), ignore_index=True
     )
-    print("reserved scenario data loaded")
+    logger.info("reserved scenario data loaded")
 
     unreserved_files = snakemake.input.lco_unreserved
     if unreserved_files and len(unreserved_files) > 0:
-        print("unreserved scenario files:", unreserved_files)
+        logger.info("unreserved scenario files: %s", unreserved_files)
         df_unreserved = pd.concat(
             (pd.read_csv(f, sep=",") for f in unreserved_files), ignore_index=True
         )
-        print("unreserved scenario data loaded")
+        logger.info("unreserved scenario data loaded")
         df_merged = df_reserved.copy()
         df_sub = df_unreserved.copy()
     else:
-        print("unreserved scenario not provided; using reserved for both outputs")
+        logger.info("unreserved scenario not provided; using reserved for both outputs")
         df_merged = df_reserved.copy()
         df_sub = df_reserved.copy()
 
@@ -132,7 +137,7 @@ def create_supply_curve():
     ].index
     df_merged = df_merged.drop(infeasible_rows)
     df_sub = df_sub.drop(infeasible_rows)
-    print("deleted infeasible rows to prepare for plotting")
+    logger.info("deleted infeasible rows to prepare for plotting")
 
     df_merged["stage_input_commodity"] = stage_meta["stage_input_commodity"]
     df_merged["stage_output_commodity"] = stage_meta["stage_output_commodity"]
@@ -181,9 +186,9 @@ def create_supply_curve():
         and len(snakemake.input.lco_unreserved) > 0
     ):
         df_sub.to_csv(unreserved_path, index=False)
-        print(f"Saved unreserved supply curve: {unreserved_path}")
+        logger.info("Saved unreserved supply curve: %s", unreserved_path)
     else:
-        print(
+        logger.info(
             "Skipping supply_unreserved output (unreserved scenario not provided or not enabled)"
         )
 
@@ -191,7 +196,9 @@ def create_supply_curve():
         try:
             if not os.path.exists(unreserved_path):
                 df_sub.to_csv(unreserved_path, index=False)
-                print(f"Wrote fallback supply_unreserved file: {unreserved_path}")
+                logger.info(
+                    "Wrote fallback supply_unreserved file: %s", unreserved_path
+                )
         except Exception:
             pass
 
@@ -292,7 +299,7 @@ if snakemake is None:
 
 # Get product from wildcards (product-labeled contract)
 product = snakemake.wildcards["product"]
-print(f"Creating supply curve for product={product}")
+logger.info("Creating supply curve for product=%s", product)
 
 if product == "hydrogen":
     columns = {
