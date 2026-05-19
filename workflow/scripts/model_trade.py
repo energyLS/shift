@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import os
 import cartopy.crs as ccrs
 import geopandas as gpd
-import pycountry
 import cartopy.io.shapereader as shpreader
 
 plt.style.use("bmh")
@@ -18,49 +17,19 @@ def build_region_geodataframe(config):
     Build a dissolved GeoDataFrame of model regions from the config country lists.
 
     Each model region (e.g. "Europe", "Middle_East") is formed by dissolving its
-    member countries from the NaturalEarth 110m dataset, so only region borders
-    are visible in the map — not internal country borders.
+    member countries (specified as ISO 3166-1 alpha-3 codes) from the NaturalEarth
+    110m dataset, so only region borders are visible in the map — not internal
+    country borders.
     """
 
     regions = config["regions"]
 
-    # Corrections to align config country names with pycountry lookup names
-    country_name_corrections = {
-        "Democratic Republic of the Congo": "Congo, The Democratic Republic of the",
-        "Turkey": "Türkiye",
-        "Venezuela": "Venezuela, Bolivarian Republic of",
-        "Tanzania": "United Republic of Tanzania",
-        "Bolivia": "Plurinational State of Bolivia",
-        "Vietnam": "Viet Nam",
-        "South Korea": "Korea, Republic of",
-        "North Korea": "Korea, Democratic People's Republic of",
-        "Taiwan": "Taiwan, Province of China",
-        "Laos": "Lao People's Democratic Republic",
-        "Brunei": "Brunei Darussalam",
-        "Equatorial French Guiana": "French Guiana",
-        "Syria": "Syrian Arab Republic",
-        "Palestine": "Palestine, State of",
-        "Moldova": "Republic of Moldova",
+    # Build ISO A3 -> region mapping directly from config
+    iso_to_region = {
+        code.strip(): region
+        for region, countries in regions.items()
+        for code in countries
     }
-
-    # Build country name -> ISO A2 mapping via pycountry
-    country_name_to_iso = {}
-    for country in pycountry.countries:
-        country_name_to_iso[country.name] = country.alpha_2
-        if hasattr(country, "official_name"):
-            country_name_to_iso[country.official_name] = country.alpha_2
-
-    # Build ISO A2 -> region mapping
-    iso_to_region = {}
-    for region, countries in regions.items():
-        for country in countries:
-            # Handle entries like "Togo + Algeria" by splitting on +
-            for part in country.split("+"):
-                name = part.strip()
-                name = country_name_corrections.get(name, name)
-                code = country_name_to_iso.get(name)
-                if code:
-                    iso_to_region[code] = region
 
     # Load NaturalEarth 110m countries shapefile
     reader = shpreader.natural_earth(
@@ -68,19 +37,8 @@ def build_region_geodataframe(config):
     )
     world = gpd.read_file(reader)
 
-    # Fix missing ISO_A2 codes (-99 placeholder in NaturalEarth)
-    def _lookup_iso(country_name):
-        try:
-            return pycountry.countries.lookup(country_name).alpha_2
-        except LookupError:
-            return None
-
-    world.loc[world["ISO_A2"] == "-99", "ISO_A2"] = world.loc[
-        world["ISO_A2"] == "-99", "ADMIN"
-    ].apply(_lookup_iso)
-
     # Assign region and dissolve to remove internal country borders
-    world["region"] = world["ISO_A2"].map(iso_to_region)
+    world["region"] = world["ISO_A3"].map(iso_to_region)
     region_gdf = world.dropna(subset=["region"]).dissolve(by="region").reset_index()
 
     return region_gdf
@@ -636,7 +594,7 @@ def plot_trade_network(
     """
     config = snakemake.config
     plot_config = config["plot"]["world_map"][product]
-    colors = config["plot"]["colors"]
+    colors = config["colors"]
     supply_color = colors.get(f"{product}_supply", "black")
     demand_color = colors.get(f"{product}_demand", "lightsteelblue")
     link_colors = colors.get(f"{product}_link", "gray")
@@ -1334,9 +1292,17 @@ if __name__ == "__main__":
     create_links(transport_costs, trade_options)
 
     # Cost penalty
-    cost_penalty = snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"]
-    print(f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}")
-    n = apply_cost_penalty(n, cost_penalty)
+    if snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"] == None:
+        cost_penalty = None
+        print("cost_penalty not activated")
+    else:
+        cost_penalty = snakemake.config["scenario"][scenario]["modifiers"][
+            "cost_penalty"
+        ]
+        print(
+            f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}"
+        )
+        n = apply_cost_penalty(n, cost_penalty)
 
     # Note: Only relevant when capital costs are added in this script. Currently, they are added only in model_lcox
     # Country specific wacc adjustment (simplified)
