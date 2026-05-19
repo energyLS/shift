@@ -86,5 +86,5 @@ wildcard_constraints:
 
 
 # include: "rules/supply_curves.smk"
-include: "../rules/trade_model.smk"
-include: "../rules/reporting.smk"
+include: "rules/trade_model.smk"
+include: "rules/reporting.smk"
