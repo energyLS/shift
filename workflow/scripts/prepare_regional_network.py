@@ -94,6 +94,18 @@ def load_region_renewables_consolidated(
         # Capacity factor time series (keep full structure for now)
         cf_ts = region_cf  # (tech, class, time)
 
+        # Validate capacity factors: clamp to [0, 1] and replace NaN with 0
+        # This prevents infeasibility warnings from PyPSA when p_max_pu goes negative or exceeds 1
+        n_invalid_before = int(
+            ((cf_ts < 0) | (cf_ts > 1) | cf_ts.isnull()).sum().values
+        )
+        cf_ts = cf_ts.clip(0, 1).fillna(0)
+        if n_invalid_before > 0:
+            logger.warning(
+                f"Capacity factors validation: fixed {n_invalid_before} invalid values "
+                f"(clamped to [0,1], replaced NaN with 0)"
+            )
+
         metadata = {
             "region": region,
             "n_classes": region_cap.sizes["class"],
@@ -323,6 +335,18 @@ def add_renewable_generators(
 
             # Get time series for this site
             p_max_pu = cf_data[site_idx, :]  # (time,)
+
+            # Ensure p_max_pu is valid (should be [0, 1] after data validation above)
+            if np.any(np.isnan(p_max_pu)):
+                logger.warning(
+                    f"Generator {gen_name}: p_max_pu contains NaN values, filling with 0"
+                )
+                p_max_pu = np.nan_to_num(p_max_pu, nan=0.0)
+            if np.any(p_max_pu < 0) or np.any(p_max_pu > 1):
+                logger.warning(
+                    f"Generator {gen_name}: p_max_pu out of bounds [0,1], clamping"
+                )
+                p_max_pu = np.clip(p_max_pu, 0, 1)
 
             # Determine tech-specific carrier while keeping generators on the
             # shared `renewable_electricity` bus. This preserves per-tech
@@ -658,63 +682,101 @@ def prepare_network(
     if route_label:
         logger.info(f"Slicing skeleton to route_label={route_label}")
 
-        # Define which links/stores to keep for each stage
-        stage_components = {
-            "hbi": {
-                "keep_links": ["electrolysis", "dri"],
-                "keep_stores": ["h2_storage", "hbi_storage"],
-                "remove_links": ["eaf-grid"],
-                "add_hbi_input": False,
-            },
-            "steel": {
-                "keep_links": ["eaf-grid"],
-                "keep_stores": ["steel_storage"],
-                "remove_links": ["electrolysis", "dri"],
-                "add_hbi_input": True,  # Add HBI as external free input
-            },
-        }
+        # Use configured component resolver to derive which PyPSA components
+        # (links, stores, buses) belong to this stage-group. This keeps the
+        # slicing logic driven by `trade_chain` config and the canonical
+        # TECH_COMPONENT_MAP in `trade_chain_utils.py`.
+        try:
+            keep_links, keep_stores, keep_buses = _get_components_for_product(
+                config, route_label
+            )
+        except Exception as exc:
+            logger.warning(
+                f"Could not derive components for route_label={route_label}: {exc}; keeping full skeleton"
+            )
+            keep_links, keep_stores, keep_buses = set(), set(), set()
 
-        if route_label in stage_components:
-            spec = stage_components[route_label]
-
+        # If resolver returned empty sets, warn and keep full skeleton
+        if not (keep_links or keep_stores or keep_buses):
+            logger.warning(
+                f"Component resolver returned no components for {route_label}; keeping full skeleton"
+            )
+        else:
             # Remove links not in keep_links
             for link_name in list(network.links.index):
-                if link_name not in spec["keep_links"]:
+                if link_name not in keep_links:
                     try:
                         network.remove("Link", link_name)
-                        logger.info(f"Removed link: {link_name}")
+                        logger.info(f"Removed Link: {link_name}")
                     except Exception as e:
-                        logger.warning(f"Could not remove link {link_name}: {e}")
+                        logger.warning(f"Could not remove Link {link_name}: {e}")
 
             # Remove stores not in keep_stores
             for store_name in list(network.stores.index):
-                if store_name not in spec["keep_stores"]:
+                if store_name not in keep_stores:
                     try:
                         network.remove("Store", store_name)
-                        logger.info(f"Removed store: {store_name}")
+                        logger.info(f"Removed Store: {store_name}")
                     except Exception as e:
-                        logger.warning(f"Could not remove store {store_name}: {e}")
+                        logger.warning(f"Could not remove Store {store_name}: {e}")
 
-            # Add HBI as free input if this is steel stage
-            if spec["add_hbi_input"]:
-                if "hbi" not in network.buses.index:
-                    network.add("Bus", "hbi", carrier="hbi", unit="t/h")
-                network.add(
-                    "Generator",
-                    "hbi_input",
-                    bus="hbi",
-                    carrier="hbi",
-                    p_nom=1e10,  # Unlimited
-                    marginal_cost=0,  # Free for stage solve
-                )
-                logger.info("Added HBI as free external input (steel stage)")
+            # Preserve buses that are required outputs or material/energy interfaces
+            # Add free external inputs for any material bus that is expected but
+            # not produced within this sliced network (e.g., `hbi` for the steel stage).
+            # Determine whether a kept bus is produced by any remaining link.
+            produced_buses = set()
+            for link_name in network.links.index:
+                row = network.links.loc[link_name]
+                for bcol in [
+                    c for c in ["bus0", "bus1", "bus2", "bus3"] if c in row.index
+                ]:
+                    b = row.get(bcol)
+                    if pd.notna(b):
+                        produced_buses.add(b)
+
+            # For each bus in keep_buses that is not produced in the sliced network,
+            # add a free generator input if no generator already supplies it.
+            for bus_name in keep_buses:
+                if bus_name not in network.buses.index:
+                    # create bus if missing
+                    try:
+                        network.add("Bus", bus_name, carrier=bus_name, unit="t/h")
+                        logger.info(f"Added missing Bus for stage slicing: {bus_name}")
+                    except Exception:
+                        pass
+
+                needs_free_input = False
+                if bus_name not in produced_buses:
+                    # If no link produces this bus, and no generator exists on it,
+                    # create a free external input (unlimited capacity, zero marginal cost)
+                    gens_on_bus = (
+                        network.generators[network.generators["bus"] == bus_name]
+                        if len(network.generators) > 0
+                        else pd.DataFrame()
+                    )
+                    if gens_on_bus.empty:
+                        needs_free_input = True
+
+                if needs_free_input:
+                    gen_name = f"{bus_name}_input"
+                    if gen_name not in network.generators.index:
+                        try:
+                            network.add(
+                                "Generator",
+                                gen_name,
+                                bus=bus_name,
+                                carrier=bus_name,
+                                p_nom=1e10,
+                                marginal_cost=0,
+                            )
+                            logger.info(
+                                f"Added external free input generator: {gen_name} on {bus_name}"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Could not add free input {gen_name}: {e}")
 
             logger.info(
                 f"Skeleton sliced to {route_label}: {len(network.links)} links, {len(network.stores)} stores"
-            )
-        else:
-            logger.warning(
-                f"route_label={route_label} not recognized; keeping full skeleton"
             )
 
     # Set region-specific discount rate

@@ -370,7 +370,6 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         lifetime=td.get_tech_param(batt_store_params, "lifetime", 30.0),
         fom_cost=batt_store_cost * 0.0,
         standing_loss=TECH_ASSUMPTIONS["batt_standing_loss"],
-        e_initial=config.get("battery_e_initial", 0.5),  # Start at 50% capacity
         e_cyclic=True,  # End state must equal start state
     )
 
@@ -384,6 +383,19 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         fom_cost=0.0,  # No maintenance cost
         discount_rate=0.0,  # No cost, discount rate doesn't matter but required by PyPSA
         standing_loss=0.0,  # HBI storage doesn't lose energy
+    )
+
+    # Steel Storage: flexible intermediate inventory between EAF and demand
+    network.add(
+        "Store",
+        "steel_storage",
+        bus="steel",
+        e_nom_extendable=True,
+        overnight_cost=0.0,  # Just a pile - no cost
+        lifetime=1.0,
+        fom_cost=0.0,  # No maintenance cost
+        discount_rate=0.0,  # No cost, discount rate doesn't matter but required by PyPSA
+        standing_loss=0.0,  # Steel storage doesn't lose energy
     )
 
 

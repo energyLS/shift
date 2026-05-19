@@ -24,20 +24,23 @@ BUS_ALIASES = {
 TECH_COMPONENT_MAP = [
     {
         "match": ("electro", "electrolyser", "electrolyzer"),
-        "links": ("electrolyzer",),
+        # Some skeletons name this link `electrolysis` while others use
+        # `electrolyzer`/`electrolyser`. Include common variants so slicer
+        # keeps the actual link present in the network.
+        "links": ("electrolyzer", "electrolysis", "electrolyser"),
         "stores": ("h2_storage",),
         # expected material reactants, energy inputs, and outputs
         "materials": (),
-        "energy": ("renewable_electricity", "grid_electricity"),
+        "energy": ("renewable_electricity",),
         "outputs": ("hydrogen",),
-        "buses": ("hydrogen", "renewable_electricity", "grid_electricity"),
+        "buses": ("hydrogen", "renewable_electricity"),
     },
     {
         "match": ("dri", "direct_reduction", "reduction"),
         "links": ("dri",),
         "stores": ("h2_storage", "hbi_storage"),
         "materials": ("iron_ore", "hydrogen"),
-        "energy": ("renewable_electricity", "grid_electricity"),
+        "energy": ("renewable_electricity"),
         "outputs": ("hbi",),
         "buses": (
             "iron_ore",
@@ -49,7 +52,8 @@ TECH_COMPONENT_MAP = [
     },
     {
         "match": ("eaf", "electric_arc", "arc_furnace"),
-        "links": ("eaf",),
+        # Support both `eaf` and `eaf-grid` link namings found in skeletons.
+        "links": ("eaf", "eaf-grid", "electric_arc_furnace"),
         "stores": ("steel_storage",),
         "materials": ("hbi",),
         "energy": ("grid_electricity", "renewable_electricity"),
@@ -317,7 +321,14 @@ def build_product_components(config: Dict, product: str) -> Dict[str, object]:
             stores.update(comp.get("stores", ()))
             for b in comp.get("buses", ()):  # include any canonical buses from mapping
                 buses.add(_normalize_commodity(b))
-
+    # If this stage-group uses renewable electricity, include battery
+    # storage and bus as an explicit component so slicers keep batteries
+    # for renewable-based stages. The user requested batteries be explicit
+    # in stage configurations; adding them here maintains backward
+    # compatibility while keeping per-stage skeletons functional.
+    if has_renewables:
+        stores.add("battery")
+        buses.add("battery")
     return {
         "links": links,
         "stores": stores,

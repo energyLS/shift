@@ -100,14 +100,24 @@ def load_demands_for_region(region, config):
 
 
 def add_loads_to_network(network, product, demands):
-    """Add hourly Load components for fixed product demand.
+    """Add hourly Load components and set storage boundary conditions.
 
-    Converts annual demand to hourly load: hourly_load = annual_demand / HOURS_PER_YEAR
-    This represents a constant hourly demand throughout the year.
+    Converts annual demand to hourly load: hourly_load = annual_demand / HOURS_PER_YEAR.
+    Sets product storage e_initial and e_final to annual_demand / 52 (approx. 2-week buffer).
+    This provides flexibility while ensuring bounded stock levels.
     """
+    if product == "hydrogen":
+        bus_name = "hydrogen"
+        storage_name = "h2_storage"
+        # Hydrogen is measured in kg/year, convert to kg/h (hourly)
+        hourly_demand_t = (
+            demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
+        )  # Mt/year → t/h
+        unit_str = "t/h"
 
     if product == "steel":
         bus_name = "steel"
+        storage_name = "steel_storage"
         # Steel is measured in t/year, convert to t/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
@@ -116,22 +126,15 @@ def add_loads_to_network(network, product, demands):
 
     elif product == "hbi":
         bus_name = "hbi"
+        storage_name = "hbi_storage"
         # HBI is measured in t/year, convert to t/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
         )  # Mt/year → t/h
         unit_str = "t/h"
 
-    elif product in ["eaf", "eaf-grid"]:
-        bus_name = "steel"
-        # Steel is measured in t/year, convert to t/h (hourly)
-        hourly_demand_t = (
-            demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
-        )  # Mt/year → t/h
-        unit_str = "t/h"
-
     else:
-        raise ValueError(f"Product '{product}' not recognized")
+        raise ValueError(f"Product '{product}' not recognized (valid: 'steel', 'hbi')")
 
     if bus_name not in network.buses.index:
         raise ValueError(f"Bus '{bus_name}' not found in network")
@@ -147,14 +150,21 @@ def add_loads_to_network(network, product, demands):
         p_set=p_set,  # Constant hourly demand
     )
 
-    # For steel/HBI: set HBI storage initial energy to 24 hours of hourly load
-    if product.lower() in ["steel", "hbi"]:
-        if "hbi_storage" in network.stores.index:
-            hbi_e_initial = 24 * hourly_demand_t  # 24 hours of buffer
-            network.stores.at["hbi_storage", "e_initial"] = hbi_e_initial
-            logger.info(
-                f"Set HBI storage e_initial to {hbi_e_initial:.2f} t (24h buffer for {hourly_demand_t:.4f} t/h demand)"
-            )
+    # Set product storage boundary conditions: initial and final stock at annual_demand/52
+    annual_demand_t = demands["product_demand_mt"] * 1e6  # Mt → t
+    storage_buffer = annual_demand_t / 52  # Approx. 1 week of annual demand
+
+    if storage_name in network.stores.index:
+        network.stores.at[storage_name, "e_initial"] = storage_buffer
+        network.stores.at[storage_name, "e_final"] = storage_buffer
+        logger.info(
+            f"Set {storage_name} e_initial and e_final to {storage_buffer:.2f} t "
+            f"(annual_demand/52 for {hourly_demand_t:.4f} t/h demand)"
+        )
+    else:
+        logger.warning(
+            f"Storage '{storage_name}' not found in network; skipping boundary condition setup"
+        )
 
     logger.info(
         f"Added hourly load for {product}: {load_name} = {p_set:.4f} {unit_str} (constant all hours)"

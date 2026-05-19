@@ -41,7 +41,7 @@ trade_chains:
       material_inputs: [hbi]
       energy_inputs: [grid_electricity]
       output_commodity: steel
-      process_label: eaf-grid
+      process_label: eaf
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep

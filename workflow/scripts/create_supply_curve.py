@@ -261,7 +261,7 @@ def create_supply_curve():
             linestyle="-.",
             label="20% final energy demand",
         )
-    elif product in ["steel", "eaf", "eaf-grid"]:
+    elif product == "steel":
         steel_demand = get_steel_demand(snakemake.wildcards["region"])
         plt.axvline(x=steel_demand.values[0], linestyle=":", label="local steel demand")
     elif product == "hbi":
@@ -312,7 +312,7 @@ if product == "hydrogen":
         "product_unit": "MWh",
         "ylim": (0, 100),
     }
-elif product in ["steel", "eaf", "hbi", "eaf-grid"]:
+elif product in ["steel", "hbi"]:
     columns = {
         "demand factor": "demand factor [%]",
         "demand": "demand [t]",
