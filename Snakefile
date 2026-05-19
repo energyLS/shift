@@ -13,10 +13,13 @@ from snakemake.utils import Paramspace
 
 WORKFLOW_DIR = Path(workflow.basedir) / "workflow"
 SCRIPT_DIR = WORKFLOW_DIR / "scripts"
+NOTEBOOKS_DIR = WORKFLOW_DIR / "notebooks"
 # DATA_
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+if str(NOTEBOOKS_DIR) not in sys.path:
+    sys.path.insert(0, str(NOTEBOOKS_DIR))
 
 from trade_chain_utils import (  # noqa: E402
     derive_supply_curve_products,
@@ -86,5 +89,6 @@ wildcard_constraints:
 
 
 # include: "rules/supply_curves.smk"
+include: "rules/preparation.smk"
 include: "rules/trade_model.smk"
 include: "rules/reporting.smk"
