@@ -44,8 +44,9 @@ trade_chains:
       output_commodity: steel
       process_label: eaf-grid
   trade_scenarios:
-    default
-    mga-stability
+    - default
+    - mga-stability
+    - mga-stability-weighted
 
 
 scenario: 
