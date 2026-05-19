@@ -98,26 +98,26 @@ def building_model(
 
     # adding carriers
 
-    n.add("Carrier", name=final, color=snakemake.config["plot"]["colors"][final])
-    n.add("Carrier", name=interone, color=snakemake.config["plot"]["colors"][interone])
+    n.add("Carrier", name=final, color=snakemake.config["colors"][final])
+    n.add("Carrier", name=interone, color=snakemake.config["colors"][interone])
 
     # Define the iron ore carrier
     n.add(
         "Carrier",
         name="iron_ore",
-        color=snakemake.config["plot"]["colors"]["iron_ore"],
+        color=snakemake.config["colors"]["iron_ore"],
     )
 
     n.add(
         "Carrier",
         name="shipping_" + shipping_first,
-        color=snakemake.config["plot"]["colors"][shipping_first + "_shipping"],
+        color=snakemake.config["colors"][shipping_first + "_shipping"],
     )
 
     n.add(
         "Carrier",
         name="shipping_" + shipping_second,
-        color=snakemake.config["plot"]["colors"][shipping_second + "_shipping"],
+        color=snakemake.config["colors"][shipping_second + "_shipping"],
     )
 
     # for each region we are creating a bus with all the potentials and load
@@ -326,10 +326,7 @@ def building_model(
                         region_data_intertwo[f"demand [{unit}]"][s]
                     ) - float(region_data_intertwo[f"demand [{unit}]"][s - 1])
 
-                if (
-                    intertwo == "eaf-grid"
-                    and snakemake.config["grid_electricity"]["grid_potential_custom"]
-                ):
+                if intertwo == "eaf-grid":
                     grid_potential = pd.read_csv(
                         snakemake.input.grid_potential, header=0, index_col=0
                     )
@@ -1253,14 +1250,16 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf-grid",
             final="steel",
-            scenario="mga-stability-weighted",
+            scenario="default",
             wacc="uniform",
+            chain_id="default_2050",
         )
 
     final = snakemake.wildcards["final"]
     interone = snakemake.wildcards["interone"]
     intertwo = snakemake.wildcards["intertwo"]
     scenario = snakemake.wildcards["scenario"]
+    chain_id = snakemake.wildcards["chain_id"]
 
     print(
         f"intermediate 1 ({interone}) and intermediate 2 ({intertwo}) to final product {final}"
