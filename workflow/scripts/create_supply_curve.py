@@ -27,7 +27,7 @@ def get_steel_demand(region):
 
     steel_demand_region = steel_demand.loc[
         steel_demand.region == region
-    ].SteelProductionMt
+    ].SteelDemand_DRI_Mt
 
     return steel_demand_region
 

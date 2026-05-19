@@ -8,24 +8,27 @@ and collect the scenario-level outputs.
 rule model_trade:
     input:
         supply_curves_interone=expand(
-            "resources/supply_curves/cost_year~{cost_year}/{region}_{interone}.csv",
+            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv",
             allow_missing=True,
             cost_year=[2050],
             region=config["regions"],
         ),
         supply_curves_intertwo=expand(
-            "resources/supply_curves/cost_year~{cost_year}/{region}_{intertwo}.csv",
+            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{intertwo}.csv",
             allow_missing=True,
             cost_year=[2050],
             region=config["regions"],
+            intertwo=["steel"],
         ),
         transport_costs="data/transport_costs/steel_r_iron_r.csv",
-        trade_options="data/trade_opt.csv",
+        trade_options="resources/trade_opt_chokepoints.csv",
         bus_locations="data/bus_locations.csv",
         demand="data/un_enerdata_demand_2050_final.csv",
-        steel_demand="resources/steel_production_clustered.csv",
+        steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore="resources/ironore_production_clustered.csv",
         grid_potential="data/grid_potential_custom.csv",
+        wacc="resources/wacc-clustered.csv",
+        political_stability="resources/political_stability_clustered.csv",
     output:
         trade_result=f"results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network=f"results/{trade_scenarios.wildcard_pattern}/network.nc",
@@ -41,7 +44,8 @@ rule model_trade:
         cost_penalty=config["design"]["cost_penalty"],
         scenarios=config["scenario"],
     script:
-        str(SCRIPT_DIR / "model_trade.py")
+        # str(SCRIPT_DIR / "model_trade.py")
+        "../workflow/scripts/model_trade.py"
 
 
 rule model_trade_all:

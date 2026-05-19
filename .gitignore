@@ -12,6 +12,11 @@
 \data
 \resources
 \results
+
+
+# Allow specific file in data/
+!data/demand/ip_market__fabrication.csv
+!/data/wacc-global.csv
 # pixi environments
 .pixi/*
 !.pixi/config.toml
