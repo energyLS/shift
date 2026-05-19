@@ -44,8 +44,8 @@ rule model_trade:
         cost_penalty=config["design"]["cost_penalty"],
         scenarios=config["scenario"],
     script:
-        # str(SCRIPT_DIR / "model_trade.py")
-        "../workflow/scripts/model_trade.py"
+        str(SCRIPT_DIR / "model_trade.py")
+
 
 rule model_trade_all:
     input:
