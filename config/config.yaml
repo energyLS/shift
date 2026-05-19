@@ -3,29 +3,52 @@ enable:
   run_supply_curve: False # Enable for first run
 
 
-# Different demand factors of maximum hydrogen potential as demand in [%]
-demand_factors: [0.001, 0.01, 0.02, 0.03, 0.04, 0.05, 0.07, 0.1, 1, 2, 3, 4, 5, 10, 15, 20, 30, 40, 50, 60, 70] # 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
-hydrogen_storage_cost: False
-iron_ore_cost_in_supply_chain: False # Should be set to false, since iron ore cost will be added in the transport model and should not be double counted
+# Output toggles for Step 0/1 (greenfield supply curve generation)
+outputs:
+  save_supply_nodemand: True  # Generate reference supply curve (all generators available) alongside main curve
+  keep_optimization_networks: True  # Keep .nc network files from optimization (set False to save disk space)
 
-run:
-  # prefix: ""
-  # name: ""
-  # scenarios:
-  #   enable: false
-  #   file: config/scenarios.yaml
-  disable_progressbar: false
+# Supply curve scenario configuration
+# Two scenarios are supported:
+#   - reserved (DEFAULT): highest-performing (best CF) renewable generators reserved for domestic
+#     electricity demand; export/HBI supply stack reduced before optimization. Requires electricity demand data.
+#   - unreserved (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
+#     Can be generated without electricity demand data when demand data unavailable.
+supply_curve:
+  generate_unreserved: False  # Set to True to generate unreserved scenario as fallback
 
-trade:
-  shipping_routes:
-    ports: "predefined"  # "closest": route from region centroid (searoute snaps to nearest sea node); "predefined": route from hand-curated port city coordinates parsed from the notes column in trade_opt.csv
-  diversity_factor: False # "False" or float as max constraint for one single hbi supply route in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supply route, etc.
-  # Note: The diversity factor constraints the trade route, not the producer itself. (Import from exporter route R <= diversity_factor * demand of importer I.). As a result, if the trade passes through one region, it is limited based on the demand of this particular region * diversity_factor. Therefore the trade routes in a scenario with a diversity_factor of 100% may differ to a scenario where diversity_factor=False.
 
-scenario: # must be listed in config/trade_scenarios.csv in order to run
+# Config-native trade chain definitions
+# Defines the commodity transformation chain with ordered stages and process labels
+trade_chains:
+  id: default_2050
+  cost_year: 2050
+  scenario: default
+  final_product: steel
+  wacc: regional
+  tradeable_commodities: [iron_ore, hbi]
+  stages:
+    1:
+      material_inputs: []
+      energy_inputs: [renewable_electricity]
+      output_commodity: hydrogen
+      process_label: electrolysis
+    2:
+      material_inputs: [iron_ore, H2]
+      energy_inputs: [renewable_electricity]
+      output_commodity: hbi
+      process_label: dri
+    3:
+      material_inputs: [hbi]
+      energy_inputs: [grid_electricity]
+      output_commodity: steel
+      process_label: eaf-grid
+  
+
+scenario: 
   default:
-      modifiers:
-        cost_penalty:
+    modifiers:
+      cost_penalty:
   penalty-nwa:
     modifiers:
       cost_penalty:
@@ -106,6 +129,65 @@ scenario: # must be listed in config/trade_scenarios.csv in order to run
           block_b: ["Middle_East","Subsaharan_Africa","North_West_Africa", "Eurasia","South_America","Central_America","West_Asia","East_Asia","Pacific_Asia"]
 
 
+
+# Absolute steel demand levels (Mt/year) for supply curve sweep
+# For each level, PyPSA minimizes cost with fixed renewable capacity
+# Values represent different production scales
+steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
+hydrogen_storage_cost: False
+
+run:
+  # prefix: ""
+  # name: ""
+  # scenarios:
+  #   enable: false
+  #   file: config/scenarios.yaml
+  disable_progressbar: false
+
+# Region definitions (ISO3 codes matching renewable clusters metadata)
+regions:
+  "Europe": ["ALB","AUT","BLR","BEL","BIH","BGR","HRV","CYP","CZE","DNK","EST","FIN","DEU","GRC","HUN","ITA","XKX","LVA","LTU","LUX","MKD","MDA","MNE","NLD","NOR","POL","ROU","SRB","SVK","SVN","SWE","CHE","TUR","UKR"]
+  "Far_West_Europe": ["FRA","GRL","ISL","IRL","PRT","ESP","GBR"]
+  "Middle_East": ["BHR","IRN","IRQ","ISR","JOR","KWT","LBN","OMN","PSE","QAT","SAU","SYR","ARE","YEM"]
+  "North_West_Africa": ["BEN","BFA","CIV","GMB","GHA","GIN","GNB","LBR","NGA","SEN","SLE","TGO","DZA","TCD","EGY","ERI","LBY","MLI","MRT","MAR","NER","SDN","TUN","ESH"]
+  "Subsaharan_Africa": ["AGO","BWA","BDI","CMR","CAF","COD","ETH","KEN","GAB","MDG","MWI","MOZ","NAM","COG","RWA","SOM","ZAF","SSD","TZA","UGA","ZMB","ZWE"]
+  "North_America": ["CAN","USA"]
+  "Eurasia": ["ARM","AZE","GEO","KAZ","KGZ","TJK","TKM","UZB","RUS"]
+  "South_America": ["BOL","BRA","COL","ECU","GUF","GUY","PRY","PER","SUR","VEN"]
+  "South_South_America": ["ARG","CHL","URY"]
+  "Central_America": ["CRI","SLV","GTM","HND","MEX","NIC","PAN","CUB","DOM","JAM","HTI"]
+  "West_Asia": ["AFG","BGD","BTN","IND","NPL","PAK","LKA"]
+  "East_Asia": ["CHN","HKG","MNG","TWN"]
+  "Pacific_Asia": ["BRN","KHM","IDN","LAO","MYS","MMR","PNG","PHL","SGP","THA","VNM"]
+  "East_East_Asia": ["JPN","KOR","PRK"]
+  "Oceania": ["AUS","NZL"]
+
+# countries: [
+#   "BI","KM","DJ","ER","ET","KE","MG","MW","MU","MZ","RW","SC","SO","SS","TZ","UG","ZM","ZW", # Africa — Eastern Africa
+#   "AO","CM","CF","TD","CG","CD","GQ","GA","ST", # Africa — Middle Africa
+#   "DZ","EG","LY","MA","SD","TN", # Africa — Northern Africa
+#   "BW","SZ","LS","NA","ZA", # Africa — Southern Africa
+#   "BJ","BF","CV","CI","GM","GH","GN","GW","LR","ML","MR","NE","NG","SN","SL","TG", # Africa — Western Africa
+#   "CA","US", # Americas — Northern America
+#   "AG","BS","BB","CU","DM","DO","GD","HT","JM","KN","LC","VC","TT", # Americas — Caribbean
+#   "BZ","CR","SV","GT","HN","MX","NI","PA", # Americas — Central America
+#   "AR","BO","BR","CL","CO","EC","GY","PY","PE","SR","UY","VE", # Americas — South America
+#   "KZ","KG","TJ","TM","UZ", # Asia — Central Asia
+#   "CN","JP","KP","KR","MN","TW", # Asia — Eastern Asia
+#   "BN","KH","ID","LA","MY","MM","PH","SG","TH","TL","VN", # Asia — South-eastern Asia
+#   "AF","BD","BT","IN","IR","MV","NP","PK","LK", # Asia — Southern Asia
+#   "AM","AZ","BH","CY","GE","IQ","IL","JO","KW","LB","OM","QA","SA","PS","SY","TR","AE","YE", # Asia — Western Asia
+#   "BY","BG","CZ","HU","MD","PL","RO","RU","SK","UA", # Europe — Eastern Europe
+#   "DK","EE","FI","IS","IE","LV","LT","NO","SE","GB", # Europe — Northern Europe
+#   "AL","AD","BA","HR","GR","IT","MT","ME","MK","PT","SM","RS","SI","ES","VA", # Europe — Southern Europe
+#   "AT","BE","FR","DE","LI","LU","MC","NL","CH", # Europe — Western Europe
+#   "AU","NZ", # Oceania — Australia and New Zealand
+#   "FJ","PG","SB","VU", # Oceania — Melanesia
+#   "FM","KI","MH","NR","PW", # Oceania — Micronesia
+#   "TO","TV","WS" # Oceania — Polynesia
+# ]
+
+
 design:
   cost_penalty:
     # North_West_Africa: 1.1 # Relative cost pentalty on all technlogies in this region. 1: no change
@@ -114,11 +196,33 @@ design:
     # Oceania: 0.8
 
 costs:
-  version: v0.12.0
-  eur_usd: 1.15 # 1 Euro equals 1.15 USD
+  version: v0.14.0
 
-interest_rate: 0.07 # This should align with the TRACE model input WACC. To use a regional interest rate, set the wildcard wacc="regional" in the `config/trade_scenarios.csv`. Caveat: this does not change the WACC for storages. For uniform interest rate, set wacc="uniform" in the `config/trade_scenarios.csv`.
+interest_rate: 
+  default: 0.05
+  # Regional discount rates (override default for specific regions):
+  Central_America: 0.11
+  East_Asia: 0.09
+  East_East_Asia: 0.08
+  Eurasia: 0.10
+  Europe: 0.10
+  Far_West_Europe: 0.08
+  Middle_East: 0.12
+  North_America: 0.08
+  North_West_Africa: 0.12
+  Oceania: 0.07
+  Pacific_Asia: 0.10
+  South_America: 0.11
+  South_South_America: 0.10
+  Subsaharan_Africa: 0.11
+  West_Asia: 0.11
 
+trade:
+  shipping_routes:
+    ports: "predefined"  # "closest": route from region centroid (searoute snaps to nearest sea node); "predefined": route from hand-curated port city coordinates parsed from the notes column in trade_opt.csv
+  diversity_factor: False # "False" or float as max constraint for one single hbi supply route in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supply route, etc.
+  # Note: The diversity factor constraints the trade route, not the producer itself. (Import from exporter route R <= diversity_factor * demand of importer I.). As a result, if the trade passes through one region, it is limited based on the demand of this particular region * diversity_factor. Therefore the trade routes in a scenario with a diversity_factor of 100% may differ to a scenario where diversity_factor=False.
+  
 grid_electricity:
   marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
   capital_cost: 0 # EUR/MW, guesstimate for average grid electricity cost in 2030
@@ -137,7 +241,7 @@ onwind_p_nom_max_cor: 0.1
 
 iron_ore:
   regionalise: "grade-dependent" #"uniform" or "grade-dependent"
-  marginal_cost: 97.7 # Used as uniform assumption in the trade model and for intermediate figures/results with undefined sourcing region of iron ore # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
+  marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
@@ -156,48 +260,10 @@ plot:
     steel:
       bus_size: 2.0e-7
       link_width: 3.0e-8
-  colors:
-    steel: 'grey'
-    steel_shipping: 'darkgrey'
-    hydrogen: 'magenta'
-    iron_ore: 'brown'
-    iron_ore_shipping: "#6A000E"
-    hbi: 'darkred'
-    hbi_shipping: 'firebrick'
-    steel_supply: 'lightsteelblue'
-    steel_demand: 'seagreen'
-    steel_link: 'skyblue'
-    iron_ore_supply: 'black'
-    iron_ore_demand: 'lightsteelblue'
-    iron_ore_link: "#6A000E"
-    hbi_demand: 'green'
-    hbi_supply: 'darkred'
-    hbi_link: 'firebrick'
-
-# Region definitions
-regions:
-  "Europe": ["Albania", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", "Bulgaria", "Croatia", "Cyprus", "Czechia", "Denmark", "Estonia", "Finland", "Germany", "Greece", "Hungary", "Italy", "Kosovo", "Latvia", "Lithuania", "Luxembourg", "North Macedonia", "Moldova", "Montenegro", "Netherlands", "Norway", "Poland", "Romania", "Serbia", "Slovakia", "Slovenia", "Sweden", "Switzerland", "Turkey", "Ukraine"]
-  "Far_West_Europe": ["France", "Greenland", "Iceland", "Ireland", "Portugal", "Spain", "United Kingdom"]
-  "Middle_East": ["Bahrain", "Iran, Islamic Republic of", "Iraq","Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "United Arab Emirates",
-   "Yemen"]
-  "North_West_Africa": ["Benin", "Burkina Faso", "Côte d'Ivoire", "Gambia", "Ghana", "Guinea", "Guinea-Bissau", "Liberia", "Nigeria", "Senegal", "Sierra Leone", "Togo + Algeria", "Chad", "Egypt", "Eritrea", "Libya", "Mali", "Mauritania", "Morocco", "Niger", "Sudan", "Tunisia", "Western Sahara"]
-  "Subsaharan_Africa": ["Angola", "Botswana", "Burundi", "Cameroon", "Central African Republic", "Democratic Republic of the Congo", "Ethiopia", "Kenya", "Gabon", "Madagascar", "Malawi", "Mozambique", "Namibia", "Republic of the Congo", "Rwanda", "Somalia", "South Africa", "South Sudan", "Tanzania", "Uganda", "Zambia", "Zimbabwe"]
-  "North_America": ["Canada", "United States"]
-  "Eurasia": ["Armenia", "Azerbaijan", "Georgia", "Kazakhstan", Kyrgyzstan, "Tajikistan", "Turkmenistan", "Uzbekistan", "Russian Federation"]
-  "South_America": ["Bolivia", "Brazil", "Colombia", "Ecuador", "Equatorial French Guiana", "Guyana", "Paraguay", "Peru", "Suriname","Venezuela"]
-  "South_South_America": ["Argentina", "Chile", "Uruguay"]
-  "Central_America": ["Costa Rica", "El Salvador", "Guatemala", "Honduras", "Mexico", "Nicaragua", "Panama", "Cuba", "Dominican Republic", "Jamaica", "Haiti"]
-  "West_Asia": ["Afghanistan", "Bangladesh", "Bhutan", "India", "Nepal", "Pakistan", "Sri Lanka"]
-  "East_Asia": ["China", "Hong Kong", "Mongolia", "Taiwan"]
-  "Pacific_Asia": ["Brunei", "Cambodia", "Indonesia", "Laos", "Malaysia", "Myanmar", "Papua New Guinea", "Philippines", "Singapore", "Thailand", "Vietnam"]
-  "East_East_Asia": ["Japan", "South Korea", "North Korea"]
-  "Oceania": ["Australia", "New Zealand"]
-
-
 solver:
-    name: gurobi
-    options: gurobi-default
-
+  name: gurobi
+  options: gurobi-default
+  compute_iis: False  # Set to false to skip expensive IIS computation for infeasible models
 solver_options:
     highs-default:
       # refer to https://ergo-code.github.io/HiGHS/dev/options/definitions/
@@ -267,4 +333,17 @@ colors:
     border:             '#bcbcbc'  # mid grey    (country borders)
     legend_bg:          '#f5f5f5'  # near-white  (legend background)
     legend_edge:        '#bdbdbd'  # grey        (legend border)
-
+  steel_shipping: 'darkgrey'
+  iron_ore: 'brown'
+  iron_ore_shipping: "#6A000E"
+  hbi: 'darkred'
+  hbi_shipping: 'firebrick'
+  steel_supply: 'lightsteelblue'
+  steel_demand: 'seagreen'
+  steel_link: 'skyblue'
+  iron_ore_supply: 'black'
+  iron_ore_demand: 'lightsteelblue'
+  iron_ore_link: "#6A000E"
+  hbi_demand: 'green'
+  hbi_supply: 'darkred'
+  hbi_link: 'firebrick'
