@@ -24,6 +24,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+
 def load_config(config):
     with open(config, "r") as stream:
         try:
@@ -79,7 +80,7 @@ def mock_snakemake(
 
     script_dir = Path(__file__).parent.resolve()
     if root_dir is None:
-        root_dir = script_dir.parent
+        root_dir = script_dir.parent.parent
     else:
         root_dir = Path(root_dir).resolve()
 
