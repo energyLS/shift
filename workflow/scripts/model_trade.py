@@ -180,7 +180,7 @@ def building_model(
                 n.add(
                     "Generator",
                     "{} supply {}_{}".format(
-                        final, region_name, region_data_interone["demand factor [%]"][s]
+                        final, region_name, region_data_interone["load [t/h]"][s]
                     ),
                     bus=region_name,
                     carrier=final,
@@ -197,7 +197,7 @@ def building_model(
                     "{} supply {}_{}".format(
                         interone,
                         region_name,
-                        region_data_interone["demand factor [%]"][s],
+                        region_data_interone["load [t/h]"][s],
                     ),
                     bus0=region_name + "_ore",
                     bus1=region_name + "_" + interone,
@@ -237,7 +237,7 @@ def building_model(
                 n.add(
                     "Link",
                     "{} supply {}_{}".format(
-                        final, region_name, region_data_intertwo["demand factor [%]"][s]
+                        final, region_name, region_data_intertwo["load [t/h]"][s]
                     ),
                     bus0=region_name + "_" + interone,
                     bus1=region_name + "_" + final,
@@ -1191,7 +1191,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Product must be either 'steel' or 'hydrogen'.")
 
-    cost_descriptor = "LCOX"
+    cost_descriptor = "lcox"
 
     plot_config = snakemake.config["plot"]["world_map"][final]
 
