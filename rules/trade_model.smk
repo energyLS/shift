@@ -8,16 +8,17 @@ and collect the scenario-level outputs.
 rule model_trade:
     input:
         supply_curves_interone=expand(
-            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
+            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv",
             allow_missing=True,
             cost_year=[2050],
             region=config["regions"],
         ),
         supply_curves_intertwo=expand(
-            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{intertwo}.csv",
+            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{intertwo}.csv",
             allow_missing=True,
             cost_year=[2050],
             region=config["regions"],
+            intertwo=["steel"],
         ),
         transport_costs = "data/transport_costs/steel_r_iron_r.csv",
         trade_options = "resources/trade_opt_chokepoints.csv",

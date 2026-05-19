@@ -100,7 +100,10 @@ def building_model(
         region_file_intertwo = supply_curves_intertwo[r]
         region_data_interone = pd.read_csv(region_file_interone, header=0)
         region_data_intertwo = pd.read_csv(region_file_intertwo, header=0)
-        region_name = os.path.basename(region_file_interone).split("_" + interone)[0]
+
+        region_name = os.path.basename(region_file_interone).rsplit(
+            "_marginal_cost_", 1
+        )[0]
 
         print("building generators and loads for ", region_name)
 
@@ -1112,7 +1115,7 @@ if __name__ == "__main__":
             intertwo="eaf-grid",
             final="steel",
             scenario="default",
-            wacc="regional",
+            wacc="uniform",
             chain_id="default_2050",
         )
 
