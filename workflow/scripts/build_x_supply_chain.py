@@ -77,9 +77,6 @@ def _add_carriers(network: pypsa.Network) -> None:
         "iron_ore": "Iron ore (mass)",
         "hbi": "Hot Briquetted Iron (mass)",
         "steel": "Steel (mass)",
-        "electrolysis": "Electrolysis process",
-        "direct_reduction_furnace": "Direct reduction furnace",
-        "electric_arc_furnace": "Electric arc furnace",
         "grid_electricity": "Grid electricity import",
     }
     for carrier_name, description in carriers.items():
@@ -323,7 +320,6 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         lifetime=td.get_tech_param(h2_params, "lifetime", 100.0),
         fom_cost=h2_inv_cost * (td.get_tech_param(h2_params, "FOM", 0.0) / 100),
         standing_loss=TECH_ASSUMPTIONS["h2_standing_loss"],
-        e_initial=config.get("h2_storage_e_initial", 0.5),  # Start at 50% capacity
         e_cyclic=True,  # End state must equal start state
     )
 
