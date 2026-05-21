@@ -73,7 +73,6 @@ def _load_trade_scenarios():
 
 trade_scenarios = _load_trade_scenarios()
 
-print(f"Loaded trade scenarios:\n{trade_scenarios}")
 
 def _derive_supply_curve_products():
     return derive_supply_curve_products(config)
@@ -88,7 +87,7 @@ wildcard_constraints:
     rule="(0|[1-9][0-9]?|100)",
 
 
-# include: "rules/supply_curves.smk"
+include: "rules/supply_curves.smk"
 include: "rules/preparation.smk"
 include: "rules/trade_model.smk"
 include: "rules/reporting.smk"

@@ -1,0 +1,43 @@
+exclude: "^LICENSES|^config/config\\.yaml$"
+
+ci:
+  autoupdate_schedule: quarterly
+
+repos:
+  # Run ruff to lint and format
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # Find common spelling mistakes
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
+        args: ['--ignore-regex="(\b[A-Z]+\b)"']
+        types_or: [python, rst, markdown]
+        files: ^(scripts|rules)/
+
+  # Format Snakemake rule files
+  - repo: https://github.com/snakemake/snakefmt
+    rev: v1.0.0
+    hooks:
+      - id: snakefmt
+  
+  # Run some default pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+      - id: check-merge-conflict
+      - id: check-yaml
+        exclude: "pixi.lock"
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+

@@ -1,79 +1,112 @@
 # SHIFT – Steel & Hydrogen Integrated Freight Trade
 
-This repository contains the **SHIFT model**, a spatially resolved techno-economic optimization of global iron and steel supply chains under decarbonization. It explores how hydrogen-based direct reduced iron (DRI) production and hot-briquetted iron (HBI) trade can shift value creation to regions with renewable energy, infrastructure, and capital availability.
+This repository contains the **SHIFT model**, a spatially resolved techno-economic optimization of global iron and steel supply chains under decarbonization.
+It explores how hydrogen-based direct reduced iron (DRI) production and hot-briquetted iron (HBI) trade can shift value creation to regions with renewable energy and capital availability.
 
-The model identifies cost-optimal configurations for mining, hydrogen production, DRI processing, and steel trade, using the PyPSA framework.
+The model identifies cost-optimal configurations for mining, hydrogen production, DRI processing, and HBI trade, using a two-stage optimization pipeline and open energy system libraries.
 
----
+## Introduction SHIFT
 
+SHIFT evaluates global supply and trade of low-carbon iron and steel at high spatial resolution.
+The model quantifies where to produce, where to ship, and how to meet demand cost-effectively under decarbonization constraints.
 
-## Prerequesite: TRACE model
+Key features:
+- 🚀 two-stage process: greenfield supply curves + cross-region LP trade
+- 🌍 spatial renewable potentials: PyPSA-Earth wind/solar CF distributions
+- 💰 integrated LCOX: region-level cost curves for H2, DRI, HBI
+- 🛳️ global trade dispatch: route costs, flows, nodal prices, utilization
+- ⚙️ configurable automation: regions, technologies, scenarios via YAML + Snakemake rules
 
-The SHIFT model integrates the energy supply chain `shipping-steel` from a [fork](https://github.com/fneum/trace/tree/pypsa-eur-sec-imports-atlite) of the [TRACE model](https://github.com/euronion/trace).
+## Quick installation (PIXI)
 
-Therefore, clone the TRACE fork with `git`:
-
-```sh
-git clone https://github.com/fneum/trace.git
-```
-
-and switch to the branch `pypsa-eur-sec-imports-atlite` (commit [8bf0571](https://github.com/fneum/trace/commit/8bf057142d4e035926ffb084493462eff64fe188)) and follow these steps:
-- delete `escs/shipping-steel/loads.csv`,
-- delete `escs/shipping-steel/ships.csv`,
-- in `data/efficiencies.csv` and `escs/shipping-steel/links.csv`, and `escs/shipping-hbi/links.csv`, add replace `direct iron reduction furnace` with `hydrogen direct iron reduction furnace` to match the latest technology-data version
-- set `technology_data: "v0.12.0"` in the `config/config.default.yaml` (same as in SHIFT: `config/config.yaml`),
-- run `snakemake -c1 resources/networks/default/2030/shipping-steel/DE-DE/network.nc`,
-- run `snakemake -c1 resources/networks/default/2050/shipping-steel/DE-DE/network.nc`.
-
-This creates a steel supply chain for 2030 and 2050 without loads and shipping, those parameters will be added later in the SHIFT workflow. The resulting steel model will be stored in `resources/networks/default/2050/shipping-steel/DE-DE/network.nc` and automatically fetched by the SHIFT model.
-
-
-## Download, Install, and Run the SHIFT model
-
-Clone the repository with `git`:
+Clone the repository:
 
 ```sh
 git clone https://github.com/energyLS/shift.git
+cd shift
 ```
 
-Create the environment with `conda`:
+Install dependencies with pixi:
 
 ```sh
-conda env create -f environment.yaml
+pixi install
 ```
 
-Navigate to the `workflow/notebooks` and run the notebooks `global-iron-ore.ipynb`, `global-steel-production.iypnb`, `prepare-iron-ore.ipynb`, and `prepare-steel.ipynb` for preparation. Those steps will be included in the main workflow in a future version.
-
-Run the trade model by navigating to the `workflow/` folder via `cd workflow` and then run
+Activate the environment:
 
 ```sh
-snakemake -call model_trade_all
+pixi shell
 ```
 
-To plot the supply curves subtracted with demand, run
+(Optional) Install pre-commit hooks:
 
 ```sh
-snakemake -c1 create_all_supply_curves_with_demand
+pre-commit install
 ```
 
 
-*Under development:*
+For details, see https://pixi.prefix.dev/latest/ (or your local PIXI docs).
 
-Run the whole workflow using `snakemake`:
+## Run (core workflow)
+
+In the workspace root:
 
 ```sh
-snakemake -call collect_figures
+pixi run snakemake model_trade_all
+```
+
+To collect all figures (under development):
+
+```sh
+pixi run snakemake collect_figures
 ```
 
 
-## Licence
+## Workflow overview
 
-This repository is licensed under the MIT License. See `LICENCE` for details.
+### Configuration & Scenario Setup (implicit)
+
+Before execution, Snakemake reads:
+- **Global settings**: `config/config.yaml` (regions, cost years, solver options, enable flags)
+- **Scenario matrix**: `config/trade_scenarios.csv` (rows = distinct trade scenarios)
+
+These expand into a deterministic wildcard space (cost_year, region, product, scenario) that drives all downstream rule creation. This bootstrap is handled automatically by Snakemake; no user action required.
+
+### Step 0: Renewable potentials (pre-computed inputs)
+
+In this stage we generate the supply-side resource backbone.
+Renewable capacity-factor series and maximum deployable potentials are pre-computed externally using PyPSA-Earth's `build_renewable_profiles` rule and stored in `data/renewable_profiles/`.
+This stage is not part of the current Snakefile. SHIFT consumes pre-computed .nc datasets to avoid the long runtime of full GIS processing.
+
+> **For new users:** No action needed. Renewable data files are provided in the repository.
+
+### Step 1: Greenfield supply curve generation (PyPSA)
+
+With renewable profiles and [techno-economic assumptions](https://github.com/PyPSA/technology-data) in place, SHIFT builds regional PyPSA optimization models to size generation, storage, and process assets.
+It evaluates each candidate plant (H2 electrolyser, DRI furnace, HBI plant, steel mills) across resource quality and cost parameters to produce levelized cost curves (LCOX) as a function of capacity.
+The result is a fleet of supply curve elements (capacity buckets with marginal costs and metadata) for H2, DRI, HBI, and steel by region.
+
+Step 1 is a multi-part stage: load techno-economic data and build regional cost baselines, prepare renewable candidate sets per region, solve optimization problems at discrete demand levels, and consolidate results into piecewise supply curves. Each stage depends on the prior; files are persisted between steps to support reproducibility and debugging.
+The output is a harmonized set of supply curves used as input for the trade stage.
+
+### Step 2: Global trade optimization (LP)
+
+This stage takes regional supply curves and demand obligations, then runs a linear program over the regional network.
+It includes transport cost matrices, ore production constraints, and market compatibility.
+The solver decides how much each region should produce versus import/export, by product and route.
+
+The trade solution yields detailed outputs: regional production volume and shipped quantities.
+It can also be reconciled with scenarios for demand, policy constraints, and infrastructure availability.
 
 
 ## Acknowledgements
 
 Thanks to:
+- Oda Agdal and her Master's Thesis on the [Investigation of Future Global Trade of Hydrogen from Renewable Energy Sources](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/3031513)
+- TRACE?
+- PYPSA-earth?
 
-* Oda Agdal and her Master's Thesis on the [Investigation of Future Global Trade of Hydrogen from Renewable Energy Sources](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/3031513).
 
+## Licence
+
+This repository is licensed under the MIT License. See `LICENCE` for details.

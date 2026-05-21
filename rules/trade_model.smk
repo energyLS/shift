@@ -20,15 +20,15 @@ rule model_trade:
             region=config["regions"],
             intertwo=["steel"],
         ),
-        transport_costs = "data/transport_costs/steel_r_iron_r.csv",
-        trade_options = "resources/trade_opt_chokepoints.csv",
-        bus_locations = "data/bus_locations.csv",
-        demand = "data/un_enerdata_demand_2050_final.csv",
-        steel_demand = "resources/steel_demand_clustered_{cost_year}.csv",
-        iron_ore = "resources/ironore_production_clustered.csv",
-        grid_potential = "data/grid_potential_custom.csv",
-        wacc = "resources/wacc-clustered.csv",
-        political_stability = "resources/political_stability_clustered.csv",
+        transport_costs="data/transport_costs/steel_r_iron_r.csv",
+        trade_options="resources/trade_opt_chokepoints.csv",
+        bus_locations="data/bus_locations.csv",
+        demand="data/un_enerdata_demand_2050_final.csv",
+        steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
+        iron_ore="resources/ironore_production_clustered.csv",
+        grid_potential="data/grid_potential_custom.csv",
+        wacc="resources/wacc-clustered.csv",
+        political_stability="resources/political_stability_clustered.csv",
     output:
         trade_result=f"results/{trade_scenarios.wildcard_pattern}/result.csv",
         trade_network=f"results/{trade_scenarios.wildcard_pattern}/network.nc",
@@ -45,6 +45,7 @@ rule model_trade:
         scenarios=config["scenario"],
     script:
         str(SCRIPT_DIR / "model_trade.py")
+
 
 
 rule model_trade_all:

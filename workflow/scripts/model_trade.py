@@ -1,6 +1,7 @@
 import pypsa
 import pandas as pd
 import matplotlib
+from typing import Any
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -8,6 +9,8 @@ import os
 import cartopy.crs as ccrs
 import geopandas as gpd
 import cartopy.io.shapereader as shpreader
+
+snakemake: Any = globals().get("snakemake")
 
 plt.style.use("bmh")
 
@@ -95,7 +98,6 @@ def building_model(
 
     # --- Build buses, generators, and loads per region ---
     for r in range(len(supply_curves_interone)):
-
         region_file_interone = supply_curves_interone[r]
         region_file_intertwo = supply_curves_intertwo[r]
         region_data_interone = pd.read_csv(region_file_interone, header=0)
@@ -156,7 +158,7 @@ def building_model(
 
         # Demand load
         load = demands.loc[demands["region"] == region_name, "demand"].values[0]
-        print(f"Load set to 100% of regional final energy demand.")
+        print("Load set to 100% of regional final energy demand.")
         n.add(
             "Load",
             region_name + "_" + final,
@@ -226,9 +228,7 @@ def building_model(
                     )
                     p_nom = (
                         grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
-                    ) / len(
-                        region_data_intertwo
-                    )  # split evenly across supply steps
+                    ) / len(region_data_intertwo)  # split evenly across supply steps
 
                 m_cost = float(
                     region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
@@ -712,7 +712,7 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
             n.links.loc[link_idx, "p_nom_max"] = max_from_single_supplier
 
         print(
-            f"HBI diversity constraint applied to {region_name}: max {diversity_factor*100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier"
+            f"HBI diversity constraint applied to {region_name}: max {diversity_factor * 100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier"
         )
 
     return n
@@ -936,10 +936,7 @@ def resolve_mga_links_from_blocks(n, mga):
 
         if block_from != block_to:
             selected_links.append(link_name)
-            print(
-                f"  Blocks MGA: link '{link_name}' crosses "
-                f"{block_from} → {block_to}"
-            )
+            print(f"  Blocks MGA: link '{link_name}' crosses {block_from} → {block_to}")
 
     print(
         f"Blocks MGA: selected {len(selected_links)}/{len(carrier_links)} "
@@ -1092,7 +1089,7 @@ def solve_network(n, mga=None, indicators=None):
         )
         mga_cost = tsc.sum()
         print(
-            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost*(1+slack_value):.2f} B€"
+            f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost * (1 + slack_value):.2f} B€"
         )
 
         # Store in dictionary with slack as key
@@ -1105,7 +1102,7 @@ def solve_network(n, mga=None, indicators=None):
 
 
 if __name__ == "__main__":
-    if "snakemake" not in globals():
+    if snakemake is None:
         from _helpers import mock_snakemake
 
         snakemake = mock_snakemake(
@@ -1177,14 +1174,12 @@ if __name__ == "__main__":
     regionalise = snakemake.config["iron_ore"]["regionalise"]
 
     if final == "steel":
-
         demands = pd.read_csv(snakemake.input.steel_demand, header=0)
         demands.rename(columns={"SteelDemand_DRI_Mt": "demand"}, inplace=True)
         demands["demand"] = demands["demand"] * 1e6  # Mt to t
         unit = "t"
 
     elif final == "hydrogen":
-
         demands = pd.read_csv(snakemake.input.demand, header=0)
         unit = "MWh"
 
@@ -1303,7 +1298,7 @@ if __name__ == "__main__":
         is_optimal = pd.isna(slack_key)
 
         if is_optimal:
-            print(f"\nPlotting optimal network (no slack)")
+            print("\nPlotting optimal network (no slack)")
         else:
             print(f"\nPlotting for slack={slack_key}")
 
