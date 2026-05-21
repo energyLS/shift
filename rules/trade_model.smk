@@ -12,6 +12,7 @@ rule model_trade:
             allow_missing=True,
             cost_year=[2050],
             region=config["regions"],
+            interone=["hbi"],
         ),
         supply_curves_intertwo=expand(
             "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{intertwo}.csv",
