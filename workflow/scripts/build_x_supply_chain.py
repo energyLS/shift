@@ -479,7 +479,6 @@ if __name__ == "__main__":
     out_dir = str(Path(output_path).resolve().parent)
     generic_dir = Path(out_dir) / ".." / "generic_production_model"
     generic_dir = generic_dir.resolve()
-    generic_dir.mkdir(parents=True, exist_ok=True)
     full_out = generic_dir / f"generic_model_{year}.nc"
     full_network.export_to_netcdf(str(full_out))
     logger.info(f"Full generic model exported to {full_out}")
