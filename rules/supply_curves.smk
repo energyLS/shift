@@ -64,7 +64,7 @@ rule retrieve_cost_data:
     resources:
         mem_mb=500,
     params:
-        version=config["costs"]["version"],
+        version=config["techno-economic parameters"]["pypsa_tech_version"],
     script:
         str(SCRIPT_DIR / "tech_database.py")
 

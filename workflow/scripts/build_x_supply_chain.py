@@ -23,7 +23,7 @@ Outputs:
   - Exported to NetCDF format for storage and further analysis
 
 Reusable pattern for any commodity with similar conversion chains.
-Modify TECH_ASSUMPTIONS, bus definitions, and links to adapt to different commodities.
+Modify the techno-economic parameters, bus definitions, and links to adapt to different commodities.
 """
 
 import logging
@@ -49,11 +49,21 @@ logger.setLevel(logging.INFO)
 snakemake: Any = globals().get("snakemake")
 
 
-# Technology parameters with no database source (assumed values)
-TECH_ASSUMPTIONS = {
-    "h2_standing_loss": 0.001,  # 0.1% per hour for underground cavern (leakage)
-    "batt_standing_loss": 0.0001,  # 0.01% per hour for battery (self-discharge)
-}
+def _techno_economic_parameters(config: dict) -> dict:
+    return config.get("techno-economic parameters", {})
+
+
+def _additional_parameters(config: dict) -> dict:
+    return _techno_economic_parameters(config).get("additional_parameters", {})
+
+
+def _additional_parameter(config: dict, name: str, default: float) -> float:
+    parameters = _additional_parameters(config)
+    if name not in parameters:
+        logger.warning(
+            f"Missing techno-economic parameter '{name}'; using default value {default}."
+        )
+    return float(parameters.get(name, default))
 
 
 def _part_load(config: dict, technology: str, default: float) -> float:
@@ -319,7 +329,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         overnight_cost=h2_inv_cost,  # EUR/kWh → EUR/MWh
         lifetime=td.get_tech_param(h2_params, "lifetime", 100.0),
         fom_cost=h2_inv_cost * (td.get_tech_param(h2_params, "FOM", 0.0) / 100),
-        standing_loss=TECH_ASSUMPTIONS["h2_standing_loss"],
+        standing_loss=_additional_parameter(config, "h2_standing_loss", 0.0),
         e_cyclic=True,  # End state must equal start state
     )
 
@@ -365,7 +375,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         overnight_cost=batt_store_cost,  # EUR/kWh → EUR/MWh
         lifetime=td.get_tech_param(batt_store_params, "lifetime", 30.0),
         fom_cost=batt_store_cost * 0.0,
-        standing_loss=TECH_ASSUMPTIONS["batt_standing_loss"],
+        standing_loss=_additional_parameter(config, "batt_standing_loss", 0.0),
         e_cyclic=True,  # End state must equal start state
     )
 
