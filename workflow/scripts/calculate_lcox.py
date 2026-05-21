@@ -115,19 +115,19 @@ def add_loads_to_network(network, product, demands):
         )  # Mt/year → t/h
         unit_str = "t/h"
 
-    if product == "steel":
-        bus_name = "steel"
-        storage_name = "steel_storage"
-        # Steel is measured in t/year, convert to t/h (hourly)
+    elif product == "hbi":
+        bus_name = "hbi"
+        storage_name = "hbi_storage"
+        # HBI is measured in t/year, convert to t/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
         )  # Mt/year → t/h
         unit_str = "t/h"
 
-    elif product == "hbi":
-        bus_name = "hbi"
-        storage_name = "hbi_storage"
-        # HBI is measured in t/year, convert to t/h (hourly)
+    elif product == "steel":
+        bus_name = "steel"
+        storage_name = "steel_storage"
+        # Steel is measured in t/year, convert to t/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
         )  # Mt/year → t/h
