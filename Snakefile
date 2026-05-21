@@ -10,11 +10,16 @@ import sys
 import pandas as pd
 from snakemake.utils import Paramspace
 
+
 WORKFLOW_DIR = Path(workflow.basedir) / "workflow"
 SCRIPT_DIR = WORKFLOW_DIR / "scripts"
+NOTEBOOKS_DIR = WORKFLOW_DIR / "notebooks"
+# DATA_
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
+if str(NOTEBOOKS_DIR) not in sys.path:
+    sys.path.insert(0, str(NOTEBOOKS_DIR))
 
 from trade_chain_utils import (  # noqa: E402
     derive_supply_curve_products,
@@ -42,20 +47,25 @@ def _load_trade_scenarios():
             raise ValueError(
                 f"Trade chain '{chain.get('id', '<unnamed>')}' produced no stage groups"
             )
-        rows.append(
-            {
-                "chain_id": str(chain.get("id", "default")),
-                "cost_year": str(chain.get("cost_year", 2050)),
-                "interone": str(stage_groups[0]["label"]),
-                "intertwo": str(
-                    stages_sorted[-1].get(
-                        "process_label", stages_sorted[-1]["output_commodity"]
-                    )
-                ),
-                "final": str(chain.get("final_product", "steel")),
-                "scenario": str(chain.get("scenario", "default")),
-            }
-        )
+        scenarios = chain.get("trade_scenarios", "default")
+        if isinstance(scenarios, str):
+            scenarios = [scenarios]
+        for scenario in scenarios:
+            rows.append(
+                {
+                    "chain_id": str(chain.get("id", "default")),
+                    "cost_year": str(chain.get("cost_year", 2050)),
+                    "interone": str(stage_groups[0]["label"]),
+                    "intertwo": str(
+                        stages_sorted[-1].get(
+                            "process_label", stages_sorted[-1]["output_commodity"]
+                        )
+                    ),
+                    "wacc": str(chain.get("wacc", "regional")),
+                    "final": str(chain.get("final_product", "steel")),
+                    "scenario": str(scenario),
+                }
+            )
         return Paramspace(pd.DataFrame(rows, dtype=str))
 
     return Paramspace(pd.read_csv("config/trade_scenarios.csv", dtype=str))
@@ -78,5 +88,6 @@ wildcard_constraints:
 
 
 include: "rules/supply_curves.smk"
+include: "rules/preparation.smk"
 include: "rules/trade_model.smk"
 include: "rules/reporting.smk"

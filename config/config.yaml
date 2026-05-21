@@ -23,9 +23,9 @@ supply_curve:
 trade_chains:
   id: default_2050
   cost_year: 2050
-  scenario: default
+  # scenario: default
   final_product: steel
-  wacc: regional
+  wacc: uniform #regional
   tradeable_commodities: [iron_ore, hbi]
   stages:
     1:
@@ -34,7 +34,7 @@ trade_chains:
       output_commodity: hydrogen
       process_label: electrolysis
     2:
-      material_inputs: [iron_ore, H2]
+      material_inputs: [iron_ore, hydrogen]
       energy_inputs: [renewable_electricity]
       output_commodity: hbi
       process_label: dri
@@ -43,7 +43,11 @@ trade_chains:
       energy_inputs: [grid_electricity]
       output_commodity: steel
       process_label: eaf
-  
+  trade_scenarios:
+    - default
+    - mga-stability
+    - mga-stability-weighted
+
 
 scenario: 
   default:

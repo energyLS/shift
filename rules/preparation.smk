@@ -1,0 +1,87 @@
+
+
+
+
+rule prepare_wacc:
+    input:
+        wacc = "data/wacc-global.csv",
+        bus_locations = "data/bus_locations.csv",
+    output:
+        wacc = "resources/wacc-clustered.csv"
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        # "notebooks/prepare-wacc.ipynb"
+        str(NOTEBOOKS_DIR / "prepare-wacc.ipynb")
+
+
+rule prepare_political_stability:
+    input:
+        political_stability = "data/political-stability/globaleconomy.csv", #https://www.theglobaleconomy.com/rankings/wb_political_stability/
+        bus_locations = "data/bus_locations.csv",
+    output:
+        political_stability = "resources/political_stability_clustered.csv"
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        str(NOTEBOOKS_DIR / "prepare-political-stability.ipynb")
+
+
+rule prepare_chokepoints:
+    params:
+        shipping_routes=config["trade"]["shipping_routes"],
+    input:
+        trade_options = "data/trade_opt.csv",
+        bus_locations = "data/bus_locations.csv",
+    output:
+        trade_options_chokepoints = "resources/trade_opt_chokepoints.csv",
+        map_chokepoints = "results/figures_general/chokepoints/map_chokepoints.pdf",
+        map_chokepoints_png = "results/figures_general/chokepoints/map_chokepoints.png",
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        str(NOTEBOOKS_DIR / "prepare-chokepoints.ipynb")
+
+
+rule retrieve_iron_ore:
+    input:
+        iron_ore_production = "data/owid-iron-ore/iron-ore-crude-ore-production.csv",
+        iron_ore_cost = "data/devlin2023-supplementary.xlsx",
+        bus_locations = "data/bus_locations.csv",
+    output:
+        iron_ore = "resources/ironore-production.csv",
+        iron_ore_map = "results/figures_general/iron_ore_map.pdf",
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        str(NOTEBOOKS_DIR / "global-iron-ore.ipynb")
+
+
+rule prepare_iron_ore:
+    input:
+        iron_ore = "resources/ironore-production.csv",
+        bus_locations = "data/bus_locations.csv",
+    output:
+        iron_ore = "resources/ironore_production_clustered.csv",
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        str(NOTEBOOKS_DIR / "prepare-iron-ore.ipynb")
+
+
+rule prepare_steel_demand:
+    input:
+        steel_demand = "data/demand/steel_demands/output_data/country_raw_steel_demand_and_dri_share.csv",
+        bus_locations = "data/bus_locations.csv",
+    output:
+        steel_demand = 'resources/steel_demand_clustered_{cost_year}.csv',
+    resources:
+        mem_mb=5000,
+    threads: 2
+    notebook:
+        str(NOTEBOOKS_DIR / "prepare-steel-demand.ipynb")
