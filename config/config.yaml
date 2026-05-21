@@ -45,7 +45,6 @@ trade_chains:
       process_label: eaf
   trade_scenarios:
     - default
-    - mga-stability
     - mga-stability-weighted
 
 
@@ -137,8 +136,11 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
+steel_demand_levels:  [0.01, 1000] # [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
 hydrogen_storage_cost: False
+
+electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
+embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 
 run:
   # prefix: ""
@@ -201,6 +203,7 @@ design:
 
 techno-economic parameters:
   pypsa_tech_version: v0.14.0
+  eur_usd: 1.15 # 1 Euro equals 1.15 USD
   additional_parameters:
     h2_standing_loss: 0.001  # 0.1% per hour for underground cavern (leakage)
     batt_standing_loss: 0.0001  # 0.01% per hour for battery (self-discharge)
