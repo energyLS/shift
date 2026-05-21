@@ -779,6 +779,19 @@ def prepare_network(
                 f"Skeleton sliced to {route_label}: {len(network.links)} links, {len(network.stores)} stores"
             )
 
+    # WORK IN PROGRESS START: ADD WACC
+    uniform_interest_rate = snakemake.params.uniform_interest_rate
+
+    if snakemake.wildcards.wacc == "regional":
+        print(f"applying region specific wacc")
+        wacc = pd.read_csv(snakemake.input.wacc, header=0)
+        wacc.set_index("region", inplace=True)
+        regional_wacc = wacc.loc[region].values[0]
+        interest_rate = regional_wacc
+
+        # TODO: APPLY REGION SPECIFIC WACC
+    # WORK IN PROGRESS END: ADD WACC
+
     # Set region-specific discount rate
     interest_rates = config.get("interest_rate", {})
     # Get region-specific rate, or fall back to default
