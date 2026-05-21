@@ -319,8 +319,19 @@ def build_product_components(config: Dict, product: str) -> Dict[str, object]:
         if comp:
             links.update(comp.get("links", ()))
             stores.update(comp.get("stores", ()))
-            for b in comp.get("buses", ()):  # include any canonical buses from mapping
-                buses.add(_normalize_commodity(b))
+            # Include canonical buses from mapping, but avoid adding energy-carrier
+            # buses (e.g., renewable_electricity, grid_electricity) unless the
+            # stage explicitly declares them as energy inputs. This prevents
+            # slicers from preserving unused energy buses for stages that only
+            # consume material inputs (e.g., steel stage using grid_electricity
+            # only when declared).
+            declared_energy_norm = {_normalize_commodity(e) for e in energy}
+            for b in comp.get("buses", ()):
+                normb = _normalize_commodity(b)
+                # If this is an energy input carrier, only keep it when declared
+                if normb in ENERGY_INPUTS and normb not in declared_energy_norm:
+                    continue
+                buses.add(normb)
     # If this stage-group uses renewable electricity, include battery
     # storage and bus as an explicit component so slicers keep batteries
     # for renewable-based stages. The user requested batteries be explicit

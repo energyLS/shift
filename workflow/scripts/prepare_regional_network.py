@@ -724,13 +724,19 @@ def prepare_network(
             # Add free external inputs for any material bus that is expected but
             # not produced within this sliced network (e.g., `hbi` for the steel stage).
             # Determine whether a kept bus is produced by any remaining link.
+            # Determine which buses are *produced* by remaining links.
+            # Convention in this codebase: `bus1` is the primary output bus
+            # for conversion Links (bus0 is typically an input). Previously we
+            # treated any referenced bus as "produced" which incorrectly
+            # prevented adding external inputs for buses that are actually
+            # inputs (e.g., `hbi` for the `eaf` link). Only consider `bus1`
+            # as an output to decide whether a bus is produced by the sliced
+            # network.
             produced_buses = set()
             for link_name in network.links.index:
                 row = network.links.loc[link_name]
-                for bcol in [
-                    c for c in ["bus0", "bus1", "bus2", "bus3"] if c in row.index
-                ]:
-                    b = row.get(bcol)
+                if "bus1" in row.index:
+                    b = row.get("bus1")
                     if pd.notna(b):
                         produced_buses.add(b)
 
