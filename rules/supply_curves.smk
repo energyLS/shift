@@ -49,10 +49,10 @@ def _product_uses_renewables(product):
 def _all_supply_curve_targets():
     targets = []
     for region in config["regions"]:
-        wacc = _wacc_for_region(region)
+        wacc = config["trade_chains"].get("wacc", "uniform")
         for product in SUPPLY_CURVE_PRODUCTS:
             targets.append(
-                f"resources/supply_curves/cost_year~2050/{region}_wacc_{wacc}_marginal_cost_{product}.csv"
+                f"resources/supply_curves/cost_year~2050/wacc~{wacc}/{region}_marginal_cost_{product}.csv"
             )
     return targets
 
@@ -178,25 +178,25 @@ if config["enable"].get("run_supply_curve", True):
                 else []
             ),
             skeleton="resources/generic_production_model/generic_model_{cost_year}.nc",
-            steel_demand="resources/steel_production_clustered.csv",
+            steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
         output:
             # Public supply-curve artifact is product-labeled; the stage label
             # is only used to locate the correct upstream LCoX runs.
-            supply="resources/supply_curves/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}.csv",
+            supply="resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}.csv",
             supply_unreserved=(
-                "resources/supply_curves/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}__unreserved.csv"
+                "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}__unreserved.csv"
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
                 and _product_uses_renewables("{product}")
                 else temp(
-                    "resources/supply_curves_unreserved_tmp/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}__unreserved.csv"
+                    "resources/supply_curves_unreserved_tmp/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}__unreserved.csv"
                 )
             ),
-            supply_curve="resources/supply_curves/cost_year~{cost_year}/{region}_wacc_{wacc}_marginal_cost_{product}.pdf",
+            supply_curve="resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}.pdf",
         log:
             "logs/create_supply_curve_{cost_year}_{region}_{product}_{wacc}.log",
         wildcard_constraints:
             product="hbi|steel",
-            wacc=r"[0-9]+(?:\.[0-9]+)?",
+            wacc="uniform|regional",
         threads: 1
         message:
             "Combining LCo results (reserved + unreserved scenarios) to create supply curve for {wildcards.region} {wildcards.product}."
