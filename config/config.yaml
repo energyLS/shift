@@ -26,6 +26,7 @@ trade_chains:
   # scenario: default
   final_product: steel
   wacc: uniform #regional
+  labour_cost: False #Include labour cost
   tradeable_commodities: [iron_ore, hbi]
   stages:
     1:
