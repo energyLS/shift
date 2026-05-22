@@ -12,17 +12,6 @@ def _process_label_for_product(product):
     return route_label_for_product(config, product)
 
 
-def _wacc_for_region(region):
-    interest_rates = config.get("interest_rate", {})
-    if isinstance(interest_rates.get(region), dict):
-        rate = interest_rates[region].get(
-            "default", interest_rates.get("default", 0.07)
-        )
-    else:
-        rate = interest_rates.get(region, interest_rates.get("default", 0.07))
-    return f"{float(rate):.2f}"
-
-
 def _product_uses_renewables(product):
     """Check if a product's stage group uses renewable_electricity.
 
