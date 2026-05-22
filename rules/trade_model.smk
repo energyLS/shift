@@ -28,7 +28,6 @@ rule model_trade:
         steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore="resources/ironore_production_clustered.csv",
         grid_potential="data/grid_potential_custom.csv",
-        wacc="resources/wacc-clustered.csv",
         political_stability="resources/political_stability_clustered.csv",
     output:
         trade_result=f"results/{trade_scenarios.wildcard_pattern}/result.csv",

@@ -228,7 +228,9 @@ def building_model(
                     )
                     p_nom = (
                         grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
-                    ) / len(region_data_intertwo)  # split evenly across supply steps
+                    ) / len(
+                        region_data_intertwo
+                    )  # split evenly across supply steps
 
                 m_cost = float(
                     region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
@@ -636,23 +638,6 @@ def apply_cost_penalty(n, cost_penalty):
         print("No cost penalty applied")
 
     return n
-
-
-# def apply_wacc_simple(n, wacc):
-
-#     # Add cost pentalty to all technologies of a certain region, excluding shipping
-#     wacc.set_index("region", inplace=True)
-#     base_interest_rate = snakemake.params.interest_rate
-
-#     for region in wacc.index:
-
-#         capital_cost_adj = wacc.loc[region].values[0] / base_interest_rate
-
-#         n.links.loc[
-#             ((n.links.bus1 == f"{region}_steel") | (n.links.bus1 == f"{region}_hbi"))
-#             & ~n.links.carrier.str.contains("shipping"),
-#             "marginal_cost",
-#         ] *= capital_cost_adj
 
 
 def apply_hbi_diversity_constraint(n, diversity_factor, demands):
@@ -1151,7 +1136,6 @@ if __name__ == "__main__":
         snakemake.input.political_stability, index_col=0
     )
     regions = snakemake.config["regions"]
-    wacc = pd.read_csv(snakemake.input.wacc, header=0)
 
     # Load indicators for MGA (flexible architecture for future extensions)
     indicators = {}
@@ -1219,15 +1203,6 @@ if __name__ == "__main__":
         )
         n = apply_cost_penalty(n, cost_penalty)
 
-    # Note: Only relevant when capital costs are added in this script. Currently, they are added only in model_lcox
-    # Country specific wacc adjustment (simplified)
-    # if snakemake.wildcards.wacc == "regional":
-    #     print(f"applying region specific wacc (simplified)")
-    #     n = apply_wacc_simple(n, wacc)
-    # else:
-    #     pass
-
-    # MGA
     # HBI diversity constraint
     diversity_factor = snakemake.config["trade"]["diversity_factor"]
     if diversity_factor is not False:

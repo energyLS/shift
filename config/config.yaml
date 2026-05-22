@@ -15,7 +15,7 @@ outputs:
 #   - unreserved (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
 #     Can be generated without electricity demand data when demand data unavailable.
 supply_curve:
-  generate_unreserved: False  # Set to True to generate unreserved scenario as fallback
+  generate_unreserved: True  # Set to True to generate unreserved scenario as fallback
 
 
 # Config-native trade chain definitions
@@ -136,7 +136,7 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels:  [0.01, 1000] # [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
+steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
 hydrogen_storage_cost: False
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
@@ -209,23 +209,7 @@ techno-economic parameters:
     batt_standing_loss: 0.0001  # 0.01% per hour for battery (self-discharge)
 
 interest_rate: 
-  default: 0.05
-  # Regional discount rates (override default for specific regions):
-  Central_America: 0.11
-  East_Asia: 0.09
-  East_East_Asia: 0.08
-  Eurasia: 0.10
-  Europe: 0.10
-  Far_West_Europe: 0.08
-  Middle_East: 0.12
-  North_America: 0.08
-  North_West_Africa: 0.12
-  Oceania: 0.07
-  Pacific_Asia: 0.10
-  South_America: 0.11
-  South_South_America: 0.10
-  Subsaharan_Africa: 0.11
-  West_Asia: 0.11
+  default: 0.05 # Used, if wildcard `wacc` is set to `uniform`
 
 trade:
   shipping_routes:

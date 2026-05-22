@@ -284,7 +284,7 @@ def add_renewable_generators(
         network.add("Bus", elec_bus, carrier="renewable_electricity", unit="MW")
 
     # Get discount rate
-    discount_rate = network.discount_rate if hasattr(network, "discount_rate") else 0.07
+    discount_rate = network.discount_rate
 
     # Map consolidated file tech names to database keys
     tech_db_map = {
@@ -755,16 +755,20 @@ def prepare_network(
                 f"Skeleton sliced to {route_label}: {len(network.links)} links, {len(network.stores)} stores"
             )
 
-    # Set region-specific discount rate
-    interest_rates = config.get("interest_rate", {})
-    # Get region-specific rate, or fall back to default
-    if isinstance(interest_rates.get(region), dict):
-        # Handle legacy component-level structure (flatten to use default)
-        discount_rate = interest_rates[region].get(
-            "default", interest_rates.get("default", 0.07)
-        )
+    if snakemake.wildcards.wacc == "regional":
+        print(f"applying region specific wacc")
+        wacc = pd.read_csv(snakemake.input.wacc, header=0)
+        wacc.set_index("region", inplace=True)
+        discount_rate = wacc.loc[region].values[0]
+
+    elif snakemake.wildcards.wacc == "uniform":
+        discount_rate = snakemake.params.uniform_interest_rate
+
     else:
-        discount_rate = interest_rates.get(region, interest_rates.get("default", 0.07))
+        raise ValueError(
+            f"Unrecognized wacc wildcard: {snakemake.wildcards.wacc}. "
+            f"Expected 'regional' or 'uniform'."
+        )
 
     network.discount_rate = discount_rate
     logger.info(f"Region {region}: discount_rate = {discount_rate}")
@@ -1016,6 +1020,19 @@ def prepare_network(
 # ============================================================================
 
 if __name__ == "__main__":
+
+    if snakemake is None:
+        from _helpers import mock_snakemake
+
+        snakemake = mock_snakemake(
+            "prepare_regional_network",
+            cost_year="2050",
+            region="South_America",
+            product="hbi",
+            scenario="reserved",
+            wacc="regional",
+        )
+
     # Check if running from Snakemake
     if snakemake is not None:
         # Snakemake inputs/outputs
@@ -1046,23 +1063,6 @@ if __name__ == "__main__":
 
         # Load config (if available)
         config_dict = snakemake.config if snakemake is not None else {}
-    else:
-        # Fallback for manual execution
-        import sys
-
-        if len(sys.argv) > 1:
-            skeleton_path = sys.argv[1]
-            renewables_path = sys.argv[2]
-            tech_costs_path = sys.argv[3]
-            region = sys.argv[4]
-            product = sys.argv[5]
-            output_path = sys.argv[6]
-            cost_year = int(sys.argv[7]) if len(sys.argv) > 7 else 2030
-            route_label = sys.argv[8] if len(sys.argv) > 8 else None
-            local_demand_path = None
-            config_dict = {}
-        else:
-            raise ValueError("Provide paths and region/product as arguments")
 
     # Prepare network
     network, audit = prepare_network(

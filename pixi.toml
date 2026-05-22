@@ -15,6 +15,7 @@ geojson = ">=3.2.0"
 geohash2 = "*"
 geopandas = ">=1"
 geopy = ">=2.4.1"
+jupyter = ">=1.0"
 libgdal-netcdf = ">=3.10.3"
 linopy = ">=0.6.1"
 matplotlib = ">=3.10.7"
@@ -38,6 +39,7 @@ xarray = ">=2026.0.0"
 [pypi-dependencies]
 # pip-installable packages (always included)
 gurobipy = "*"
+wbdata = ">=1.1.0"
 
 [feature.test.dependencies]
 pytest = "*"
@@ -50,7 +52,6 @@ unit-tests = "pytest tests"
 ruff = "*"
 pre-commit = "*"
 pylint = "*"
-jupyter = "*"
 ipykernel = "*"
 ipython = "*"
 nbqa = "*"

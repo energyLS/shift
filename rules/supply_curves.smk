@@ -12,17 +12,6 @@ def _process_label_for_product(product):
     return route_label_for_product(config, product)
 
 
-def _wacc_for_region(region):
-    interest_rates = config.get("interest_rate", {})
-    if isinstance(interest_rates.get(region), dict):
-        rate = interest_rates[region].get(
-            "default", interest_rates.get("default", 0.07)
-        )
-    else:
-        rate = interest_rates.get(region, interest_rates.get("default", 0.07))
-    return f"{float(rate):.2f}"
-
-
 def _product_uses_renewables(product):
     """Check if a product's stage group uses renewable_electricity.
 
@@ -98,11 +87,12 @@ rule prepare_regional_network:
         renewables="data/new_renewables_consolidated.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
+        wacc = "resources/wacc-clustered.csv",
     output:
         # Output keyed by product; route_label is internal to the script
-        network="resources/networks/base_{cost_year}_{region}_{product}_{scenario}.nc",
+        network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",
     log:
-        "logs/prepare_regional_network_{cost_year}_{region}_{product}_{scenario}.log",
+        "logs/prepare_regional_network_{cost_year}_{region}_{wacc}_{product}_{scenario}.log",
     wildcard_constraints:
         scenario="reserved|unreserved",
         product="hbi|steel",
@@ -114,6 +104,7 @@ rule prepare_regional_network:
         product="{product}",
         route_label=lambda wildcards: _process_label_for_product(wildcards.product),
         config=config,
+        uniform_interest_rate=config["interest_rate"]["default"]
     message:
         "Preparing {wildcards.scenario} regional network: {wildcards.region} -> {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
@@ -125,22 +116,22 @@ if config["enable"].get("run_supply_chain", True):
 
     rule calculate_regional_lcox:
         input:
-            base_network="resources/networks/base_{cost_year}_{region}_{product}_{scenario}.nc",
+            base_network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",
             local_demand="data/un_enerdata_demand_2050_final.csv",
         output:
             # Internal cache keyed by route_label for reuse; only products matter for supply curves
-            results="resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/results_{product_demand_mt}.csv",
+            results="resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}_{scenario}/results_{product_demand_mt}.csv",
             network=(
                 temp(
-                    "resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
+                    "resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}_{scenario}/network_{product_demand_mt}.nc"
                 )
                 if not config.get("outputs", {}).get(
                     "keep_optimization_networks", False
                 )
-                else "resources/lco-{product}/cost_year~{cost_year}/{region}_{scenario}/network_{product_demand_mt}.nc"
+                else "resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}_{scenario}/network_{product_demand_mt}.nc"
             ),
         log:
-            "logs/calculate_regional_lcox_{cost_year}_{region}_{product}_{scenario}_{product_demand_mt}.log",
+            "logs/calculate_regional_lcox_{cost_year}_{region}_{wacc}_{product}_{scenario}_{product_demand_mt}.log",
         wildcard_constraints:
             product_demand_mt=r"\d+(?:\.\d+)?",
             scenario="reserved|unreserved",
@@ -165,12 +156,12 @@ if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         input:
             lco_reserved=lambda wildcards: expand(
-                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
+                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
                 product_demand_mt=config.get("steel_demand_levels"),
             ),
             lco_unreserved=lambda wildcards: (
                 expand(
-                    f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_unreserved/results_{{product_demand_mt}}.csv",
+                    f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_unreserved/results_{{product_demand_mt}}.csv",
                     product_demand_mt=config.get("steel_demand_levels"),
                 )
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
