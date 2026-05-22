@@ -405,17 +405,6 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
     )
 
 
-def _add_resources(network: pypsa.Network, config: dict) -> None:
-    """Add external resource supplies (iron ore)."""
-    network.add(
-        "Generator",
-        "iron_ore",
-        bus="iron_ore",
-        p_nom=1e10,
-        marginal_cost=0,
-    )
-
-
 def build_network(config: dict, tech_costs_path: str, year: int) -> pypsa.Network:
     """Build PyPSA steel supply chain skeleton (region-agnostic).
 
@@ -441,7 +430,6 @@ def build_network(config: dict, tech_costs_path: str, year: int) -> pypsa.Networ
     _add_grid_electricity_supply(network, config)
     _add_conversion_chain(network, tech_costs, config)
     _add_storage(network, tech_costs, config)
-    _add_resources(network, config)
 
     logger.info(
         f"Built network: {len(network.buses)} buses, {len(network.links)} links, "
@@ -514,7 +502,6 @@ if __name__ == "__main__":
             group_network, tech_costs, config, stages=group.get("stages")
         )
         _add_storage(group_network, tech_costs, config)
-        _add_resources(group_network, config)
         _set_meta(group_network, group)
         out_path = generic_dir / f"generic_model_{year}_{label}.nc"
         group_network.export_to_netcdf(str(out_path))

@@ -144,9 +144,15 @@ def add_loads_to_network(network, product, demands):
     p_set = hourly_demand_t
 
     network.add(
+        "Carrier",
+        f"{product}_demand",
+    )
+
+    network.add(
         "Load",
         load_name,
         bus=bus_name,
+        carrier=f"{product}_demand",
         p_set=p_set,  # Constant hourly demand
     )
 
