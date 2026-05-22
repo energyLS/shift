@@ -209,23 +209,7 @@ techno-economic parameters:
     batt_standing_loss: 0.0001  # 0.01% per hour for battery (self-discharge)
 
 interest_rate: 
-  default: 0.05
-  # Regional discount rates (override default for specific regions):
-  Central_America: 0.11
-  East_Asia: 0.09
-  East_East_Asia: 0.08
-  Eurasia: 0.10
-  Europe: 0.10
-  Far_West_Europe: 0.08
-  Middle_East: 0.12
-  North_America: 0.08
-  North_West_Africa: 0.12
-  Oceania: 0.07
-  Pacific_Asia: 0.10
-  South_America: 0.11
-  South_South_America: 0.10
-  Subsaharan_Africa: 0.11
-  West_Asia: 0.11
+  default: 0.05 # Used, if wildcard `wacc` is set to `uniform`
 
 trade:
   shipping_routes:
