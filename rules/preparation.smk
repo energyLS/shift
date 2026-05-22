@@ -1,6 +1,15 @@
 
 
 
+rule download_labour_data:
+    output:
+        merged = "../resources/merged_labour_inputs.csv",
+    resources:
+        mem_mb=2000,
+    threads: 1
+    script:
+        "scripts/download_labour_data.py"
+
 
 rule prepare_wacc:
     input:
