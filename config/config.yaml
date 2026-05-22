@@ -239,8 +239,8 @@ grid_electricity:
   grid_potential_custom: true # Use custom grid potential for eaf-grid from data/grid_potential_custom.csv in Mt steel
 
 part_load:
-  electrolysis: 0.0
-  direct reduction furnace: 0.9
+  electrolysis: 0.25 #  (0.1-0.4) https://doi.org/10.1016/j.jpowsour.2023.232629
+  direct reduction furnace: 0.2 # https://doi.org/10.1016/j.renene.2021.10.036
   electric arc furnace: 0.0
   # add part load limitations by naming the carrier of links
 

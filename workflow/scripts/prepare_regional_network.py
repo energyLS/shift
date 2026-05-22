@@ -38,7 +38,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from trade_chain_utils import build_product_components  # noqa: E402
+from trade_chain_utils import build_product_components, get_external_material_inputs  # noqa: E402
 from _helpers import setup_logging  # noqa: E402
 
 snakemake: Any = globals().get("snakemake")
@@ -437,6 +437,7 @@ def sanitize_and_fix(
         _logger.warning(f"network.sanitize() raised an exception: {exc}")
 
     fixes = []
+
     # operate on a snapshot of the generators DataFrame to avoid SettingWithCopy
     if len(network.generators) == 0:
         _logger.info("No generators to check during sanitize_and_fix.")
@@ -720,66 +721,35 @@ def prepare_network(
                     except Exception as e:
                         logger.warning(f"Could not remove Store {store_name}: {e}")
 
-            # Preserve buses that are required outputs or material/energy interfaces
-            # Add free external inputs for any material bus that is expected but
-            # not produced within this sliced network (e.g., `hbi` for the steel stage).
-            # Determine whether a kept bus is produced by any remaining link.
-            # Determine which buses are *produced* by remaining links.
-            # Convention in this codebase: `bus1` is the primary output bus
-            # for conversion Links (bus0 is typically an input). Previously we
-            # treated any referenced bus as "produced" which incorrectly
-            # prevented adding external inputs for buses that are actually
-            # inputs (e.g., `hbi` for the `eaf` link). Only consider `bus1`
-            # as an output to decide whether a bus is produced by the sliced
-            # network.
-            produced_buses = set()
-            for link_name in network.links.index:
-                row = network.links.loc[link_name]
-                if "bus1" in row.index:
-                    b = row.get("bus1")
-                    if pd.notna(b):
-                        produced_buses.add(b)
+            # Add free external inputs ONLY for external materials of this
+            # configured stage-group.
+            external_material_inputs = set(
+                get_external_material_inputs(config, route_label)
+            )
 
-            # For each bus in keep_buses that is not produced in the sliced network,
-            # add a free generator input if no generator already supplies it.
-            for bus_name in keep_buses:
+            for bus_name in sorted(external_material_inputs):
                 if bus_name not in network.buses.index:
-                    # create bus if missing
-                    try:
-                        network.add("Bus", bus_name, carrier=bus_name, unit="t/h")
-                        logger.info(f"Added missing Bus for stage slicing: {bus_name}")
-                    except Exception:
-                        pass
-
-                needs_free_input = False
-                if bus_name not in produced_buses:
-                    # If no link produces this bus, and no generator exists on it,
-                    # create a free external input (unlimited capacity, zero marginal cost)
-                    gens_on_bus = (
-                        network.generators[network.generators["bus"] == bus_name]
-                        if len(network.generators) > 0
-                        else pd.DataFrame()
+                    logger.warning(
+                        f"Expected material input bus missing during stage slicing: {bus_name}; skipping free input generator"
                     )
-                    if gens_on_bus.empty:
-                        needs_free_input = True
+                    continue
 
-                if needs_free_input:
-                    gen_name = f"{bus_name}_input"
-                    if gen_name not in network.generators.index:
-                        try:
-                            network.add(
-                                "Generator",
-                                gen_name,
-                                bus=bus_name,
-                                carrier=bus_name,
-                                p_nom=1e10,
-                                marginal_cost=0,
-                            )
-                            logger.info(
-                                f"Added external free input generator: {gen_name} on {bus_name}"
-                            )
-                        except Exception as e:
-                            logger.warning(f"Could not add free input {gen_name}: {e}")
+                gen_name = f"{bus_name}_input"
+                if gen_name not in network.generators.index:
+                    try:
+                        network.add(
+                            "Generator",
+                            gen_name,
+                            bus=bus_name,
+                            carrier=bus_name,
+                            p_nom=1e10,
+                            marginal_cost=0,
+                        )
+                        logger.info(
+                            f"Added external free input generator from trade chain: {gen_name} on {bus_name}"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not add free input {gen_name}: {e}")
 
             logger.info(
                 f"Skeleton sliced to {route_label}: {len(network.links)} links, {len(network.stores)} stores"
