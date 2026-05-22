@@ -40,7 +40,7 @@ TECH_COMPONENT_MAP = [
         "links": ("dri",),
         "stores": ("h2_storage", "hbi_storage"),
         "materials": ("iron_ore", "hydrogen"),
-        "energy": ("renewable_electricity"),
+        "energy": ("renewable_electricity",),
         "outputs": ("hbi",),
         "buses": (
             "iron_ore",
@@ -319,8 +319,19 @@ def build_product_components(config: Dict, product: str) -> Dict[str, object]:
         if comp:
             links.update(comp.get("links", ()))
             stores.update(comp.get("stores", ()))
-            for b in comp.get("buses", ()):  # include any canonical buses from mapping
-                buses.add(_normalize_commodity(b))
+            # Include canonical buses from mapping, but avoid adding energy-carrier
+            # buses (e.g., renewable_electricity, grid_electricity) unless the
+            # stage explicitly declares them as energy inputs. This prevents
+            # slicers from preserving unused energy buses for stages that only
+            # consume material inputs (e.g., steel stage using grid_electricity
+            # only when declared).
+            declared_energy_norm = {_normalize_commodity(e) for e in energy}
+            for b in comp.get("buses", ()):
+                normb = _normalize_commodity(b)
+                # If this is an energy input carrier, only keep it when declared
+                if normb in ENERGY_INPUTS and normb not in declared_energy_norm:
+                    continue
+                buses.add(normb)
     # If this stage-group uses renewable electricity, include battery
     # storage and bus as an explicit component so slicers keep batteries
     # for renewable-based stages. The user requested batteries be explicit
@@ -335,3 +346,42 @@ def build_product_components(config: Dict, product: str) -> Dict[str, object]:
         "buses": buses,
         "has_renewables": has_renewables,
     }
+
+
+def get_external_material_inputs(config: Dict, product: str) -> List[str]:
+    """Return material buses that must be supplied externally for a stage-group.
+
+    Inputs produced by earlier stages in the same group are not returned.
+    """
+
+    chain = get_trade_chain(config)
+    groups = get_stage_groups(chain)
+
+    target_group: Optional[Dict] = None
+    for group in groups:
+        if group["label"] == product:
+            target_group = group
+            break
+
+    if target_group is None:
+        raise ValueError(f"Product '{product}' not found in configured stage groups")
+
+    produced = set()
+    external_materials: List[str] = []
+
+    for stage in target_group["stages"]:
+        materials, _ = split_stage_inputs(stage)
+        for material in materials:
+            norm_material = _normalize_commodity(material)
+            if (
+                norm_material
+                and norm_material not in produced
+                and norm_material not in external_materials
+            ):
+                external_materials.append(norm_material)
+
+        output_commodity = _normalize_commodity(stage.get("output_commodity", ""))
+        if output_commodity:
+            produced.add(output_commodity)
+
+    return external_materials

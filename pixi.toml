@@ -1,13 +1,12 @@
 [workspace]
 authors = ["energyls <leon1.schumm@oth-regensburg.de>"]
-channels = ["conda-forge", "bioconda"]
+channels = ["conda-forge", "bioconda", "gurobi"]
 name = "shift"
 description = "Techno-economic optimization of global iron and steel supply chains under decarbonization"
 platforms = ["linux-64", "win-64"]
 version = "0.1.0"
 
 [tasks]
-snakemake = "snakemake"
 
 [dependencies]
 atlite = ">=0.3,!=0.5.0"
