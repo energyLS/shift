@@ -88,6 +88,7 @@ rule prepare_regional_network:
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
         wacc = "resources/wacc-clustered.csv",
+        labour_cost = "resources/labour_cost_clustered.csv",
     output:
         # Output keyed by product; route_label is internal to the script
         network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",

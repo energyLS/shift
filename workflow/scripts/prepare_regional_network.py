@@ -38,7 +38,10 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from trade_chain_utils import build_product_components, get_external_material_inputs  # noqa: E402
+from trade_chain_utils import (
+    build_product_components,
+    get_external_material_inputs,
+)  # noqa: E402
 from _helpers import setup_logging  # noqa: E402
 
 snakemake: Any = globals().get("snakemake")
@@ -1015,6 +1018,64 @@ def prepare_network(
     return network, audit_info
 
 
+def add_labour_cost(n, labour_cost):
+
+    print(f"adding labour cost")
+
+    carrier_labour_cost_dict = {
+        "electrolysis": "ely_intensity in h/kW_ely",
+        "direct_reduction_furnace": "dri_intensity in h/t_dri",
+        "electric_arc_furnace": "eaf_intensity in h/t_steel",
+    }
+
+    regional_labour_cost = labour_cost.loc[snakemake.wildcards.region]
+    wage = regional_labour_cost["steelworker_wage in euro/h"]
+
+    for carrier in carrier_labour_cost_dict.keys():
+        if carrier in n.links.carrier.values:
+            if carrier == "electrolysis":
+                n.links.loc[n.links.carrier == carrier, "overnight_cost"] += (
+                    wage
+                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
+                    * 1000
+                    * network.links[n.links.carrier == "electrolysis"].lifetime
+                )  # Wage in €/h * intensity in h/kW_ely * 1000 kW/MW = € / MW multiplied by lifetime to convert to overnight cost (instead of annual capital_cost)
+                logger.info(
+                    f"Added labour cost to {carrier} links: {wage} €/h * {regional_labour_cost[carrier_labour_cost_dict[carrier]]} h/kW_ely * 1000 = {wage * regional_labour_cost[carrier_labour_cost_dict[carrier]] * 1000:.2f} €/MW"
+                )
+            else:
+                pass
+
+            if carrier == "direct_reduction_furnace":
+                n.links.loc[n.links.carrier == carrier, "marginal_cost"] += (
+                    wage
+                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
+                    * n.links.loc[n.links.carrier == carrier, "efficiency"]
+                )  # Wage in €/h * intensity in h/t_dri * effiency_ironore_dri = € / t_dri, added to marginal cost
+                logger.info(
+                    f"Added labour cost to {carrier} links: {wage} €/h * {regional_labour_cost[carrier_labour_cost_dict[carrier]]} h/t_dri * efficiency = {wage * regional_labour_cost[carrier_labour_cost_dict[carrier]] * n.links.loc[n.links.carrier == carrier, 'efficiency'].iloc[0]:.2f} €/t_dri"
+                )
+            else:
+                pass
+
+            if carrier == "electric_arc_furnace":
+                n.links.loc[n.links.carrier == carrier, "marginal_cost"] += (
+                    wage
+                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
+                    * n.links.loc[n.links.carrier == carrier, "efficiency"]
+                )  # Wage in €/h * intensity in h/t_steel * effiency_input_output = € / t_steel, added to marginal cost
+                logger.info(
+                    f"Added labour cost to {carrier} links: {wage} €/h * {regional_labour_cost[carrier_labour_cost_dict[carrier]]} h/t_steel * efficiency = {wage * regional_labour_cost[carrier_labour_cost_dict[carrier]] * n.links.loc[n.links.carrier == carrier, 'efficiency'].iloc[0]:.2f} €/t_steel"
+                )
+            else:
+                pass
+        else:
+            print(
+                f"carrier {carrier} not in network, skipping labour cost addition for this carrier"
+            )
+    return n
+
+
 # ============================================================================
 # SNAKEMAKE INTEGRATION
 # ============================================================================
@@ -1077,6 +1138,22 @@ if __name__ == "__main__":
         scenario=scenario,
         route_label=route_label,
     )
+
+    # Add labour cost
+    if snakemake.config["trade_chains"]["labour_cost"] == True:
+        logger.info("Adding labour costs to network")
+        # Load labour cost
+        labour_cost = pd.read_csv(snakemake.input.labour_cost, header=0, index_col=0)
+        network = add_labour_cost(network, labour_cost)
+
+    elif snakemake.config["trade_chains"]["labour_cost"] == False:
+        logger.info("Labour cost addition skipped (labour_cost is False)")
+
+    else:
+        raise ValueError(
+            f"Unrecognized labour_cost wildcard: {snakemake.config['trade_chains']['labour_cost']}. "
+            f"Expected 'True' or 'False'."
+        )
 
     # Save network
     logger.info(f"Saving network to {output_path}")
