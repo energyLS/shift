@@ -98,7 +98,7 @@ rule prepare_regional_network:
         renewables="data/new_renewables_consolidated.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
-        wacc = "../resources/wacc-clustered.csv",
+        wacc = "resources/wacc-clustered.csv",
     output:
         # Output keyed by product; route_label is internal to the script
         network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",
@@ -167,12 +167,12 @@ if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         input:
             lco_reserved=lambda wildcards: expand(
-                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_reserved/wacc~{wildcards.wacc}/results_{{product_demand_mt}}.csv",
+                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
                 product_demand_mt=config.get("steel_demand_levels"),
             ),
             lco_unreserved=lambda wildcards: (
                 expand(
-                    f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/{wildcards.region}_unreserved/wacc~{wildcards.wacc}/results_{{product_demand_mt}}.csv",
+                    f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_unreserved/results_{{product_demand_mt}}.csv",
                     product_demand_mt=config.get("steel_demand_levels"),
                 )
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
