@@ -21,11 +21,11 @@ supply_curve:
 # Config-native trade chain definitions
 # Defines the commodity transformation chain with ordered stages and process labels
 trade_chains:
-  id: default_2050
+  id: labour_2050
   cost_year: 2050
-  # scenario: default
   final_product: steel
   wacc: uniform #regional
+  labour_cost: True #Include labour cost
   tradeable_commodities: [iron_ore, hbi]
   stages:
     1:

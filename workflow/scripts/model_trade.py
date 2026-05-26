@@ -1,7 +1,8 @@
+from typing import Any
+
 import pypsa
 import pandas as pd
 import matplotlib
-from typing import Any
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -10,7 +11,11 @@ import cartopy.crs as ccrs
 import geopandas as gpd
 import cartopy.io.shapereader as shpreader
 
+from _helpers import setup_logging
+
 snakemake: Any = globals().get("snakemake")
+
+logger = setup_logging(__name__, snakemake=snakemake, log_filename="model_trade.log")
 
 plt.style.use("bmh")
 
@@ -107,7 +112,7 @@ def building_model(
             "_marginal_cost_", 1
         )[0]
 
-        print("building generators and loads for ", region_name)
+        logger.info(f"building generators and loads for {region_name}")
 
         # Bus coordinates (shared by all buses in this region)
         loc = bus_location.loc[bus_location["region_name"] == region_name]
@@ -158,7 +163,7 @@ def building_model(
 
         # Demand load
         load = demands.loc[demands["region"] == region_name, "demand"].values[0]
-        print("Load set to 100% of regional final energy demand.")
+        logger.info("Load set to 100%% of regional final energy demand.")
         n.add(
             "Load",
             region_name + "_" + final,
@@ -228,9 +233,7 @@ def building_model(
                     )
                     p_nom = (
                         grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
-                    ) / len(
-                        region_data_intertwo
-                    )  # split evenly across supply steps
+                    ) / len(region_data_intertwo)  # split evenly across supply steps
 
                 m_cost = float(
                     region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
@@ -292,9 +295,9 @@ def create_links(transport_costs, trade_options):
     speed = 30  # km/h, IEA future of hydrogen 2019
     BOG = 0.2 / 100  # %/day, IEA future of hydrogen 2019
 
-    print("ship + pipe cost", ship_mc, ship_c, pipe_mc)
-    print(f"shipping cost {interone} {ship_interone_mc} EUR/(t*km)")
-    print(f"shipping cost iron ore {ship_iron_ore_mc} EUR/(t*km)")
+    logger.info(f"ship + pipe cost {ship_mc} {ship_c} {pipe_mc}")
+    logger.info(f"shipping cost {interone} {ship_interone_mc} EUR/(t*km)")
+    logger.info(f"shipping cost iron ore {ship_iron_ore_mc} EUR/(t*km)")
 
     # if there should be a link, create a link
     # do this for both shipping and pipeline
@@ -337,7 +340,13 @@ def create_links(transport_costs, trade_options):
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
-            print(f"shipping {interone} link made from {r_from} to {r_to} - eff {eff}")
+            logger.info(
+                "shipping %s link made from %s to %s - eff %s",
+                interone,
+                r_from,
+                r_to,
+                eff,
+            )
 
             # Add iron ore shipping link
             total_cost_iron_ore = ship_iron_ore_mc * float(
@@ -355,10 +364,11 @@ def create_links(transport_costs, trade_options):
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
-            print(
-                "iron ore shipping link made from {}_ore to {}_ore - eff {}".format(
-                    r_from, r_to, eff
-                )
+            logger.info(
+                "iron ore shipping link made from %s_ore to %s_ore - eff %s",
+                r_from,
+                r_to,
+                eff,
             )
 
         # checking if the row connects with pipeline
@@ -382,7 +392,7 @@ def create_links(transport_costs, trade_options):
                 p_nom_extendable=True,
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
             )
-            print("pipeline link made from {} to {} - eff {}".format(r_from, r_to, eff))
+            logger.info("pipeline link made from %s to %s - eff %s", r_from, r_to, eff)
 
     return
 
@@ -392,7 +402,7 @@ def save_trade_network(solved_network):
     sol = pd.DataFrame(columns=["type", "variable", "value", "unit"])
     # add objective cost
     sol.loc[sol.shape[0]] = ["objective", "cost", solved_network.objective, "EUR"]
-    print("added objective cost to sol")
+    logger.info("added objective cost to sol")
 
     # add all generators with name and production value
     df_gen = solved_network.generators.p_nom_opt.T.to_frame()
@@ -401,7 +411,7 @@ def save_trade_network(solved_network):
     df_gen.insert(0, "type", "generator")
     df_gen.insert(3, "unit", unit)
     sol = pd.concat([sol, df_gen], ignore_index=True)
-    print("added generators to sol")
+    logger.info("added generators to sol")
 
     # add all links with names and flows
     df_links = solved_network.links.p_nom_opt.T.to_frame()
@@ -410,7 +420,7 @@ def save_trade_network(solved_network):
     df_links.insert(0, "type", "link")
     df_links.insert(3, "unit", unit)
     sol = pd.concat([sol, df_links], ignore_index=True)
-    print("added links to sol")
+    logger.info("added links to sol")
 
     # add all bus (balance) - who is importing/exporting
     df_bus = solved_network.buses_t.p.T
@@ -419,7 +429,7 @@ def save_trade_network(solved_network):
     df_bus.insert(0, "type", "bus")
     df_bus.insert(3, "unit", unit + "/a")
     sol = pd.concat([sol, df_bus], ignore_index=True)
-    print("added bus_balances to sol")
+    logger.info("added bus_balances to sol")
 
     # how much of capacity is actually being used per bus?
     df_bus_cap = (
@@ -436,7 +446,7 @@ def save_trade_network(solved_network):
     df_bus_cap.insert(0, "type", "used bus capacity")
     df_bus_cap.insert(3, "unit", "%")
     sol = pd.concat([sol, df_bus_cap], ignore_index=True)
-    print("added bus_capacities to sol")
+    logger.info("added bus_capacities to sol")
 
     sol.to_csv(snakemake.output.trade_result)
 
@@ -470,21 +480,23 @@ def save_network_collection(nc, output_path, optimal_network=None):
     # Split path into base and extension
     base, ext = os.path.splitext(output_path)
 
-    print(f"Saving NetworkCollection with {len(nc.networks)} networks to {output_dir}")
+    logger.info(
+        "Saving NetworkCollection with %s networks to %s", len(nc.networks), output_dir
+    )
 
     # Save optimal network (without slack) to the base filename if provided
     if optimal_network is not None:
-        print(f"  Saving optimal network (no slack) to {output_path}")
+        logger.info(f"  Saving optimal network (no slack) to {output_path}")
         optimal_network.export_to_netcdf(output_path)
 
     # Save each network with its index/key in the filename
     for key, network in nc.networks.items():
         filename = f"{base}_{key}{ext}"
-        print(f"  Saving network with key '{key}' to {filename}")
+        logger.info(f"  Saving network with key '{key}' to {filename}")
         network.export_to_netcdf(filename)
 
     total_saved = len(nc.networks) + (1 if optimal_network is not None else 0)
-    print(f"Saved {total_saved} networks to {output_dir}")
+    logger.info(f"Saved {total_saved} networks to {output_dir}")
 
 
 def plot_trade_network(
@@ -635,7 +647,7 @@ def apply_cost_penalty(n, cost_penalty):
                 "marginal_cost",
             ] *= cost_penalty[region]
     else:
-        print("No cost penalty applied")
+        logger.info("No cost penalty applied")
 
     return n
 
@@ -661,7 +673,7 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
     """
 
     if diversity_factor is False:
-        print("HBI diversity constraint disabled")
+        logger.info("HBI diversity constraint disabled")
         return n
 
     if diversity_factor <= 0 or diversity_factor > 1:
@@ -682,8 +694,9 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
         demand_tonnes = demands.loc[demands["region"] == region_name, "demand"].values
 
         if len(demand_tonnes) == 0:
-            print(
-                f"Warning: No demand found for region {region_name}, skipping diversity constraint"
+            logger.warning(
+                "Warning: No demand found for region %s, skipping diversity constraint",
+                region_name,
             )
             continue
 
@@ -696,8 +709,12 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
         for link_idx in group.index:
             n.links.loc[link_idx, "p_nom_max"] = max_from_single_supplier
 
-        print(
-            f"HBI diversity constraint applied to {region_name}: max {diversity_factor * 100:.0f}% of {demand_tonnes:.0f}t = {max_from_single_supplier:.0f}t per supplier"
+        logger.info(
+            "HBI diversity constraint applied to %s: max %.0f%% of %.0ft = %.0ft per supplier",
+            region_name,
+            diversity_factor * 100,
+            demand_tonnes,
+            max_from_single_supplier,
         )
 
     return n
@@ -745,7 +762,7 @@ def resolve_mga_exporters_from_indicator(mga, indicators):
 
     # Otherwise, resolve from indicator
     if "indicator" not in mga:
-        print("No indicator or export specified in MGA config")
+        logger.info("No indicator or export specified in MGA config")
         return mga
 
     indicator_name = mga["indicator"]
@@ -777,8 +794,10 @@ def resolve_mga_exporters_from_indicator(mga, indicators):
 
     selected_regions = values[values < threshold].index.tolist()
 
-    print(f"Selected regions with {indicator_name} < {threshold}: {selected_regions}")
-    print(f"Values: {values[values < threshold].to_dict()}")
+    logger.info(
+        f"Selected regions with {indicator_name} < {threshold}: {selected_regions}"
+    )
+    logger.info(f"Values: {values[values < threshold].to_dict()}")
 
     # Set export to the selected regions
     mga["export"] = selected_regions
@@ -854,14 +873,17 @@ def resolve_mga_links_from_chokepoints(n, mga, trade_options, interone):
         route_cp = route_chokepoints.get((r_from, r_to), set())
         if route_cp & chokepoints_to_avoid:  # set intersection
             selected_links.append(link_name)
-            print(
-                f"  Chokepoint MGA: link '{link_name}' traverses "
-                f"{route_cp & chokepoints_to_avoid}"
+            logger.info(
+                "  Chokepoint MGA: link '%s' traverses %s",
+                link_name,
+                route_cp & chokepoints_to_avoid,
             )
 
-    print(
-        f"Chokepoint MGA: selected {len(selected_links)}/{len(carrier_links)} "
-        f"shipping links traversing {chokepoints_to_avoid}"
+    logger.info(
+        "Chokepoint MGA: selected %s/%s shipping links traversing %s",
+        len(selected_links),
+        len(carrier_links),
+        chokepoints_to_avoid,
     )
 
     return pd.Index(selected_links)
@@ -898,8 +920,8 @@ def resolve_mga_links_from_blocks(n, mga):
         for region in regions:
             region_to_block[region] = block_name
 
-    print(
-        f"Blocks MGA: {', '.join(f'{k}: {len(v)} regions' for k, v in blocks.items())}"
+    logger.info(
+        "Blocks MGA: %s", ", ".join(f"{k}: {len(v)} regions" for k, v in blocks.items())
     )
 
     # Select shipping links for the target carrier
@@ -921,11 +943,17 @@ def resolve_mga_links_from_blocks(n, mga):
 
         if block_from != block_to:
             selected_links.append(link_name)
-            print(f"  Blocks MGA: link '{link_name}' crosses {block_from} → {block_to}")
+            logger.info(
+                "  Blocks MGA: link '%s' crosses %s → %s",
+                link_name,
+                block_from,
+                block_to,
+            )
 
-    print(
-        f"Blocks MGA: selected {len(selected_links)}/{len(carrier_links)} "
-        f"inter-block shipping links"
+    logger.info(
+        "Blocks MGA: selected %s/%s inter-block shipping links",
+        len(selected_links),
+        len(carrier_links),
     )
 
     return pd.Index(selected_links)
@@ -1005,7 +1033,7 @@ def solve_network(n, mga=None, indicators=None):
         if hasattr(n, "model") and getattr(n.model, "solver_model", None) is not None:
             n.model.solver_model = None
     except Exception as e:
-        print(f"Warning clearing solver model before copying network: {e}")
+        logger.warning(f"Warning clearing solver model before copying network: {e}")
 
     optimal_network = n.copy()  # Store the optimal solution
 
@@ -1047,13 +1075,13 @@ def solve_network(n, mga=None, indicators=None):
     slack_list = mga["slack"]  # Always a list in config
 
     # Handle slack values (always as a list)
-    print(f"MGA activated with slacks: {slack_list}")
-    print(f"Optimal cost (no MGA): {optimal_cost:.2f} B€")
+    logger.info(f"MGA activated with slacks: {slack_list}")
+    logger.info(f"Optimal cost (no MGA): {optimal_cost:.2f} B€")
 
     networks = {}
 
     for slack_value in slack_list:
-        print(f"\n--- Solving with slack = {slack_value} ---")
+        logger.info(f"\n--- Solving with slack = {slack_value} ---")
 
         # Create a copy of the network for each slack
         n_copy = n.copy()
@@ -1073,7 +1101,7 @@ def solve_network(n, mga=None, indicators=None):
             .div(1e9)
         )
         mga_cost = tsc.sum()
-        print(
+        logger.info(
             f"MGA cost: {mga_cost:.2f} B€, allowed cost increase: {optimal_cost * (1 + slack_value):.2f} B€"
         )
 
@@ -1117,14 +1145,17 @@ if __name__ == "__main__":
     stages = trade_chain["stages"]
     intertwo = stages[max(stages.keys())]["process_label"]
 
-    print(
-        f"intermediate 1 ({interone}) and intermediate 2 ({intertwo}) to final product {final}"
+    logger.info(
+        "intermediate 1 (%s) and intermediate 2 (%s) to final product %s",
+        interone,
+        intertwo,
+        final,
     )
 
     shipping_first = "iron_ore"
     shipping_second = interone
 
-    print("starting up with all regions--- ")
+    logger.info("starting up with all regions--- ")
     # making dataframes
     transport_costs = pd.read_csv(snakemake.input.transport_costs, header=0)
     trade_options = pd.read_csv(snakemake.input.trade_options, header=0)
@@ -1174,10 +1205,10 @@ if __name__ == "__main__":
 
     plot_config = snakemake.config["plot"]["world_map"][final]
 
-    print("data loaded successfully")
+    logger.info("data loaded successfully")
 
     # building model
-    print("building model")
+    logger.info("building model")
     n = building_model(
         supply_curves_interone,
         supply_curves_intertwo,
@@ -1187,63 +1218,67 @@ if __name__ == "__main__":
     )
 
     # building transport network connecting the individual buses
-    print("building transportation links")
+    logger.info("building transportation links")
     create_links(transport_costs, trade_options)
 
     # Cost penalty
-    if snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"] == None:
+    if snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"] is None:
         cost_penalty = None
-        print("cost_penalty not activated")
+        logger.info("cost_penalty not activated")
     else:
         cost_penalty = snakemake.config["scenario"][scenario]["modifiers"][
             "cost_penalty"
         ]
-        print(
-            f"applying cost penalty scenario: {scenario} with penalties {cost_penalty}"
+        logger.info(
+            "applying cost penalty scenario: %s with penalties %s",
+            scenario,
+            cost_penalty,
         )
         n = apply_cost_penalty(n, cost_penalty)
 
     # HBI diversity constraint
     diversity_factor = snakemake.config["trade"]["diversity_factor"]
     if diversity_factor is not False:
-        print(f"applying HBI diversity constraint with factor {diversity_factor}")
+        logger.info(
+            "applying HBI diversity constraint with factor %s", diversity_factor
+        )
         n = apply_hbi_diversity_constraint(n, diversity_factor, demands)
     else:
-        print("HBI diversity constraint disabled")
+        logger.info("HBI diversity constraint disabled")
 
     # MGA
     if "mga" not in snakemake.config["scenario"][scenario]["modifiers"].keys():
         mga = None
-        print("MGA not activated")
+        logger.info("MGA not activated")
     else:
         mga = snakemake.config["scenario"][scenario]["modifiers"]["mga"]
-        print(f"MGA activated with slack {mga['slack']}")
+        logger.info(f"MGA activated with slack {mga['slack']}")
 
     # solving model
-    print("solving model")
+    logger.info("solving model")
     result = solve_network(n, mga=mga, indicators=indicators if indicators else None)
-    print("network was solved")
+    logger.info("network was solved")
 
     # Export result: always a tuple (optimal_network, NetworkCollection)
-    print("saving network to netCDF")
+    logger.info("saving network to netCDF")
     optimal_net, nc = result
     save_network_collection(
         nc, snakemake.output.trade_network, optimal_network=optimal_net
     )
     n_selected = optimal_net
-    print(
+    logger.info(
         f"Saved optimal network and NetworkCollection with {len(nc.networks)} networks"
     )
 
     # saving results and calculating LCOH
-    print("saving results as network+csv")
+    logger.info("saving results as network+csv")
     save_trade_network(n_selected)
 
     # Build dissolved region GeoDataFrame once for basemap (no internal country borders)
     region_gdf = build_region_geodataframe(snakemake.config)
 
     # Plot results: consolidate plotting for all networks
-    print("saving plots")
+    logger.info("saving plots")
 
     # Define the products to plot and their settings
     plot_settings = [
@@ -1273,9 +1308,9 @@ if __name__ == "__main__":
         is_optimal = pd.isna(slack_key)
 
         if is_optimal:
-            print("\nPlotting optimal network (no slack)")
+            logger.info("\nPlotting optimal network (no slack)")
         else:
-            print(f"\nPlotting for slack={slack_key}")
+            logger.info(f"\nPlotting for slack={slack_key}")
 
         for product, alpha_supply, output_path, output_path_png in plot_settings:
             # Use base filenames for optimal, append slack value for MGA variants

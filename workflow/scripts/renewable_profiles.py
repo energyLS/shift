@@ -18,7 +18,6 @@ Visualization API:
 """
 
 import json
-import logging
 from pathlib import Path
 from datetime import datetime
 
@@ -36,8 +35,9 @@ import matplotlib.colors as mcolors
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from cartopy.io import shapereader as shprdr
+from _helpers import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging(__name__, log_filename="renewable_profiles.log")
 
 SCHEMA_VERSION = "1.0"
 

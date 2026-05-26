@@ -7,15 +7,14 @@ Technology database utilities: Download and query PyPSA cost data.
 Dual-purpose module: Snakemake rule for downloading tech costs + importable utilities.
 """
 
-import logging
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-
-logger = logging.getLogger(__name__)
+from _helpers import setup_logging
 
 snakemake: Any = globals().get("snakemake")
+logger = setup_logging(__name__, snakemake=snakemake, log_filename="tech_database.log")
 
 
 def download_tech_database(

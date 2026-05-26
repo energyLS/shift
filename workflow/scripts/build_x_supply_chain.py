@@ -26,7 +26,6 @@ Reusable pattern for any commodity with similar conversion chains.
 Modify the techno-economic parameters, bus definitions, and links to adapt to different commodities.
 """
 
-import logging
 from typing import Any
 from pathlib import Path
 import pandas as pd
@@ -34,6 +33,7 @@ import numpy as np
 import pypsa
 
 import tech_database as td
+from _helpers import setup_logging
 
 from trade_chain_utils import (
     get_ordered_stages,
@@ -43,10 +43,10 @@ from trade_chain_utils import (
     _components_for_process_label,
 )
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
 snakemake: Any = globals().get("snakemake")
+logger = setup_logging(
+    __name__, snakemake=snakemake, log_filename="build_x_supply_chain.log"
+)
 
 
 def _techno_economic_parameters(config: dict) -> dict:
