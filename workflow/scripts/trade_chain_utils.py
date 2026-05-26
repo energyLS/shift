@@ -9,6 +9,10 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple
 
+from _helpers import setup_logging
+
+logger = setup_logging(__name__)
+
 
 ENERGY_INPUTS = {"renewable_electricity", "grid_electricity"}
 BUS_ALIASES = {
@@ -90,10 +94,6 @@ def validate_stage_io(stage: Dict, raise_on_mismatch: bool = False) -> bool:
     Returns True if validation passes or no mapping exists. If `raise_on_mismatch` is True,
     a ValueError is raised on mismatch; otherwise a warning is returned via logging and False is returned.
     """
-    import logging
-
-    logger = logging.getLogger(__name__)
-
     process_label = str(stage.get("process_label", "")).strip()
     if not process_label:
         return True

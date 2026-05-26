@@ -112,7 +112,7 @@ def create_supply_curve():
     route_label = route_label_for_product(snakemake.config, product) or product
 
     reserved_files = snakemake.input.lco_reserved
-    logger.info("reserved scenario files: %s", reserved_files)
+    logger.info(f"reserved scenario files: {reserved_files}")
     df_reserved = pd.concat(
         (pd.read_csv(f, sep=",") for f in reserved_files), ignore_index=True
     )
@@ -120,7 +120,7 @@ def create_supply_curve():
 
     unreserved_files = snakemake.input.lco_unreserved
     if unreserved_files and len(unreserved_files) > 0:
-        logger.info("unreserved scenario files: %s", unreserved_files)
+        logger.info(f"unreserved scenario files: {unreserved_files}")
         df_unreserved = pd.concat(
             (pd.read_csv(f, sep=",") for f in unreserved_files), ignore_index=True
         )
@@ -186,7 +186,7 @@ def create_supply_curve():
         and len(snakemake.input.lco_unreserved) > 0
     ):
         df_sub.to_csv(unreserved_path, index=False)
-        logger.info("Saved unreserved supply curve: %s", unreserved_path)
+        logger.info(f"Saved unreserved supply curve: {unreserved_path}")
     else:
         logger.info(
             "Skipping supply_unreserved output (unreserved scenario not provided or not enabled)"
@@ -299,7 +299,7 @@ if snakemake is None:
 
 # Get product from wildcards (product-labeled contract)
 product = snakemake.wildcards["product"]
-logger.info("Creating supply curve for product=%s", product)
+logger.info(f"Creating supply curve for product={product}")
 
 if product == "hydrogen":
     columns = {

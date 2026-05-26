@@ -37,15 +37,17 @@ Usage
 
 import sys
 import warnings
-import requests
-import pandas as pd
-import pycountry
+import requests  # type: ignore
+import pandas as pd  # type: ignore
+import pycountry  # type: ignore
 from io import StringIO
 from pathlib import Path
 
+from _helpers import setup_logging
+
 # ── optional wbgapi ──────────────────────────────────────────────────────────
 try:
-    import wbgapi as wb
+    import wbgapi as wb  # type: ignore
 
     HAS_WBGAPI = True
 except ImportError:
@@ -64,6 +66,11 @@ GNI_CSV = DATA_DIR / "gni_per_capita.csv"
 ECB_CSV = DATA_DIR / "ecb_usd_eur.csv"
 CONTRIB_CSV = DATA_DIR / "employer_contributions.csv"
 MERGED_CSV = DATA_DIR / "merged_labour_inputs.csv"
+
+snakemake = globals().get("snakemake")
+logger = setup_logging(
+    __name__, snakemake=snakemake, log_filename="download_labour_data.log"
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # OECD member list (ISO-3, as of 2024)
@@ -124,7 +131,7 @@ def fetch_world_bank_gni(start_year=2010, end_year=2023, force=False):
     Saves result to  data/gni_per_capita.csv.
     """
     if GNI_CSV.exists() and not force:
-        print(f"[GNI]  Loading cached → {GNI_CSV}")
+        logger.info(f"[GNI]  Loading cached → {GNI_CSV}")
         return pd.read_csv(GNI_CSV)
 
     if not HAS_WBGAPI:
@@ -133,7 +140,7 @@ def fetch_world_bank_gni(start_year=2010, end_year=2023, force=False):
             "  pip install wbgapi"
         )
 
-    print("[GNI]  Downloading from World Bank (NY.GNP.PCAP.CD) …")
+    logger.info("[GNI]  Downloading from World Bank (NY.GNP.PCAP.CD) …")
     try:
         raw = wb.data.DataFrame(
             "NY.GNP.PCAP.CD",
@@ -150,7 +157,7 @@ def fetch_world_bank_gni(start_year=2010, end_year=2023, force=False):
         df["year"] = df["year"].str.replace("YR", "").astype(int)
         df = df.dropna(subset=["gni_usd"])
         df.to_csv(GNI_CSV, index=False)
-        print(f"[GNI]  {len(df)} rows → {GNI_CSV}")
+        logger.info(f"[GNI]  {len(df)} rows → {GNI_CSV}")
         return df
 
     except Exception as exc:
@@ -222,7 +229,7 @@ def fetch_ecb_rates(start_year=2010, end_year=2023, force=False):
     Saves to  data/ecb_usd_eur.csv.
     """
     if ECB_CSV.exists() and not force:
-        print(f"[ECB]  Loading cached → {ECB_CSV}")
+        logger.info(f"[ECB]  Loading cached → {ECB_CSV}")
         return pd.read_csv(ECB_CSV)
 
     ecb_attempts = [
@@ -254,20 +261,19 @@ def fetch_ecb_rates(start_year=2010, end_year=2023, force=False):
 
     for label, url, headers in ecb_attempts:
         try:
-            print(f"[ECB]  Trying {label} …")
+            logger.info(f"[ECB]  Trying {label} …")
             resp = requests.get(url, headers=headers, timeout=20)
             resp.raise_for_status()
             df = _parse_ecb_csv(resp.text)
             df.to_csv(ECB_CSV, index=False)
-            print(f"[ECB]  {len(df)} rows → {ECB_CSV}")
+            logger.info(f"[ECB]  {len(df)} rows → {ECB_CSV}")
             return df
         except Exception as exc:
-            print(f"[ECB]  {label} failed: {exc}")
+            logger.warning(f"[ECB]  {label} failed: {exc}")
 
     # ── fallback: embedded reference table ───────────────────────────────────
-    print(
-        "[ECB]  All live endpoints unavailable.  "
-        "Using embedded reference table (_ECB_FALLBACK_USD_PER_EUR)."
+    logger.info(
+        "[ECB]  All live endpoints unavailable.  Using embedded reference table (_ECB_FALLBACK_USD_PER_EUR)."
     )
     rows = [
         {"year": y, "usd_per_eur": r, "eur_per_usd": 1.0 / r}
@@ -276,7 +282,7 @@ def fetch_ecb_rates(start_year=2010, end_year=2023, force=False):
     ]
     df = pd.DataFrame(rows).sort_values("year").reset_index(drop=True)
     df.to_csv(ECB_CSV, index=False)
-    print(f"[ECB]  {len(df)} rows (from fallback table) → {ECB_CSV}")
+    logger.info(f"[ECB]  {len(df)} rows (from fallback table) → {ECB_CSV}")
     return df
 
 
@@ -352,18 +358,19 @@ def load_unido_data(filepath=UNIDO_RAW):
     """
     filepath = Path(filepath)
     if not filepath.exists():
-        print(f"[UNIDO] Data file not found: {filepath}")
-        print(
+        logger.warning(f"[UNIDO] Data file not found: {filepath}")
+        logger.warning(
             "  Please download INDSTAT Rev 4 (ISIC 241, variables 04+05, all countries)\n"
             "  from https://stat.unido.org/data/download and extract data.csv into\n"
-            f"  {filepath.parent}/"
+            f"  {filepath.parent}/",
         )
         return None
 
-    print(f"[UNIDO] Reading {filepath} …")
+    logger.info(f"[UNIDO] Reading {filepath} …")
     raw = pd.read_csv(filepath, low_memory=False)
 
     # ── Employees: VariableCode 4, count in Value ─────────────────────────
+    logger.info(f"[UNIDO] {len(raw)} raw rows read from {filepath}")
     emp_mask = raw["VariableCode"].astype(str).str.strip().isin(["4", "04"])
     emp = (
         raw[emp_mask][["Year", "Country", "Value"]]
@@ -397,7 +404,7 @@ def load_unido_data(filepath=UNIDO_RAW):
     df["iso3"] = df["iso3"].str.upper().str.strip()
 
     result = df[["iso3", "country_name", "year", "employees", "wages_usd"]].copy()
-    print(
+    logger.info(
         f"[UNIDO] {len(result)} country-year rows loaded ({result['iso3'].nunique()} countries)."
     )
     return result
@@ -516,21 +523,16 @@ EMPLOYER_CONTRIB_TABLE = {
     "GEO": (0.000, "Georgia: no employer-side social contribution"),
     "ARM": (0.025, "Armenia: employer social premium 2.5%"),
     "AZE": (0.220, "Azerbaijan: employer social insurance 22%"),
-    "UZB": (0.120, "Uzbekistan: social insurance 12%"),
     "TKM": (0.200, "Turkmenistan: employer insurance ~20%"),
     "KGZ": (0.175, "Kyrgyzstan: employer social fund 17.5%"),
     "TJK": (0.250, "Tajikistan: employer contribution ~25%"),
     "MNG": (0.135, "Mongolia: employer social insurance 13.5%"),
     "MMR": (0.030, "Myanmar: SSB employer 2.5-3%"),
     "KHM": (0.031, "Cambodia: NSSF employer 3.1%"),
-    "BGD": (0.050, "Bangladesh: employer provident fund ~5%"),
     "LKA": (0.120, "Sri Lanka: EPF 12%"),
     "NPL": (0.100, "Nepal: SSF employer ~10%"),
     "KEN": (0.060, "Kenya: NSSF + NHIF employer ~6%"),
-    "TZA": (0.100, "Tanzania: NSSF employer 10%"),
     "UGA": (0.100, "Uganda: NSSF employer 10%"),
-    "ZMB": (0.050, "Zambia: NAPSA employer 5%"),
-    "ZWE": (0.045, "Zimbabwe: NSSA employer 4.5%"),
     "SEN": (0.040, "Senegal: IPM employer + family benefit ~4%"),
     "CIV": (0.065, "Côte d'Ivoire: CNPS employer ~6.5%"),
     "CMR": (0.080, "Cameroon: CNPS employer ~8%"),
@@ -571,7 +573,7 @@ def build_employer_contributions():
         lambda x: "OECD" if x in OECD_MEMBERS else "non_OECD"
     )
     df.to_csv(CONTRIB_CSV, index=False)
-    print(f"[CONTRIB] {len(df)} countries → {CONTRIB_CSV}")
+    logger.info(f"[CONTRIB] {len(df)} countries → {CONTRIB_CSV}")
     return df
 
 
@@ -645,8 +647,10 @@ def merge_all_data(
     contrib_df = build_employer_contributions()
 
     if unido_df is None:
-        print("[MERGE] Cannot merge – UNIDO file not yet downloaded.")
-        print("        GNI, ECB and employer-contribution files have been saved.")
+        logger.warning("[MERGE] Cannot merge – UNIDO file not yet downloaded.")
+        logger.warning(
+            "        GNI, ECB and employer-contribution files have been saved."
+        )
         return None
 
     # 2. Build fast lookup dicts
@@ -707,7 +711,7 @@ def merge_all_data(
         )
 
     if not records:
-        print("[MERGE] No valid records produced. Check UNIDO file contents.")
+        logger.warning("[MERGE] No valid records produced. Check UNIDO file contents.")
         return None
 
     merged = pd.DataFrame(records)
@@ -731,7 +735,7 @@ def merge_all_data(
 
     output_filepath.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(output_filepath, index=False)
-    print(f"\n[MERGE] {len(merged)} countries → {output_filepath}")
+    logger.info(f"\n[MERGE] {len(merged)} countries → {output_filepath}")
     cols_show = [
         "iso3",
         "country_name",
@@ -741,7 +745,7 @@ def merge_all_data(
         "gni_target_year_usd",
         "employer_contrib_rate",
     ]
-    print(merged[cols_show].to_string(index=False))
+    logger.info(merged[cols_show].to_string(index=False))
     return merged
 
 

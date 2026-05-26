@@ -39,6 +39,14 @@ import warnings
 import pycountry
 import pandas as pd
 from pathlib import Path
+from typing import Any
+
+from _helpers import setup_logging
+
+snakemake: Any = globals().get("snakemake")
+logger = setup_logging(
+    __name__, snakemake=snakemake, log_filename="prepare_labour_cost.log"
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -152,7 +160,7 @@ def compute_all_hourly_wages(merged_df: pd.DataFrame) -> pd.DataFrame:
         "employer_contrib_rate",
         "eur_per_usd_target",
     ]
-    valid_mask = merged_df[required].notna().all(axis=1)
+    valid_mask = merged_df[required].notna().all(axis=1)  # type: ignore[arg-type]
     valid = merged_df[valid_mask].copy()
     valid["hourly_wage_eur"] = valid.apply(compute_hourly_wage, axis=1)
 
@@ -239,24 +247,25 @@ if __name__ == "__main__":
             f"Merged labour inputs not found: {merged_path}\n"
             "  Run download_labour_data first."
         )
-    print(f"Loading {merged_path} …")
+    logger.info(f"Loading {merged_path} …")
     merged = pd.read_csv(merged_path)
-    print(f"  {len(merged)} countries loaded.")
+    logger.info(f"  {len(merged)} countries loaded.")
 
     # ── 2. Load config regions ───────────────────────────────────────────
     regions_config: dict = snakemake.config["regions"]
     iso_to_region = build_iso_to_region(regions_config)
     regions = list(regions_config.keys())
-    print(f"  {len(regions)} model regions from config.")
+    logger.info(f"  {len(regions)} model regions from config.")
 
     # ── 3. Compute hourly wages ──────────────────────────────────────────
     wages = compute_all_hourly_wages(merged)
-    print("\nCountry-level hourly wages [EUR/h, 2020]:")
-    print(
+    logger.info("\nCountry-level hourly wages [EUR/h, 2020]:")
+    wage_table = (
         wages[["iso3", "country_name", "hourly_wage_eur"]]
-        .sort_values("hourly_wage_eur", ascending=False)
+        .sort_values("hourly_wage_eur", ascending=False)  # type: ignore[call-overload]
         .to_string(index=False)
     )
+    logger.info(wage_table)
 
     # ── 4. Aggregate by region ───────────────────────────────────────────
     result = aggregate_by_region(wages, iso_to_region, regions)
@@ -265,5 +274,5 @@ if __name__ == "__main__":
     output_path = Path(snakemake.output.labour_cost)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(output_path)
-    print(f"\nSaved → {output_path}")
-    print(result.to_string())
+    logger.info(f"\nSaved → {output_path}")
+    logger.info(result.to_string())
