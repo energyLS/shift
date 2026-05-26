@@ -25,10 +25,10 @@ Usage (Snakemake rule):
 
 import logging
 from typing import Any, Dict, Optional, Tuple, Iterable, cast
-import numpy as np
-import pandas as pd
-import xarray as xr
-import pypsa
+import numpy as np  # type: ignore
+import pandas as pd  # type: ignore
+import xarray as xr  # type: ignore
+import pypsa  # type: ignore
 
 import tech_database as td
 
@@ -1026,43 +1026,30 @@ def add_labour_cost(n, labour_cost):
     wage = regional_labour_cost["steelworker_wage in euro/h"]
 
     for carrier in carrier_labour_cost_dict.keys():
-        if carrier in n.links.carrier.values:
+        mask = n.links.carrier == carrier
+        if mask.any():
+            intensity = regional_labour_cost[carrier_labour_cost_dict[carrier]]
+
             if carrier == "electrolysis":
-                n.links.loc[n.links.carrier == carrier, "overnight_cost"] += (
-                    wage
-                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
-                    * 1000
-                    * network.links[n.links.carrier == "electrolysis"].lifetime
-                )  # Wage in €/h * intensity in h/kW_ely * 1000 kW/MW = € / MW multiplied by lifetime to convert to overnight cost (instead of annual capital_cost)
+                fom_cost = wage * intensity * 1000
+                n.links.loc[mask, "fom_cost"] += fom_cost
                 logger.info(
-                    f"Added labour cost to {carrier} links: {wage} €/h * {regional_labour_cost[carrier_labour_cost_dict[carrier]]} h/kW_ely * 1000 = {wage * regional_labour_cost[carrier_labour_cost_dict[carrier]] * 1000:.2f} €/MW"
+                    f"Added labour cost as fom_cost to {carrier} links: {wage} €/h * {intensity} h/kW_ely * 1000 = {fom_cost:.2f} €/MW"
                 )
-            else:
-                pass
 
             if carrier == "direct_reduction_furnace":
-                n.links.loc[n.links.carrier == carrier, "marginal_cost"] += (
-                    wage
-                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
-                    * n.links.loc[n.links.carrier == carrier, "efficiency"]
-                )  # Wage in €/h * intensity in h/t_dri * effiency_ironore_dri = € / t_dri, added to marginal cost
+                marginal_cost = wage * intensity * n.links.loc[mask, "efficiency"]
+                n.links.loc[mask, "marginal_cost"] += marginal_cost
                 logger.info(
-                    f"Added labour cost to {carrier} links: {wage} €/h * {regional_labour_cost[carrier_labour_cost_dict[carrier]]} h/t_dri * efficiency = {wage * regional_labour_cost[carrier_labour_cost_dict[carrier]] * n.links.loc[n.links.carrier == carrier, 'efficiency'].iloc[0]:.2f} €/t_dri"
+                    f"Added labour cost as marginal_cost to {carrier} links: {wage} €/h * {intensity} h/t_dri * efficiency"
                 )
-            else:
-                pass
 
             if carrier == "electric_arc_furnace":
-                n.links.loc[n.links.carrier == carrier, "marginal_cost"] += (
-                    wage
-                    * regional_labour_cost[carrier_labour_cost_dict[carrier]]
-                    * n.links.loc[n.links.carrier == carrier, "efficiency"]
-                )  # Wage in €/h * intensity in h/t_steel * effiency_input_output = € / t_steel, added to marginal cost
+                marginal_cost = wage * intensity * n.links.loc[mask, "efficiency"]
+                n.links.loc[mask, "marginal_cost"] += marginal_cost
                 logger.info(
-                    f"Added labour cost to {carrier} links: {wage} €/h * {regional_labour_cost[carrier_labour_cost_dict[carrier]]} h/t_steel * efficiency = {wage * regional_labour_cost[carrier_labour_cost_dict[carrier]] * n.links.loc[n.links.carrier == carrier, 'efficiency'].iloc[0]:.2f} €/t_steel"
+                    f"Added labour cost as marginal_cost to {carrier} links: {wage} €/h * {intensity} h/t_steel * efficiency"
                 )
-            else:
-                pass
         else:
             logger.info(
                 f"carrier {carrier} not in network, skipping labour cost addition for this carrier"
