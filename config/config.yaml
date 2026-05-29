@@ -168,31 +168,23 @@ regions:
   "East_East_Asia": ["JPN","KOR","PRK"]
   "Oceania": ["AUS","NZL"]
 
-# countries: [
-#   "BI","KM","DJ","ER","ET","KE","MG","MW","MU","MZ","RW","SC","SO","SS","TZ","UG","ZM","ZW", # Africa — Eastern Africa
-#   "AO","CM","CF","TD","CG","CD","GQ","GA","ST", # Africa — Middle Africa
-#   "DZ","EG","LY","MA","SD","TN", # Africa — Northern Africa
-#   "BW","SZ","LS","NA","ZA", # Africa — Southern Africa
-#   "BJ","BF","CV","CI","GM","GH","GN","GW","LR","ML","MR","NE","NG","SN","SL","TG", # Africa — Western Africa
-#   "CA","US", # Americas — Northern America
-#   "AG","BS","BB","CU","DM","DO","GD","HT","JM","KN","LC","VC","TT", # Americas — Caribbean
-#   "BZ","CR","SV","GT","HN","MX","NI","PA", # Americas — Central America
-#   "AR","BO","BR","CL","CO","EC","GY","PY","PE","SR","UY","VE", # Americas — South America
-#   "KZ","KG","TJ","TM","UZ", # Asia — Central Asia
-#   "CN","JP","KP","KR","MN","TW", # Asia — Eastern Asia
-#   "BN","KH","ID","LA","MY","MM","PH","SG","TH","TL","VN", # Asia — South-eastern Asia
-#   "AF","BD","BT","IN","IR","MV","NP","PK","LK", # Asia — Southern Asia
-#   "AM","AZ","BH","CY","GE","IQ","IL","JO","KW","LB","OM","QA","SA","PS","SY","TR","AE","YE", # Asia — Western Asia
-#   "BY","BG","CZ","HU","MD","PL","RO","RU","SK","UA", # Europe — Eastern Europe
-#   "DK","EE","FI","IS","IE","LV","LT","NO","SE","GB", # Europe — Northern Europe
-#   "AL","AD","BA","HR","GR","IT","MT","ME","MK","PT","SM","RS","SI","ES","VA", # Europe — Southern Europe
-#   "AT","BE","FR","DE","LI","LU","MC","NL","CH", # Europe — Western Europe
-#   "AU","NZ", # Oceania — Australia and New Zealand
-#   "FJ","PG","SB","VU", # Oceania — Melanesia
-#   "FM","KI","MH","NR","PW", # Oceania — Micronesia
-#   "TO","TV","WS" # Oceania — Polynesia
-# ]
-
+# Renewable generator clustering configuration
+# Used by cluster_renewables.py to cluster 122k+ individual renewable buses
+# into manageable pseudo-buses for optimization tractability
+clustering:
+  # Number of pseudo-buses per technology per region
+  n_clusters_onwind: 40      # Onshore wind clusters
+  n_clusters_pvplant: 40     # Solar/PV clusters
+  
+  # Feature weighting for K-means clustering
+  # Determines how heavily clustering emphasizes each aspect:
+  # - avg_cf (0.5): Merit-order / capacity factor quality (primary driver)
+  # - temporal (0.3): Temporal patterns (std, cv, autocorr_24h)
+  # - geospatial (0.2): Geographic proximity (lat, lon)
+  feature_weights:
+    avg_cf: 0.5              # High CF sites group together for optimization value
+    temporal: 0.3            # Similar generation patterns cluster (wind/solar separation + peakiness)
+    geospatial: 0.2          # Loose geographic coherence (secondary constraint)
 
 design:
   cost_penalty:

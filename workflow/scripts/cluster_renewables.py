@@ -443,9 +443,56 @@ def aggregate_clusters(
     ds: xr.Dataset,
     config: Dict,
     cache_clusters_path: str = None,
+    clustering_cache_dir: str = None,
 ) -> Dict:
     """Aggregate clusters and generate outputs."""
     logger.info("Aggregating clusters...")
+
+    # Fast path: load the fully aggregated payload if it already exists.
+    if cache_clusters_path and Path(cache_clusters_path).exists():
+        try:
+            cached_payload = joblib.load(cache_clusters_path)
+            if (
+                "clustered_data" in cached_payload
+                and "cluster_metadata" in cached_payload
+            ):
+                logger.info(
+                    f"Loading cached aggregated clusters from {cache_clusters_path}"
+                )
+                return cached_payload["clustered_data"], cached_payload[
+                    "cluster_metadata"
+                ]
+        except Exception as e:
+            logger.info(
+                f"Could not load cached aggregated clusters from {cache_clusters_path}: {e}"
+            )
+
+    # Try to load pre-computed cluster results from per-region-tech cache
+    if clustering_cache_dir:
+        clustering_cache_path = Path(clustering_cache_dir)
+        cache_files = list(clustering_cache_path.glob("clustering_cache_*.json"))
+        if cache_files:
+            logger.info(
+                f"Found {len(cache_files)} cached region-tech clustering results"
+            )
+            for cache_file in cache_files:
+                try:
+                    with open(cache_file, "r") as f:
+                        cached = json.load(f)
+                        region = cached["region"]
+                        tech = cached["technology"]
+                        clusters_array = np.array(cached["clusters"])
+
+                        # Only add to clusters_dict if not already present
+                        if (region, tech) not in clusters_dict or len(
+                            clusters_dict[(region, tech)]
+                        ) == 0:
+                            clusters_dict[(region, tech)] = clusters_array
+                            logger.info(
+                                f"  [RECOVERED] {region} {tech}: loaded {len(clusters_array)} cluster assignments from cache"
+                            )
+                except Exception as e:
+                    logger.debug(f"Could not load {cache_file}: {e}")
 
     clustered_data = {}  # {(region, tech, cluster_id): {capacity, cf_ts, avg_cf}}
     cluster_metadata = {}
@@ -554,18 +601,16 @@ def aggregate_clusters(
     # Cache aggregated clusters to disk for recovery
     if cache_clusters_path:
         logger.info(f"Caching aggregated clusters to {cache_clusters_path}")
-        # Save metadata (can't easily pickle clustered_data due to numpy arrays)
-        with open(cache_clusters_path, "w") as f:
-            json.dump(
-                {
-                    "cluster_count": len(clustered_data),
-                    "metadata": cluster_metadata,
-                    "timestamp": pd.Timestamp.now().isoformat(),
-                },
-                f,
-                indent=2,
-            )
-        logger.info("  ✓ Cached clustering metadata")
+        joblib.dump(
+            {
+                "clustered_data": clustered_data,
+                "cluster_metadata": cluster_metadata,
+                "timestamp": pd.Timestamp.now().isoformat(),
+            },
+            cache_clusters_path,
+            compress=3,
+        )
+        logger.info("  ✓ Cached full clustered payload")
 
     return clustered_data, cluster_metadata
 
@@ -614,7 +659,15 @@ def write_clustered_netcdf(
 
             for idx, (cluster_id, cluster_info) in enumerate(clusters_for_rt):
                 capacity_data[region][tech][idx] = cluster_info["capacity"]
-                cf_data[region][tech][idx, :] = cluster_info["cf_ts"]
+                cf_ts = cluster_info["cf_ts"]
+                if isinstance(cf_ts, np.ndarray):
+                    if cf_ts.ndim != 1:
+                        logger.warning(
+                            f"  cf_ts has wrong shape {cf_ts.shape}, taking first row"
+                        )
+                        cf_ts = cf_ts[0] if cf_ts.ndim > 1 else cf_ts
+                    if len(cf_ts) == 8760:
+                        cf_data[region][tech][idx, :] = cf_ts.astype(np.float32)
                 avg_cf_data[region][tech][idx] = cluster_info["avg_cf"]
 
     # Create xarray dataset with aligned dimensions
@@ -712,7 +765,11 @@ def validate_clustering(
         "temporal_quality": {},
     }
 
-    for (region, tech), cluster_assignments in clustered_data.items():
+    region_tech_pairs = sorted(
+        {(region, tech) for region, tech, _ in clustered_data.keys()}
+    )
+
+    for region, tech in region_tech_pairs:
         # Total capacity check
         original_cap = []
         for bus_id in ds_merged.bus.values:
@@ -727,8 +784,9 @@ def validate_clustering(
 
         original_total = np.sum(original_cap)
         clustered_total = sum(
-            clustered_data.get((region, tech, cluster_id), {}).get("capacity", 0)
-            for cluster_id in range(len(cluster_assignments))
+            cluster_info.get("capacity", 0)
+            for (r, t, _), cluster_info in clustered_data.items()
+            if r == region and str(t) == str(tech)
         )
 
         if original_total > 0:
@@ -851,9 +909,14 @@ def main():
     clusters_dict = dict(results)
 
     # Aggregate clusters (with caching)
-    cache_clusters = Path("resources") / "clusters_cache.json"
+    cache_clusters = Path("resources") / "clusters_cache.joblib"
     clustered_data, cluster_metadata = aggregate_clusters(
-        df_features, clusters_dict, ds_filtered, config, str(cache_clusters)
+        df_features,
+        clusters_dict,
+        ds_filtered,
+        config,
+        str(cache_clusters),
+        str(clustering_cache_dir),
     )
 
     # Write output
