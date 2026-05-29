@@ -172,17 +172,30 @@ regions:
 # Used by cluster_renewables.py to cluster 122k+ individual renewable buses
 # into manageable pseudo-buses for optimization tractability
 clustering:
-  # Number of pseudo-buses per technology per region
-  n_clusters_onwind: 40      # Onshore wind clusters
-  n_clusters_pvplant: 40     # Solar/PV clusters
-  
+  # Cluster-count policy. The `base_clusters` values are the single source of
+  # truth for fixed mode and the reference points for dynamic scaling.
+  cluster_count_policy:
+    mode: dynamic
+    base_clusters:
+      onwind: 25
+      solar: 25
+    min_clusters: 10
+    max_clusters: 50
+    reference_buses: 2000
+    reference_capacity_mw: 16000000
+    bus_weight: 0.5
+    capacity_weight: 0.5
+    spread_weight: 0.15
+    spread_reference: 0.20
+    scale_exponent: 0.5
+
   # Feature weighting for K-means clustering
   # Determines how heavily clustering emphasizes each aspect:
-  # - avg_cf (0.5): Merit-order / capacity factor quality (primary driver)
+  # - merit_order (0.5): Merit-order / capacity factor quality (primary driver)
   # - temporal (0.3): Temporal patterns (std, cv, autocorr_24h)
   # - geospatial (0.2): Geographic proximity (lat, lon)
   feature_weights:
-    avg_cf: 0.5              # High CF sites group together for optimization value
+    merit_order: 0.5          # High CF / tail-shape sites group together for optimization value
     temporal: 0.3            # Similar generation patterns cluster (wind/solar separation + peakiness)
     geospatial: 0.2          # Loose geographic coherence (secondary constraint)
 
