@@ -24,7 +24,7 @@ trade_chains:
   id: labour_2050
   cost_year: 2050
   final_product: steel
-  wacc: uniform #regional
+  wacc: regional #regional
   labour_cost: True #Include labour cost
   tradeable_commodities: [iron_ore, hbi]
   stages:
