@@ -1,6 +1,27 @@
 
 
 
+rule download_labour_data:
+    output:
+        merged = "resources/merged_labour_inputs.csv",
+    resources:
+        mem_mb=2000,
+    threads: 1
+    script:
+        str(SCRIPT_DIR / "download_labour_data.py")
+
+
+rule prepare_labour_cost:
+    input:
+        merged = "resources/merged_labour_inputs.csv",
+    output:
+        labour_cost = "resources/labour_cost_clustered.csv",
+    resources:
+        mem_mb=2000,
+    threads: 1
+    script:
+        str(SCRIPT_DIR / "prepare_labour_cost.py")
+
 
 rule prepare_wacc:
     input:

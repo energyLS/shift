@@ -71,7 +71,8 @@ def load_config(config):
         try:
             config = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
-            print(exc)
+            logger.exception("Failed to load config %s", config)
+            raise exc
     return config
 
 

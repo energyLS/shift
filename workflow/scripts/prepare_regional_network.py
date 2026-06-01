@@ -24,22 +24,19 @@ Usage (Snakemake rule):
 """
 
 import logging
-from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Iterable, cast
-import sys
-import numpy as np
-import pandas as pd
-import xarray as xr
-import pypsa
+import numpy as np  # type: ignore
+import pandas as pd  # type: ignore
+import xarray as xr  # type: ignore
+import pypsa  # type: ignore
 
 import tech_database as td
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from trade_chain_utils import build_product_components, get_external_material_inputs  # noqa: E402
-from _helpers import setup_logging  # noqa: E402
+from trade_chain_utils import (
+    build_product_components,
+    get_external_material_inputs,
+)
+from _helpers import setup_logging
 
 snakemake: Any = globals().get("snakemake")
 
@@ -426,7 +423,7 @@ def sanitize_and_fix(
     - Logs a summary of applied fixes.
     """
     if logger is None:
-        _logger = logging.getLogger(__name__)
+        _logger = globals()["logger"]
     else:
         _logger = logger
 
@@ -483,8 +480,8 @@ def sanitize_and_fix(
             )
             if pd.notna(pmin) and pd.notna(pmax):
                 # If pmax < pmin, reduce pmin to pmax
-                if float(pmax) < float(pmin):
-                    network.generators.loc[gen, "p_nom_min"] = float(pmax)
+                if float(cast(Any, pmax)) < float(cast(Any, pmin)):
+                    network.generators.loc[gen, "p_nom_min"] = float(cast(Any, pmax))
                     fixes.append(f"clamped p_nom_min to p_nom_max for {gen}")
         except Exception:
             pass
@@ -756,7 +753,7 @@ def prepare_network(
             )
 
     if snakemake.wildcards.wacc == "regional":
-        print(f"applying region specific wacc")
+        logger.info("applying region specific wacc")
         wacc = pd.read_csv(snakemake.input.wacc, header=0)
         wacc.set_index("region", inplace=True)
         discount_rate = wacc.loc[region].values[0]
@@ -1015,12 +1012,56 @@ def prepare_network(
     return network, audit_info
 
 
+def add_labour_cost(n, labour_cost):
+
+    logger.info("adding labour cost")
+
+    carrier_labour_cost_dict = {
+        "electrolysis": "ely_intensity in h/kW_ely",
+        "direct_reduction_furnace": "dri_intensity in h/t_dri",
+        "electric_arc_furnace": "eaf_intensity in h/t_steel",
+    }
+
+    regional_labour_cost = labour_cost.loc[snakemake.wildcards.region]
+    wage = regional_labour_cost["steelworker_wage in euro/h"]
+
+    for carrier in carrier_labour_cost_dict.keys():
+        mask = n.links.carrier == carrier
+        if mask.any():
+            intensity = regional_labour_cost[carrier_labour_cost_dict[carrier]]
+
+            if carrier == "electrolysis":
+                fom_cost = wage * intensity * 1000
+                n.links.loc[mask, "fom_cost"] += fom_cost
+                logger.info(
+                    f"Added labour cost as fom_cost to {carrier} links: {wage} €/h * {intensity} h/kW_ely * 1000 = {fom_cost:.2f} €/MW"
+                )
+
+            if carrier == "direct_reduction_furnace":
+                marginal_cost = wage * intensity * n.links.loc[mask, "efficiency"]
+                n.links.loc[mask, "marginal_cost"] += marginal_cost
+                logger.info(
+                    f"Added labour cost as marginal_cost to {carrier} links: {wage} €/h * {intensity} h/t_dri * efficiency"
+                )
+
+            if carrier == "electric_arc_furnace":
+                marginal_cost = wage * intensity * n.links.loc[mask, "efficiency"]
+                n.links.loc[mask, "marginal_cost"] += marginal_cost
+                logger.info(
+                    f"Added labour cost as marginal_cost to {carrier} links: {wage} €/h * {intensity} h/t_steel * efficiency"
+                )
+        else:
+            logger.info(
+                f"carrier {carrier} not in network, skipping labour cost addition for this carrier"
+            )
+    return n
+
+
 # ============================================================================
 # SNAKEMAKE INTEGRATION
 # ============================================================================
 
 if __name__ == "__main__":
-
     if snakemake is None:
         from _helpers import mock_snakemake
 
@@ -1077,6 +1118,22 @@ if __name__ == "__main__":
         scenario=scenario,
         route_label=route_label,
     )
+
+    # Add labour cost
+    if snakemake.config["trade_chains"]["labour_cost"]:
+        logger.info("Adding labour costs to network")
+        # Load labour cost
+        labour_cost = pd.read_csv(snakemake.input.labour_cost, header=0, index_col=0)
+        network = add_labour_cost(network, labour_cost)
+
+    elif not snakemake.config["trade_chains"]["labour_cost"]:
+        logger.info("Labour cost addition skipped (labour_cost is False)")
+
+    else:
+        raise ValueError(
+            f"Unrecognized labour_cost wildcard: {snakemake.config['trade_chains']['labour_cost']}. "
+            f"Expected 'True' or 'False'."
+        )
 
     # Save network
     logger.info(f"Saving network to {output_path}")
