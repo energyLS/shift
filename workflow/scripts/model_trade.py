@@ -182,12 +182,9 @@ def building_model(
 
         # --- Stage 1 supply: ore → interone (material) or direct supply (energy) ---
         for s in range(len(region_data_interone)):
-            if s == 0:
-                p_nom = float(region_data_interone[f"demand [{unit}]"][s])
-            else:
-                p_nom = float(region_data_interone[f"demand [{unit}]"][s]) - float(
-                    region_data_interone[f"demand [{unit}]"][s - 1]
-                )
+
+            p_nom = float(region_data_interone[f"demand [{unit}]"][s])
+
             m_cost = float(region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s])
 
             if not is_material_chain:
@@ -227,12 +224,8 @@ def building_model(
         # --- Stage 2 supply: interone → final (two-stage material chain only) ---
         if two_stage:
             for s in range(len(region_data_intertwo)):
-                if s == 0:
-                    p_nom = float(region_data_intertwo[f"demand [{unit}]"][s])
-                else:
-                    p_nom = float(region_data_intertwo[f"demand [{unit}]"][s]) - float(
-                        region_data_intertwo[f"demand [{unit}]"][s - 1]
-                    )
+
+                p_nom = float(region_data_intertwo[f"demand [{unit}]"][s])
 
                 # Override capacity for grid-connected EAF based on grid potential
                 if intertwo == "eaf-grid":
