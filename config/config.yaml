@@ -1,6 +1,6 @@
 enable:
-  run_supply_chain: True # Enable for first run
-  run_supply_curve: True # Enable for first run
+  run_supply_chain: False # Enable for first run
+  run_supply_curve: False # Enable for first run
 
 
 # Output toggles for Step 0/1 (greenfield supply curve generation)
@@ -104,12 +104,12 @@ scenario:
         indicator: "stability"
         threshold_value: -0.5 # Regions with stability index below -0.5
         weighting: # Use `workflow/notebooks/utility-weighted-mga.ipynb` to define the weights based on the political stability index, if desired
-          North_West_Africa: 1.00
-          Subsaharan_Africa: 0.87
-          West_Asia: 0.81
-          Eurasia: 0.70
-          South_America: 0.59
-          Middle_East: 0.51
+          Middle_East: 1.00
+          North_West_Africa: 0.93
+          Subsaharan_Africa: 0.81
+          West_Asia: 0.76
+          Eurasia: 0.65
+          South_America: 0.55
   mga-chokepoints:
     modifiers:
       cost_penalty:
@@ -205,6 +205,8 @@ design:
     # Eurasia: 1.1
     # South_America: 0.7
     # Oceania: 0.8
+  stability_penalty:
+    Middle_East: 0.6 # Absolute stability penalty, reduces the stability index of a region by this number using substraction
 
 techno-economic parameters:
   pypsa_tech_version: v0.14.0
