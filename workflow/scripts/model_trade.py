@@ -105,8 +105,16 @@ def building_model(
     for r in range(len(supply_curves_interone)):
         region_file_interone = supply_curves_interone[r]
         region_file_intertwo = supply_curves_intertwo[r]
-        region_data_interone = pd.read_csv(region_file_interone, header=0)
-        region_data_intertwo = pd.read_csv(region_file_intertwo, header=0)
+        region_data_interone = (
+            pd.read_csv(region_file_interone, header=0)
+            .dropna(subset=[f"{cost_descriptor} [EUR/{unit}]"])
+            .reset_index(drop=True)
+        )  # Filter out rows where "lcox [EUR/t]" is NaN
+        region_data_intertwo = (
+            pd.read_csv(region_file_intertwo, header=0)
+            .dropna(subset=[f"{cost_descriptor} [EUR/{unit}]"])
+            .reset_index(drop=True)
+        )  # Filter out rows where "lcox [EUR/t]" is NaN
 
         region_name = os.path.basename(region_file_interone).rsplit(
             "_marginal_cost_", 1
@@ -174,12 +182,9 @@ def building_model(
 
         # --- Stage 1 supply: ore → interone (material) or direct supply (energy) ---
         for s in range(len(region_data_interone)):
-            if s == 0:
-                p_nom = float(region_data_interone[f"demand [{unit}]"][s])
-            else:
-                p_nom = float(region_data_interone[f"demand [{unit}]"][s]) - float(
-                    region_data_interone[f"demand [{unit}]"][s - 1]
-                )
+
+            p_nom = float(region_data_interone[f"demand [{unit}]"][s])
+
             m_cost = float(region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s])
 
             if not is_material_chain:
@@ -219,12 +224,8 @@ def building_model(
         # --- Stage 2 supply: interone → final (two-stage material chain only) ---
         if two_stage:
             for s in range(len(region_data_intertwo)):
-                if s == 0:
-                    p_nom = float(region_data_intertwo[f"demand [{unit}]"][s])
-                else:
-                    p_nom = float(region_data_intertwo[f"demand [{unit}]"][s]) - float(
-                        region_data_intertwo[f"demand [{unit}]"][s - 1]
-                    )
+
+                p_nom = float(region_data_intertwo[f"demand [{unit}]"][s])
 
                 # Override capacity for grid-connected EAF based on grid potential
                 if intertwo == "eaf-grid":
@@ -233,7 +234,9 @@ def building_model(
                     )
                     p_nom = (
                         grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
-                    ) / len(region_data_intertwo)  # split evenly across supply steps
+                    ) / len(
+                        region_data_intertwo
+                    )  # split evenly across supply steps
 
                 m_cost = float(
                     region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
@@ -1122,11 +1125,11 @@ if __name__ == "__main__":
             "model_trade",
             cost_year="2050",
             interone="hbi",
-            intertwo="eaf-grid",
+            intertwo="steel",
             final="steel",
             scenario="default",
-            wacc="uniform",
-            chain_id="default_2050",
+            wacc="regional",
+            chain_id="labour_2050",
         )
 
     final = snakemake.wildcards["final"]
