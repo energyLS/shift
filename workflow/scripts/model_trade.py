@@ -46,7 +46,7 @@ def build_region_geodataframe(config):
     world = gpd.read_file(reader)
 
     # Assign region and dissolve to remove internal country borders
-    world["region"] = world["ISO_A3"].map(iso_to_region)
+    world["region"] = world["ISO_A3_EH"].map(iso_to_region)
     region_gdf = world.dropna(subset=["region"]).dissolve(by="region").reset_index()
 
     return region_gdf
