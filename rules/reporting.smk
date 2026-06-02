@@ -33,9 +33,9 @@ rule collect_figures:
 
 rule plot_mga:
     input:
-        network_mga_production = "results/chain_id~default_2050/cost_year~2050/interone~hbi/intertwo~eaf-grid/wacc~{wacc}/final~steel/scenario~mga-stability-weighted/network.nc",
-        network_mga_chokepoints = "results/chain_id~default_2050/cost_year~2050/interone~hbi/intertwo~eaf-grid/wacc~{wacc}/final~steel/scenario~mga-chokepoints/network.nc",
-        network_mga_blocks = "results/chain_id~default_2050/cost_year~2050/interone~hbi/intertwo~eaf-grid/wacc~{wacc}/final~steel/scenario~mga-blocs/network.nc",
+        network_mga_production = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-stability-weighted/network.nc",
+        network_mga_chokepoints = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-chokepoints/network.nc",
+        network_mga_blocks = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-blocs/network.nc",
         political_stability = "resources/political_stability_clustered.csv",
         trade_options_chokepoints = "resources/trade_opt_chokepoints.csv",
     output:
