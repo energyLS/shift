@@ -109,22 +109,9 @@ rule prepare_steel_demand:
 
 
 rule cluster_renewables:
-    """
-Cluster renewable generators from merged profiles for optimization.
-
-Input: merged renewable profiles (122k+ buses from all regions)
-Output: clustered profiles (region, technology, class dimensions)
-        validation report with quality metrics
-
-Clustering strategy:
-- Filters to onwind + pvplant only (excludes unreliable offshore)
-- Extracts 6D temporal features: avg_cf, temporal_std, cv, autocorr_24h, lat, lon
-- Applies weighted K-means (0.5 merit-order, 0.3 temporal, 0.2 geospatial)
-- Selects representative timeseries per cluster to preserve real patterns
-- Cluster naming: Regionname_tech(onwind/solar)_number
-"""
     input:
-        merged="data/renewable_profiles_global_merged.nc",
+        merged_cdf="data/renewable_profiles_global_merged.nc",
+        merged_geojson="data/renewable_profiles_global_merged.geojson",
     output:
         clustered="resources/renewables_clustered.nc",
         report="resources/renewables_clustering_report.json",

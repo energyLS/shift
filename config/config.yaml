@@ -168,26 +168,24 @@ regions:
   "East_East_Asia": ["JPN","KOR","PRK"]
   "Oceania": ["AUS","NZL"]
 
-# Renewable generator clustering configuration
-# Used by cluster_renewables.py to cluster 122k+ individual renewable buses
-# into manageable pseudo-buses for optimization tractability
 clustering:
-  # Cluster-count policy. The `base_clusters` values are the single source of
-  # truth for fixed mode and the reference points for dynamic scaling.
+  n_strata: 7
+  tail_percentile: 10.0
+  tail_cluster_boost: 2.0
+  geo_weight: 0.3
+  n_pca_components: 5
   cluster_count_policy:
     mode: dynamic
     base_clusters:
-      onwind: 25
-      solar: 25
-    min_clusters: 10
-    max_clusters: 50
+      solar: 20
+      onwind: 20
     reference_buses: 2000
-    reference_capacity_mw: 16000000
+    reference_capacity_mw: 2e7
+    scale_exponent: 0.5
     bus_weight: 0.5
     capacity_weight: 0.5
-    spread_weight: 0.15
-    spread_reference: 0.20
-    scale_exponent: 0.5
+    min_clusters: 5
+    max_clusters: 50
 
   # Feature weighting for K-means clustering
   # Determines how heavily clustering emphasizes each aspect:
