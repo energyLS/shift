@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 snakemake: Any = globals().get("snakemake")
 
-CACHE_VERSION = "v4_stratified_kmedoids"
+CACHE_VERSION = "v5"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -288,30 +288,71 @@ def _cluster_within_stratum(
 
 
 def _allocate_stratum_clusters(
-    stratum_capacities: Dict[str, float],
+    stratum_groups: Dict[str, pd.DataFrame],
     total_k: int,
+    profiles_by_stratum: Dict[str, np.ndarray],
     tail_boost: float = 2.0,
-    min_per_stratum: int = 1,
+    diversity_threshold: float = 0.05,  # min profile std to warrant splitting
+    min_capacity_for_split_mw: float = 500.0,  # min capacity to warrant >1 cluster
 ) -> Dict[str, int]:
-    """Distribute cluster budget across strata, boosting tails."""
-    weights = {}
-    for name, cap in stratum_capacities.items():
-        w = cap
-        if name.startswith("tail"):
-            w *= tail_boost
-        weights[name] = max(w, 1e-9)
+    """Allocate cluster budget, giving 1 to strata that don't need splitting."""
 
-    total_w = sum(weights.values())
-    alloc = {
-        name: max(min_per_stratum, int(round(w / total_w * total_k)))
-        for name, w in weights.items()
-    }
+    # First pass: decide which strata deserve >1 cluster
+    splittable = {}
+    fixed_at_one = {}
 
-    # Trim excess from the largest stratum
-    excess = sum(alloc.values()) - total_k
-    if excess > 0:
-        largest = max(alloc, key=alloc.get)
-        alloc[largest] = max(min_per_stratum, alloc[largest] - excess)
+    for name, group in stratum_groups.items():
+        profiles = profiles_by_stratum[name]
+        total_cap = group["capacity_mw"].sum()
+        n_buses = len(group)
+
+        # Check if stratum has enough diversity to warrant sub-clustering
+        if n_buses <= 2:
+            fixed_at_one[name] = 1
+            continue
+
+        # Profile diversity: std of per-bus mean CFs within stratum
+        bus_means = profiles.mean(axis=1)
+        internal_diversity = float(np.std(bus_means))
+
+        if (
+            total_cap < min_capacity_for_split_mw
+            or internal_diversity < diversity_threshold
+        ):
+            fixed_at_one[name] = 1
+            continue
+
+        splittable[name] = total_cap
+
+    # Remaining budget after reserving 1 per fixed stratum
+    remaining_k = (
+        total_k - len(fixed_at_one) - len(splittable)
+    )  # 1 each for splittable too
+    remaining_k = max(0, remaining_k)
+
+    # Distribute remaining budget proportional to capacity (with tail boost)
+    alloc = dict(fixed_at_one)  # start with fixed ones
+    if splittable and remaining_k > 0:
+        weights = {}
+        for name, cap in splittable.items():
+            w = cap
+            if (
+                name == "tail_high"
+            ):  # boost tail_high to preserve green pockets and peak quality
+                w *= tail_boost
+            elif (
+                name == "tail_low"
+            ):  # de-prioritize tail_low since these are last to be picked in merit order
+                w *= 1 / tail_boost
+            weights[name] = w
+        total_w = sum(weights.values())
+
+        for name, w in weights.items():
+            extra = int(round(w / total_w * remaining_k))
+            alloc[name] = 1 + max(0, extra)  # at least 1
+    else:
+        for name in splittable:
+            alloc[name] = 1
 
     return alloc
 
@@ -321,7 +362,7 @@ def _build_strata(
     n_strata: int = 7,
     tail_pct: float = 10.0,
 ) -> pd.Series:
-    """Assign each row to a stratum based on cf_high_mass.
+    """Assign each row to a stratum based on avg_cf.
 
     Uses capacity-weighted quantile boundaries with explicit tail separation.
     Returns a Series of stratum labels aligned to df_rt.index.
@@ -374,7 +415,7 @@ def resolve_total_clusters(df_rt: pd.DataFrame, tech: str) -> int:
     base_clusters = policy.get("base_clusters", {})
     mode = policy.get("mode", "dynamic")
     base_key = "solar" if tech == "solar" else "onwind"
-    base = int(base_clusters.get(base_key, 40))
+    base = int(base_clusters.get(base_key))
 
     if mode == "fixed":
         return base
@@ -393,8 +434,8 @@ def resolve_total_clusters(df_rt: pd.DataFrame, tech: str) -> int:
     )
     target = int(round(base * scale))
 
-    min_c = int(policy.get("min_clusters", 3))
-    max_c = int(policy.get("max_clusters", 120))
+    min_c = int(policy.get("min_clusters"))
+    max_c = int(policy.get("max_clusters"))
     return max(min_c, min(max_c, min(target, len(df_rt))))
 
 
@@ -448,10 +489,33 @@ def cluster_region_technology(
     # --- Stratify ---
     df_rt["stratum"] = _build_strata(df_rt, n_strata=n_strata, tail_pct=tail_pct)
 
-    stratum_caps = df_rt.groupby("stratum")["capacity_mw"].sum().to_dict()
-    stratum_k = _allocate_stratum_clusters(stratum_caps, total_k, tail_boost=tail_boost)
+    # Load profiles per stratum for diversity check
+    stratum_groups = {}
+    profiles_by_stratum = {}
+    for stratum_name, group in df_rt.groupby("stratum"):
+        stratum_groups[stratum_name] = group
+        profiles_by_stratum[stratum_name] = _load_profiles_for_group(
+            group["bus_id"].values.tolist(), tech, ds
+        )
 
-    logger.info(f"    Stratum cluster allocation: {stratum_k}")
+    min_cap_split = float(clustering_config.get("min_capacity_for_split_mw", 500.0))
+    diversity_thresh = float(clustering_config.get("diversity_threshold", 0.05))
+
+    stratum_k = _allocate_stratum_clusters(
+        stratum_groups,
+        total_k,
+        profiles_by_stratum,
+        tail_boost=tail_boost,
+        diversity_threshold=diversity_thresh,
+        min_capacity_for_split_mw=min_cap_split,
+    )
+
+    actual_total = sum(stratum_k.values())
+    logger.info(
+        f"    Cluster allocation: {stratum_k} (total: {actual_total}, "
+        f"budget: {total_k}, {len(stratum_k) - sum(1 for v in stratum_k.values() if v > 1)} "
+        f"strata kept at 1)"
+    )
 
     # --- Cluster within each stratum ---
     cluster_rows: List[Dict] = []
@@ -490,6 +554,9 @@ def cluster_region_technology(
             if medoid_local is None:
                 # Fallback: largest capacity bus in cluster
                 medoid_local = medoid_candidates[np.argmax(member_caps)]
+                logger.warning(
+                    f"No medoid in cluster {cl} of stratum {stratum_name}, picking largest bus: {bus_ids[medoid_local]}"
+                )
 
             medoid_bus = bus_ids[medoid_local]
 
@@ -804,7 +871,7 @@ def main():
     logger.info(f"Loaded coordinates for {len(bus_coords)} buses")
 
     # Extract features
-    cache_features = Path("resources") / "features_cache_v4.csv"
+    cache_features = Path("resources") / f"features_cache_{CACHE_VERSION}.csv"
     df_features = extract_features(ds, config, bus_coords, str(cache_features))
 
     # Build region-tech pairs
@@ -817,7 +884,7 @@ def main():
     logger.info(f"Clustering {len(region_tech_pairs)} region-technology pairs")
 
     # Cluster (parallel)
-    cache_dir = Path("resources") / "clustering_cache_v4"
+    cache_dir = Path("resources") / f"clustering_cache_{CACHE_VERSION}"
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     n_jobs = getattr(snakemake, "threads", -1)

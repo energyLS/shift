@@ -169,33 +169,19 @@ regions:
   "Oceania": ["AUS","NZL"]
 
 clustering:
-  n_strata: 7
+  n_strata: 10 # number of strata ("quality classes") to divide the renewable potential into based on capacity factor (CF) distribution. 
   tail_percentile: 10.0
-  tail_cluster_boost: 2.0
-  geo_weight: 0.3
-  n_pca_components: 5
+  tail_cluster_boost: 2.0 # multiplier for number of clusters in the tail (highest-quality stratum) to avoid overgeneralization of the best resources
+  diversity_threshold: 0.05     # min avg_cf std within stratum to split
+  min_capacity_for_split_mw: 1e5  # strata below this get 1 cluster
   cluster_count_policy:
-    mode: dynamic
     base_clusters:
-      solar: 20
+      solar: 20        
       onwind: 20
-    reference_buses: 2000
-    reference_capacity_mw: 2e7
-    scale_exponent: 0.5
-    bus_weight: 0.5
-    capacity_weight: 0.5
-    min_clusters: 5
-    max_clusters: 50
-
-  # Feature weighting for K-means clustering
-  # Determines how heavily clustering emphasizes each aspect:
-  # - merit_order (0.5): Merit-order / capacity factor quality (primary driver)
-  # - temporal (0.3): Temporal patterns (std, cv, autocorr_24h)
-  # - geospatial (0.2): Geographic proximity (lat, lon)
-  feature_weights:
-    merit_order: 0.5          # High CF / tail-shape sites group together for optimization value
-    temporal: 0.3            # Similar generation patterns cluster (wind/solar separation + peakiness)
-    geospatial: 0.2          # Loose geographic coherence (secondary constraint)
+    reference_buses: 2000 # Reference number of buses for scaling cluster count 2000 buses ~ 20 clusters
+    reference_capacity_mw: 2e7 # Reference total capacity for scaling cluster count, 20 GW ~ 20 clusters
+    min_clusters: 10     # = floor is just n_strata with no splitting
+    max_clusters: 40    # tighter cap
 
 design:
   cost_penalty:
