@@ -1,8 +1,8 @@
 """
-Prepare regional network: load consolidated renewables and configure supply chain.
+Prepare regional network: load clustered renewables and configure supply chain.
 
 This is the simplified Step 1 workflow that:
-1. Loads the consolidated renewable profiles directly (region, technology, class, time)
+1. Loads the clustered renewable profiles directly (region, technology, class, time)
 2. Creates PyPSA generators for each technology and class
 3. Applies local demand reservation if configured
 4. Adds supply chain (electrolyzer, DRI, optional EAF)
@@ -12,7 +12,7 @@ Usage (Snakemake rule):
     rule prepare_regional_network:
         input:
             skeleton = "resources/networks/skeleton.nc",
-            renewables = "data/new_renewables_consolidated.nc",
+            renewables = "data/clustered_renewables.nc",
             tech_costs = "resources/tech_database.csv",
         params:
             region = "{region}",
@@ -43,17 +43,17 @@ snakemake: Any = globals().get("snakemake")
 logger = setup_logging(__name__, snakemake=snakemake)
 
 
-def load_region_renewables_consolidated(
-    consolidated_path: str,
+def load_regional_clustered_renewables(
+    clustered_path: str,
     region: str,
 ) -> Tuple[Dict[str, np.ndarray], xr.DataArray, Dict]:
     """
-    Load renewable data for a region from consolidated NetCDF.
+    Load renewable data for a region from clustered NetCDF.
 
     Parameters
     ----------
-    consolidated_path : str
-        Path to data/new_renewables_consolidated.nc
+    clustered_path : str
+        Path to data/clustered_renewables.nc
     region : str
         Region name (e.g., 'Europe', 'North_America')
 
@@ -68,12 +68,12 @@ def load_region_renewables_consolidated(
     metadata : dict
         Summary info (n_classes, n_time, technologies, etc.)
     """
-    with xr.open_dataset(consolidated_path) as ds:
+    with xr.open_dataset(clustered_path) as ds:
         if region not in ds.region.values:
             available = ", ".join(ds.region.values)
             raise ValueError(f"Region '{region}' not found. Available: {available}")
 
-        logger.info(f"Loading consolidated renewables for {region}")
+        logger.info(f"Loading clustered renewables for {region}")
 
         # Select region (dims: technology, class)
         region_cap = ds["capacity"].sel(region=region)  # (tech, class)
@@ -84,9 +84,13 @@ def load_region_renewables_consolidated(
         technologies_dict = {}
 
         for tech in techs:
-            cap = region_cap.sel(technology=tech).values  # (class,)
-            technologies_dict[tech] = cap
-            logger.info(f"  {tech}: {len(cap)} sites, {cap.sum():.0f} MW total")
+            cap = region_cap.sel(technology=tech).values
+            # Drop NaN-padded trailing classes
+            valid = ~np.isnan(cap)
+            technologies_dict[tech] = cap[valid]
+            logger.info(
+                f"  {tech}: {valid.sum()} classes, {np.nansum(cap):.0f} MW total"
+            )
 
         # Capacity factor time series (keep full structure for now)
         cf_ts = region_cf  # (tech, class, time)
@@ -98,20 +102,28 @@ def load_region_renewables_consolidated(
         )
         cf_ts = cf_ts.clip(0, 1).fillna(0)
         if n_invalid_before > 0:
-            logger.warning(
-                f"Capacity factors validation: fixed {n_invalid_before} invalid values "
-                f"(clamped to [0,1], replaced NaN with 0)"
-            )
+            logger.warning(f"Fixed {n_invalid_before} invalid CF values (clamped/NaN)")
+
+        avg_cf_data = {}
+        if "avg_cf" in ds.data_vars:
+            for tech in techs:
+                avg = ds["avg_cf"].sel(region=region, technology=tech).values
+                valid = ~np.isnan(avg)
+                avg_cf_data[tech] = avg[valid]
 
         metadata = {
             "region": region,
-            "n_classes": region_cap.sizes["class"],
+            "n_classes": {
+                tech: int((~np.isnan(region_cap.sel(technology=tech).values)).sum())
+                for tech in techs
+            },
             "n_time": region_cf.sizes["time"],
             "n_technologies": len(techs),
             "technologies": techs,
             "time_start": pd.Timestamp(ds["time"].values[0]),
             "time_end": pd.Timestamp(ds["time"].values[-1]),
             "total_capacity_mw": float(region_cap.sum().values),
+            "avg_cf": avg_cf_data,
         }
 
         logger.info(
@@ -594,7 +606,7 @@ def apply_product_cutoff(
 
 def prepare_network(
     skeleton_network_path: str,
-    consolidated_renewables_path: str,
+    clustered_renewables_path: str,
     tech_costs_path: str,
     local_demand_path: Optional[str],
     region: str,
@@ -604,14 +616,14 @@ def prepare_network(
     scenario: str = "reserved",
     route_label: Optional[str] = None,
 ) -> Tuple[pypsa.Network, Dict]:
-    """Prepare regional network with consolidated renewables.
+    """Prepare regional network with clustered renewables.
 
     Parameters
     ----------
     skeleton_network_path : str
         Path to base network topology
-    consolidated_renewables_path : str
-        Path to consolidated renewables NetCDF
+    clustered_renewables_path : str
+        Path to clustered renewables NetCDF
     tech_costs_path : str
         Path to technology cost database
     region : str
@@ -797,8 +809,8 @@ def prepare_network(
         metadata = {}
     else:
         logger.info("Loading consolidated renewables...")
-        techs_dict, cf_ts, metadata = load_region_renewables_consolidated(
-            consolidated_renewables_path, region
+        techs_dict, cf_ts, metadata = load_regional_clustered_renewables(
+            clustered_renewables_path, region
         )
     # Apply local demand reservation if configured (only for products with renewable_electricity)
     # For scenario="reserved", reserve high-CF sites; for "unreserved", skip reservation
@@ -1092,7 +1104,7 @@ if __name__ == "__main__":
         cost_year = (
             snakemake.wildcards.cost_year
             if hasattr(snakemake.wildcards, "cost_year")
-            else 2030
+            else 2050
         )
         scenario = (
             snakemake.wildcards.scenario
@@ -1108,7 +1120,7 @@ if __name__ == "__main__":
     # Prepare network
     network, audit = prepare_network(
         skeleton_network_path=skeleton_path,
-        consolidated_renewables_path=renewables_path,
+        clustered_renewables_path=renewables_path,
         tech_costs_path=tech_costs_path,
         local_demand_path=local_demand_path,
         region=region,

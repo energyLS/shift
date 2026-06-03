@@ -84,11 +84,11 @@ rule prepare_regional_network:
             if _process_label_for_product(wildcards.product)
             else f"resources/generic_production_model/generic_model_{wildcards.cost_year}.nc"
         ),
-        renewables="data/new_renewables_consolidated.nc",
+        renewables="data/renewables_clustered.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
-        wacc = "resources/wacc-clustered.csv",
-        labour_cost = "resources/labour_cost_clustered.csv",
+        wacc="resources/wacc-clustered.csv",
+        labour_cost="resources/labour_cost_clustered.csv",
     output:
         # Output keyed by product; route_label is internal to the script
         network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",
@@ -105,7 +105,7 @@ rule prepare_regional_network:
         product="{product}",
         route_label=lambda wildcards: _process_label_for_product(wildcards.product),
         config=config,
-        uniform_interest_rate=config["interest_rate"]["default"]
+        uniform_interest_rate=config["interest_rate"]["default"],
     message:
         "Preparing {wildcards.scenario} regional network: {wildcards.region} -> {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
