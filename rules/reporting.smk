@@ -89,3 +89,14 @@ rule plot_global_supply:
 rule plot_global_supply_all:
         input:
             expand("../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", cost_year=[2050], wacc=["regional"], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
+
+rule plot_comparison:
+    input:
+        default = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
+        stability = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-stability-weighted/network_0.02.nc",
+        hightrans = "results/chain_id~hightrans_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
+    output:
+        cost_comparison="../results/figures_general/comparison/cost_comparison.pdf",
+        cost_comparison_png="../results/figures_general/comparison/cost_comparison.png",
+    notebook:
+        "notebooks/compare-scenarios.ipynb"
