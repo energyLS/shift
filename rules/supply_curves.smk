@@ -84,7 +84,7 @@ rule prepare_regional_network:
             if _process_label_for_product(wildcards.product)
             else f"resources/generic_production_model/generic_model_{wildcards.cost_year}.nc"
         ),
-        renewables="data/renewables_clustered.nc",
+        renewables="resources/renewables_clustered.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
         wacc="resources/wacc-clustered.csv",

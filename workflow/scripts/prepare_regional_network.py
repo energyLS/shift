@@ -12,7 +12,7 @@ Usage (Snakemake rule):
     rule prepare_regional_network:
         input:
             skeleton = "resources/networks/skeleton.nc",
-            renewables = "data/clustered_renewables.nc",
+            renewables = "resources/clustered_renewables.nc",
             tech_costs = "resources/tech_database.csv",
         params:
             region = "{region}",
