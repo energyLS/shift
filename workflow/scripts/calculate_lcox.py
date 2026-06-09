@@ -33,16 +33,6 @@ HOURS_PER_YEAR = 8760
 logger = setup_logging(__name__, snakemake=snakemake, log_filename="calculate_lcox.log")
 
 # ============================================================================
-# STAGE SLICING (legacy helpers removed)
-# ============================================================================
-
-# The stage-slicing helper and incremental-selection utilities were used in an
-# older workflow. They are no longer invoked by the main driver but kept in
-# history; they have been removed to simplify the codebase. If you need them
-# for advanced per-stage analyses, reintroduce a tested implementation.
-
-
-# ============================================================================
 # DEMAND LOADING
 # ============================================================================
 
@@ -75,23 +65,6 @@ def load_demands_for_region(region, config):
     return {
         "local_el_demand_mwh": local_el_demand_mwh,
     }
-
-
-# ============================================================================
-# RENEWABLE CONSTRAINT
-# ============================================================================
-
-
-# ============================================================================
-# INCREMENTAL RENEWABLE SELECTION (upstream filtering, Phase 3)
-# ============================================================================
-
-
-# NOTE: incremental generator selection was part of an older workflow where
-# incremental_sets were precomputed per demand level. The current driver skips
-# per-demand incremental filtering and therefore this function has been removed
-# to reduce maintenance burden. Reintroduce with tests if needed for custom
-# workflows.
 
 
 # ============================================================================
@@ -617,11 +590,6 @@ if __name__ == "__main__":
     # Create scaled demands dict for this demand level
     scaled_demands = demands.copy()
     scaled_demands["product_demand_mt"] = product_demand_mt
-
-    # Load incremental generator sets and apply filtering
-    logger.info("Loading incremental generator sets...")
-    # Skip incremental filtering: use all generators for all demand levels
-    logger.info("Using all generators (no incremental filtering applied)")
 
     # Add hourly load for steel output
     # (This also sets HBI storage e_initial inside add_loads_to_network)

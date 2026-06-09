@@ -95,7 +95,7 @@ rule prepare_regional_network:
     log:
         "logs/prepare_regional_network_{cost_year}_{region}_{wacc}_{product}_{scenario}.log",
     wildcard_constraints:
-        scenario="reserved|unreserved",
+        scenario="reserved|unreserved|allocated_share",
         product="hbi|steel",
     threads: 1
     resources:
@@ -135,7 +135,7 @@ if config["enable"].get("run_supply_chain", True):
             "logs/calculate_regional_lcox_{cost_year}_{region}_{wacc}_{product}_{scenario}_{product_demand_mt}.log",
         wildcard_constraints:
             product_demand_mt=r"\d+(?:\.\d+)?",
-            scenario="reserved|unreserved",
+            scenario="reserved|unreserved|allocated_share",
             product="hbi|steel",
         threads: 2
         resources:
@@ -157,7 +157,10 @@ if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         input:
             lco_reserved=lambda wildcards: expand(
-                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
+                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_{{scenario}}/results_{{product_demand_mt}}.csv",
+                scenario=config.get("supply_curve", {}).get(
+                    "default_scenario", "allocated_share"
+                ),
                 product_demand_mt=config.get("steel_demand_levels"),
             ),
             lco_unreserved=lambda wildcards: (
@@ -176,7 +179,7 @@ if config["enable"].get("run_supply_curve", True):
             # is only used to locate the correct upstream LCoX runs.
             supply="resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}.csv",
             supply_unreserved=(
-                "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}__unreserved.csv"
+                "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}_unreserved.csv"
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
                 and _product_uses_renewables("{product}")
                 else temp(
@@ -191,7 +194,11 @@ if config["enable"].get("run_supply_curve", True):
             wacc="uniform|regional",
         threads: 1
         message:
-            "Combining LCo results (reserved + unreserved scenarios) to create supply curve for {wildcards.region} {wildcards.product}."
+            "Combining LCo results (default={} + optional unreserved) to create supply curve for {{wildcards.region}} {{wildcards.product}}.".format(
+                config.get("supply_curve", {}).get(
+                    "default_scenario", "allocated_share"
+                )
+            )
         script:
             str(SCRIPT_DIR / "create_supply_curve.py")
 

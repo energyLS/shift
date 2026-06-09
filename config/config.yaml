@@ -10,13 +10,18 @@ outputs:
   keep_optimization_networks: True  # Keep .nc network files from optimization (set False to save disk space)
 
 # Supply curve scenario configuration
-# Two scenarios are supported:
-#   - reserved (DEFAULT): highest-performing (best CF) renewable generators reserved for domestic
+# Three scenarios are supported:
+#   - allocated_share (DEFAULT): each renewable generator available at X of nominal capacity,
+#     where X is the allocation_factor (0 < X < 1). Simulates grid-constrained or partially
+#     dedicated renewable infrastructure.
+#   - reserved: highest-performing (best CF) renewable generators reserved for domestic
 #     electricity demand; export/HBI supply stack reduced before optimization. Requires electricity demand data.
-#   - unreserved (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
+#   - unreserved (FALLBACK): no domestic reservation; full renewable stack available.
 #     Can be generated without electricity demand data when demand data unavailable.
 supply_curve:
   generate_unreserved: True  # Set to True to generate unreserved scenario as fallback
+  default_scenario: allocated_share  # Default scenario for supply curve generation
+  allocation_factor: 0.3  # Renewable capacity allocation factor for allocated_share scenario (0 < X <= 1)
 
 
 # Config-native trade chain definitions

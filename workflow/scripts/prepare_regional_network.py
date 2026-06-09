@@ -244,6 +244,60 @@ def reserve_top_sites_by_highest_cf(
     return reserved
 
 
+def apply_capacity_allocation(
+    technologies_dict: Dict[str, np.ndarray],
+    allocation_factor: float,
+) -> Dict[str, np.ndarray]:
+    """
+    Scale all renewable generator capacities by allocation factor.
+
+    Used for allocated_share scenario where each generator can only provide
+    allocation_factor (0 < X <= 1) of its nominal capacity. This simulates
+    grid constraints or partial dedication of renewable infrastructure.
+
+    Parameters
+    ----------
+    technologies_dict : dict
+        {tech_name: capacity_array} where capacity_array is (n_classes,)
+    allocation_factor : float
+        Allocation factor (0 < X <= 1). Each generator's p_nom_max will be
+        multiplied by this factor.
+
+    Returns
+    -------
+    allocated_capacities : dict
+        Same structure as technologies_dict with scaled capacities.
+        Non-NaN entries are multiplied by allocation_factor.
+    """
+    if not (0 < allocation_factor <= 1):
+        logger.warning(
+            f"allocation_factor={allocation_factor} outside valid range (0, 1]; "
+            f"clamping to 1.0"
+        )
+        allocation_factor = min(max(allocation_factor, 0.0001), 1.0)
+
+    allocated = {}
+    total_original_mw = 0
+    total_allocated_mw = 0
+
+    for tech, capacities in technologies_dict.items():
+        allocated_array = np.full_like(capacities, np.nan, dtype=np.float32)
+        for site_idx, cap in enumerate(capacities):
+            if not np.isnan(cap) and cap > 0:
+                allocated_array[site_idx] = cap * allocation_factor
+                total_original_mw += cap
+                total_allocated_mw += allocated_array[site_idx]
+            else:
+                allocated_array[site_idx] = cap  # Keep NaN as-is
+        allocated[tech] = allocated_array
+
+    logger.info(
+        f"Applied capacity allocation factor {allocation_factor}: "
+        f"{total_original_mw:.0f} MW → {total_allocated_mw:.0f} MW"
+    )
+    return allocated
+
+
 def add_renewable_generators(
     network: pypsa.Network,
     region: str,
@@ -812,30 +866,45 @@ def prepare_network(
         techs_dict, cf_ts, metadata = load_regional_clustered_renewables(
             clustered_renewables_path, region
         )
-    # Apply local demand reservation if configured (only for products with renewable_electricity)
-    # For scenario="reserved", reserve high-CF sites; for "unreserved", skip reservation
+
+    # Apply capacity allocation or local demand reservation based on scenario
+    # (only for products with renewable_electricity)
     reserved_techs = None
     if product_uses_renewables:
-        reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
-        if reserve_capacity_mw <= 0 and scenario == "reserved":
-            reserve_capacity_mw = load_local_electricity_demand_mw(
-                local_demand_path, region
-            )
-            logger.info(
-                f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
-            )
         logger.info(f"Scenario: {scenario} (scenario flag passed from Snakemake rule)")
-        if reserve_capacity_mw > 0 or scenario == "reserved":
+
+        if scenario == "allocated_share":
+            # Apply capacity allocation: scale p_nom_max by allocation_factor
+            allocation_factor = config.get("supply_curve", {}).get(
+                "allocation_factor", 0.5
+            )
             logger.info(
-                f"Applying local demand reservation for scenario={scenario}: "
-                f"target {reserve_capacity_mw} MW"
+                f"Applying capacity allocation for scenario=allocated_share: "
+                f"allocation_factor={allocation_factor}"
             )
-            reserved_techs = reserve_top_sites_by_highest_cf(
-                techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
-            )
+            if techs_dict:
+                techs_dict = apply_capacity_allocation(techs_dict, allocation_factor)
+        else:
+            # For reserved/unreserved scenarios: apply local demand reservation
+            reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
+            if reserve_capacity_mw <= 0 and scenario == "reserved":
+                reserve_capacity_mw = load_local_electricity_demand_mw(
+                    local_demand_path, region
+                )
+                logger.info(
+                    f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
+                )
+            if reserve_capacity_mw > 0 or scenario == "reserved":
+                logger.info(
+                    f"Applying local demand reservation for scenario={scenario}: "
+                    f"target {reserve_capacity_mw} MW"
+                )
+                reserved_techs = reserve_top_sites_by_highest_cf(
+                    techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
+                )
     else:
         logger.info(
-            f"Skipping reservation: product '{route_label}' does not use renewables"
+            f"Skipping reservation/allocation: product '{route_label}' does not use renewables"
         )
 
     # Add renewable generators (only if techs_dict is not empty)
