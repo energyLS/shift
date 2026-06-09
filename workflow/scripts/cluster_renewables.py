@@ -292,12 +292,18 @@ def _allocate_stratum_clusters(
     total_k: int,
     profiles_by_stratum: Dict[str, np.ndarray],
     tail_boost: float = 2.0,
-    diversity_threshold: float = 0.05,  # min profile std to warrant splitting
-    min_capacity_for_split_mw: float = 500.0,  # min capacity to warrant >1 cluster
+    diversity_threshold: float = 0.05,
+    min_capacity_for_split_mw: float = 500.0,
+    top_n_strata_boost: int = 3,  # boost the top N strata by avg_cf
 ) -> Dict[str, int]:
-    """Allocate cluster budget, giving 1 to strata that don't need splitting."""
+    """Allocate clusters with boost for highest-CF strata (green pockets)."""
 
-    # First pass: decide which strata deserve >1 cluster
+    # Rank strata by their avg_cf midpoint (encoded in name)
+    strata_sorted = sorted(
+        stratum_groups.keys(), reverse=True
+    )  # lexicographic works for cf_XX_YY
+    top_strata = set(strata_sorted[:top_n_strata_boost])
+
     splittable = {}
     fixed_at_one = {}
 
@@ -306,12 +312,10 @@ def _allocate_stratum_clusters(
         total_cap = group["capacity_mw"].sum()
         n_buses = len(group)
 
-        # Check if stratum has enough diversity to warrant sub-clustering
         if n_buses <= 2:
             fixed_at_one[name] = 1
             continue
 
-        # Profile diversity: std of per-bus mean CFs within stratum
         bus_means = profiles.mean(axis=1)
         internal_diversity = float(np.std(bus_means))
 
@@ -324,32 +328,22 @@ def _allocate_stratum_clusters(
 
         splittable[name] = total_cap
 
-    # Remaining budget after reserving 1 per fixed stratum
-    remaining_k = (
-        total_k - len(fixed_at_one) - len(splittable)
-    )  # 1 each for splittable too
+    remaining_k = total_k - len(fixed_at_one) - len(splittable)
     remaining_k = max(0, remaining_k)
 
-    # Distribute remaining budget proportional to capacity (with tail boost)
-    alloc = dict(fixed_at_one)  # start with fixed ones
+    alloc = dict(fixed_at_one)
     if splittable and remaining_k > 0:
         weights = {}
         for name, cap in splittable.items():
             w = cap
-            if (
-                name == "tail_high"
-            ):  # boost tail_high to preserve green pockets and peak quality
+            if name in top_strata:
                 w *= tail_boost
-            elif (
-                name == "tail_low"
-            ):  # de-prioritize tail_low since these are last to be picked in merit order
-                w *= 1 / tail_boost
             weights[name] = w
         total_w = sum(weights.values())
 
         for name, w in weights.items():
             extra = int(round(w / total_w * remaining_k))
-            alloc[name] = 1 + max(0, extra)  # at least 1
+            alloc[name] = 1 + max(0, extra)
     else:
         for name in splittable:
             alloc[name] = 1
@@ -359,51 +353,25 @@ def _allocate_stratum_clusters(
 
 def _build_strata(
     df_rt: pd.DataFrame,
-    n_strata: int = 7,
-    tail_pct: float = 10.0,
+    bin_width: float = 0.05,
 ) -> pd.Series:
-    """Assign each row to a stratum based on avg_cf.
+    """Assign strata by fixed avg_cf intervals of `bin_width`.
 
-    Uses capacity-weighted quantile boundaries with explicit tail separation.
-    Returns a Series of stratum labels aligned to df_rt.index.
+    E.g. bin_width=0.05 gives bins [0.00, 0.05), [0.05, 0.10), ..., [0.95, 1.00].
+    Empty bins are implicitly ignored since no rows map to them.
     """
     cf_vals = df_rt["avg_cf"].values
-    caps = df_rt["capacity_mw"].values
 
-    p_low = np.percentile(cf_vals, tail_pct)
-    p_high = np.percentile(cf_vals, 100 - tail_pct)
+    # Floor to nearest bin edge
+    bin_idx = np.floor(cf_vals / bin_width).astype(int)
 
-    labels = pd.Series("core", index=df_rt.index)
-    labels[cf_vals <= p_low] = "tail_low"
-    labels[cf_vals >= p_high] = "tail_high"
-
-    # Subdivide core into (n_strata - 2) bins by capacity-weighted quantiles
-    core_mask = labels == "core"
-    if core_mask.sum() > (n_strata - 2):
-        core_cf = cf_vals[core_mask]
-        core_caps = caps[core_mask]
-
-        # Capacity-weighted quantile boundaries
-        sort_idx = np.argsort(core_cf)
-        cum_cap = np.cumsum(core_caps[sort_idx])
-        total_cap = cum_cap[-1]
-        n_core_bins = max(1, n_strata - 2)
-        boundaries = []
-        for i in range(1, n_core_bins):
-            target = total_cap * i / n_core_bins
-            idx = np.searchsorted(cum_cap, target)
-            idx = min(idx, len(core_cf) - 1)
-            boundaries.append(core_cf[sort_idx[idx]])
-
-        # Assign core sub-bins
-        bins = [-np.inf] + sorted(set(boundaries)) + [np.inf]
-        core_labels = pd.cut(
-            cf_vals[core_mask],
-            bins=bins,
-            labels=[f"core_{i}" for i in range(len(bins) - 1)],
-            duplicates="drop",
-        )
-        labels[core_mask] = core_labels.astype(str)
+    labels = pd.Series(
+        [
+            f"cf_{int(b * bin_width * 100):02d}_{int((b + 1) * bin_width * 100):02d}"
+            for b in bin_idx
+        ],
+        index=df_rt.index,
+    )
 
     return labels
 
@@ -475,19 +443,18 @@ def cluster_region_technology(
         return region, tech, pd.DataFrame()
 
     total_k = resolve_total_clusters(df_rt, tech)
-    n_strata = int(clustering_config.get("n_strata", 7))
-    tail_pct = float(clustering_config.get("tail_percentile", 10.0))
     tail_boost = float(clustering_config.get("tail_cluster_boost", 2.0))
     geo_weight = float(clustering_config.get("geo_weight", 0.3))
     n_pca = int(clustering_config.get("n_pca_components", 5))
 
-    logger.info(
-        f"  {region} {tech}: {len(df_rt)} buses -> target {total_k} clusters, "
-        f"{n_strata} strata"
-    )
-
     # --- Stratify ---
-    df_rt["stratum"] = _build_strata(df_rt, n_strata=n_strata, tail_pct=tail_pct)
+    bin_widths = clustering_config.get("strata_bin_width", {})
+    bin_width = bin_widths.get(tech, 0.05)
+    top_n_strata_boost = int(clustering_config.get("top_n_strata_boost", 3))
+    df_rt["stratum"] = _build_strata(df_rt, bin_width=bin_width)
+
+    n_actual_strata = df_rt["stratum"].nunique()
+    logger.info(f"    {n_actual_strata} non-empty strata (bin width: {bin_width})")
 
     # Load profiles per stratum for diversity check
     stratum_groups = {}
@@ -508,6 +475,7 @@ def cluster_region_technology(
         tail_boost=tail_boost,
         diversity_threshold=diversity_thresh,
         min_capacity_for_split_mw=min_cap_split,
+        top_n_strata_boost=top_n_strata_boost,
     )
 
     actual_total = sum(stratum_k.values())

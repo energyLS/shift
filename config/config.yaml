@@ -1,6 +1,7 @@
 enable:
-  run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
+  run_supply_chain: True # Enable for first run
+  run_supply_curve: True # Enable for first run
+  cluster_renewables: False # Enable for first run
 
 
 # Output toggles for Step 0/1 (greenfield supply curve generation)
@@ -169,19 +170,19 @@ regions:
   "Oceania": ["AUS","NZL"]
 
 clustering:
-  n_strata: 10 # number of strata ("quality classes") to divide the renewable potential into based on capacity factor (CF) distribution. 
-  tail_percentile: 10.0
-  tail_cluster_boost: 2.0 # multiplier for number of clusters in the tail (highest-quality stratum) to avoid overgeneralization of the best resources
-  diversity_threshold: 0.05     # min avg_cf std within stratum to split
-  min_capacity_for_split_mw: 1e5  # strata below this get 1 cluster
+  strata_bin_width:
+    onwind: 0.05
+    solar: 0.02
+  top_n_strata_boost: 2        
+  tail_cluster_boost: 2.0
+  diversity_threshold: 0.02
+  min_capacity_for_split_mw: 1e5
   cluster_count_policy:
     base_clusters:
-      solar: 20        
+      solar: 20
       onwind: 20
-    reference_buses: 2000 # Reference number of buses for scaling cluster count 2000 buses ~ 20 clusters
-    reference_capacity_mw: 2e7 # Reference total capacity for scaling cluster count, 20 GW ~ 20 clusters
-    min_clusters: 10     # = floor is just n_strata with no splitting
-    max_clusters: 40    # tighter cap
+    min_clusters: 6
+    max_clusters: 50
 
 design:
   cost_penalty:
@@ -266,6 +267,7 @@ solver_options:
       AggFill: 0
       PreDual: 0
       GURO_PAR_BARDENSETHRESH: 200
+      NumericFocus: 2
 
 
 colors:

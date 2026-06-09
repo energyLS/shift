@@ -108,16 +108,18 @@ rule prepare_steel_demand:
         str(NOTEBOOKS_DIR / "prepare-steel-demand.ipynb")
 
 
-rule cluster_renewables:
-    input:
-        merged_cdf="data/renewable_profiles_global_merged.nc",
-        merged_geojson="data/renewable_profiles_global_merged.geojson",
-    output:
-        clustered="resources/renewables_clustered.nc",
-        report="resources/renewables_clustering_report.json",
-    threads: 4
-    resources:
-        mem_mb=16000,
-        time_min=60,
-    script:
-        str(SCRIPT_DIR / "cluster_renewables.py")
+if config["enable"].get("cluster_renewables", True):
+
+    rule cluster_renewables:
+        input:
+            merged_cdf="data/renewable_profiles_global_merged.nc",
+            merged_geojson="data/renewable_profiles_global_merged.geojson",
+        output:
+            clustered="resources/renewables_clustered.nc",
+            report="resources/renewables_clustering_report.json",
+        threads: 4
+        resources:
+            mem_mb=16000,
+            time_min=60,
+        script:
+            str(SCRIPT_DIR / "cluster_renewables.py")
