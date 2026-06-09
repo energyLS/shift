@@ -100,3 +100,16 @@ rule plot_comparison:
         cost_comparison_png="../results/figures_general/comparison/cost_comparison.png",
     notebook:
         "notebooks/compare-scenarios.ipynb"
+
+    
+rule plot_compare_lcox:
+    input:
+        eu_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_0.1.nc",
+        eu_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_1.nc",
+        eu_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_10.nc",
+        eu_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_100.nc",
+    output:
+        lcox_comparison="../results/figures_general/comparison/lcox_comparison.pdf",
+        lcox_comparison_png="../results/figures_general/comparison/lcox_comparison.png",
+    notebook:
+        "notebooks/plot-compare-lcox.ipynb"
