@@ -45,7 +45,7 @@ rule plot_mga:
         mem_mb=4000,
     threads: 2
     notebook:
-        "../workflow/notebooks/plot-mga.ipynb"
+        str(NOTEBOOKS_DIR / "plot-mga.ipynb")
 
 rule plot_mga_all:
     input:
@@ -70,21 +70,18 @@ rule plot_trade_today:
 
 rule plot_global_supply:
     input:
-        trade_network="../results/cost_year~{cost_year}/interone~hbi/intertwo~eaf-grid/final~steel/wacc~{wacc}/scenario~{scenario}/network.nc",
+        trade_network="results/chain_id~newre_2050/cost_year~{cost_year}/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~{scenario}/network.nc",
         # supply = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
         # supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
         supply_curves_interone = expand(
-            "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
-            allow_missing=True, region=config["regions"]),
-        supply_curves_interone_nodemand = expand(
-            "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{interone}.csv",
+            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}{demand}.csv",
             allow_missing=True, region=config["regions"]),
     output:
         network_curve="../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
         network_curve_png="../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
         # supply_curves
     notebook:
-        "notebooks/analysis-globalsupplycurve.ipynb"
+        str(NOTEBOOKS_DIR / "analysis-globalsupplycurve.ipynb")
 
 rule plot_global_supply_all:
         input:
@@ -96,24 +93,24 @@ rule plot_comparison:
         stability = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-stability-weighted/network_0.02.nc",
         hightrans = "results/chain_id~hightrans_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
     output:
-        cost_comparison="../results/figures_general/comparison/cost_comparison.pdf",
-        cost_comparison_png="../results/figures_general/comparison/cost_comparison.png",
+        cost_comparison="results/figures_general/comparison/cost_comparison.pdf",
+        cost_comparison_png="results/figures_general/comparison/cost_comparison.png",
     notebook:
-        "notebooks/compare-scenarios.ipynb"
+        str(NOTEBOOKS_DIR / "compare-scenarios.ipynb")
 
     
 rule plot_compare_lcox:
     input:
-        eu_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_0.1.nc",
-        eu_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_1.nc",
-        eu_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_10.nc",
-        eu_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_100.nc",
-        sa_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_0.1.nc",
-        sa_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_1.nc",
-        sa_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_10.nc",
-        sa_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_100.nc",
+        south_america_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_0.1.nc",
+        south_america_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_1.nc",
+        south_america_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_10.nc",
+        south_america_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_100.nc",
+        europe_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_0.1.nc",
+        europe_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_1.nc",
+        europe_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_10.nc",
+        europe_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_100.nc",
     output:
-        lcox_comparison="../results/figures_general/comparison/lcox_comparison.pdf",
-        lcox_comparison_png="../results/figures_general/comparison/lcox_comparison.png",
+        lcox_comparison="results/figures_general/comparison/lcox_comparison.pdf",
+        lcox_comparison_png="results/figures_general/comparison/lcox_comparison.png",
     notebook:
-        "notebooks/plot-compare-lcox.ipynb"
+        str(NOTEBOOKS_DIR / "plot-compare-lcox.ipynb")
