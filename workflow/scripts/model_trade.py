@@ -260,47 +260,29 @@ def building_model(
     return n
 
 
-def create_links(transport_costs, trade_options):
+def create_links(trade_options):
 
     # for in range of length of input csv with all the different links, region_from = column , region_to = column 2
     # create links with the correct corresponding costs
 
-    # marginal and fixed cost for the different type of transport
-    ship_mc = float(
-        transport_costs.loc[transport_costs["transport_type"] == "shipping"]
-        .loc[:, "marginal_cost"]
-        .values[0]
-    )
-    pipe_mc = float(
-        transport_costs.loc[transport_costs["transport_type"] == "pipeline"]
-        .loc[:, "marginal_cost"]
-        .values[0]
-    )
-    ship_c = float(
-        transport_costs.loc[transport_costs["transport_type"] == "shipping"]
-        .loc[:, "fixed_cost"]
-        .values[0]
-    )
+    shipping = snakemake.config["trade"]["shipping"]
 
-    ship_iron_ore_mc = (
-        transport_costs.loc[transport_costs["transport_type"] == "shipping_iron_ore"]
-        .loc[:, "marginal_cost"]
-        .values[0]
-    )
+    port_loading = shipping["port_loading"]
+    nh3_cost = shipping["nh3_cost"]  # USD/t_NH3
+    nh3_consumption = shipping["nh3_consumption"]  # t_NH3/nm
+    charter_rate = shipping["charter_rate"]  # USD/(t*km)
+    panamax_load = shipping["panamax_load"]  # t
+    nm_to_km = shipping["nm_to_km"]
+    eur_usd = snakemake.config["techno-economic parameters"]["eur_usd"]
 
-    ship_interone_mc = (
-        transport_costs.loc[transport_costs["transport_type"] == f"shipping_{interone}"]
-        .loc[:, "marginal_cost"]
-        .values[0]
-    )
-    input_demand = 0.42  # MWh/km for LH2, IEA future of hydrogen 2019
-    boat_capacity = 363000  # MWh for LH2, IEA future of hydrogen 2019
-    speed = 30  # km/h, IEA future of hydrogen 2019
-    BOG = 0.2 / 100  # %/day, IEA future of hydrogen 2019
+    variable_cost = (
+        (nh3_cost * nh3_consumption / nm_to_km) / panamax_load + charter_rate
+    ) / eur_usd  # EUR/(t*km)
+    fixed_cost = port_loading * 2 / eur_usd  # EUR/t
 
-    logger.info(f"ship + pipe cost {ship_mc} {ship_c} {pipe_mc}")
-    logger.info(f"shipping cost {interone} {ship_interone_mc} EUR/(t*km)")
-    logger.info(f"shipping cost iron ore {ship_iron_ore_mc} EUR/(t*km)")
+    logger.info(
+        f"variable shipping cost {variable_cost:.6f} EUR/(t*km) and fixed cost {fixed_cost:.6f} EUR/t applied to shipping links"
+    )
 
     # if there should be a link, create a link
     # do this for both shipping and pipeline
@@ -310,27 +292,10 @@ def create_links(transport_costs, trade_options):
             r_from = trade_options["region_from"][r]
             r_to = trade_options["region_to"][r]
 
-            # If shipping costs are made up from marginal and capital
-            # total_cost = ship_c + int(
-            #     float(trade_options["shipping_distance [km]"][r]) * ship_mc
-            # )
-            # If shipping costs are made up from marginal only
-            total_cost_interone = ship_interone_mc * float(
-                trade_options["shipping_distance [km]"][r]
-            )
-            total_cost = total_cost_interone
-
-            # calculating efficiency
-            days_at_sea = (
-                float(trade_options["shipping_distance [km]"][r]) / speed
-            ) / 24
-            tot_BOG = 1 - (1 - BOG) ** days_at_sea
-            tot_fuel_demand = (
-                (2 * float(trade_options["shipping_distance [km]"][r]))
-                * input_demand
-                / boat_capacity
-            )
-            eff = 1 - max(tot_BOG, tot_fuel_demand)
+            shipping_cost = (
+                variable_cost * float(trade_options["shipping_distance [km]"][r])
+                + fixed_cost
+            )  # EUR/t
 
             n.add(
                 "Link",
@@ -338,23 +303,17 @@ def create_links(transport_costs, trade_options):
                 carrier="shipping_" + interone,
                 bus0=r_from + "_" + interone,
                 bus1=r_to + "_" + interone,
-                efficiency=eff,  # %, calculated above
-                marginal_cost=total_cost,  # EUR/MWh or EUR/t
+                efficiency=1,
+                marginal_cost=shipping_cost,
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
             logger.info(
-                "shipping %s link made from %s to %s - eff %s",
+                "shipping %s link made from %s to %s",
                 interone,
                 r_from,
                 r_to,
-                eff,
             )
-
-            # Add iron ore shipping link
-            total_cost_iron_ore = ship_iron_ore_mc * float(
-                trade_options["shipping_distance [km]"][r]
-            )  # TODO Capital cost are not separate but included
 
             n.add(
                 "Link",
@@ -363,15 +322,14 @@ def create_links(transport_costs, trade_options):
                 bus0=r_from + "_ore",
                 bus1=r_to + "_ore",
                 efficiency=1,
-                marginal_cost=total_cost_iron_ore,  # EUR/t_ironore
+                marginal_cost=shipping_cost,  # EUR/t_ironore
                 capital_cost=1 / 1000,  # to prevent optimisation shenenigans
                 p_nom_extendable=True,
             )
             logger.info(
-                "iron ore shipping link made from %s_ore to %s_ore - eff %s",
+                "iron ore shipping link made from %s_ore to %s_ore",
                 r_from,
                 r_to,
-                eff,
             )
 
         # checking if the row connects with pipeline
@@ -1125,11 +1083,11 @@ if __name__ == "__main__":
             "model_trade",
             cost_year="2050",
             interone="hbi",
-            intertwo="steel",
+            intertwo="eaf",
             final="steel",
             scenario="default",
             wacc="regional",
-            chain_id="labour_2050",
+            chain_id="newre_2050",
         )
 
     final = snakemake.wildcards["final"]
@@ -1160,7 +1118,6 @@ if __name__ == "__main__":
 
     logger.info("starting up with all regions--- ")
     # making dataframes
-    transport_costs = pd.read_csv(snakemake.input.transport_costs, header=0)
     trade_options = pd.read_csv(snakemake.input.trade_options, header=0)
     supply_curves_interone = snakemake.input.supply_curves_interone
     supply_curves_intertwo = snakemake.input.supply_curves_intertwo
@@ -1222,7 +1179,7 @@ if __name__ == "__main__":
 
     # building transport network connecting the individual buses
     logger.info("building transportation links")
-    create_links(transport_costs, trade_options)
+    create_links(trade_options)
 
     # Cost penalty
     if snakemake.config["scenario"][scenario]["modifiers"]["cost_penalty"] is None:

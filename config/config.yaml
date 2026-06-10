@@ -218,6 +218,13 @@ trade:
     ports: "predefined"  # "closest": route from region centroid (searoute snaps to nearest sea node); "predefined": route from hand-curated port city coordinates parsed from the notes column in trade_opt.csv
   diversity_factor: False # "False" or float as max constraint for one single hbi supply route in the trade model. 1: no limit, 0.5: max 50% of demand can be supplied by one single supply route, etc.
   # Note: The diversity factor constraints the trade route, not the producer itself. (Import from exporter route R <= diversity_factor * demand of importer I.). As a result, if the trade passes through one region, it is limited based on the demand of this particular region * diversity_factor. Therefore the trade routes in a scenario with a diversity_factor of 100% may differ to a scenario where diversity_factor=False.
+  shipping:
+    port_loading: 7  # USD/t, for each loading, see 10.1038/s41467-023-38123-2 supplementary S12
+    nh3_cost: 460  # USD/t_NH3, see 10.1038/s41467-023-38123-2 supplementary S12
+    nh3_consumption: 0.2  # t_NH3/nm, see 10.1038/s41467-023-38123-2 supplementary S12
+    charter_rate: 0.0008  # USD/(t*km), see 10.1038/s41467-023-38123-2 supplementary S12
+    panamax_load: 80000  # t
+    nm_to_km: 1.852  # 1 nautical mile equals 1.852 kilometers
   
 grid_electricity:
   marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030

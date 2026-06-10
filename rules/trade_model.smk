@@ -21,7 +21,6 @@ rule model_trade:
             region=config["regions"],
             intertwo=["steel"],
         ),
-        transport_costs="data/transport_costs/steel_r_iron_r.csv",
         trade_options="resources/trade_opt_chokepoints.csv",
         bus_locations="data/bus_locations.csv",
         demand="data/un_enerdata_demand_2050_final.csv",
