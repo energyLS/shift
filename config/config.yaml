@@ -283,19 +283,22 @@ colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'grey'
   hydrogen direct iron reduction furnace: 'grey'
-  electrolysis: 'magenta'
+  
   battery inverter: '#6A000E'
   battery inverter (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
   battery: 'purple'
   wind: 'blue'
+  onshore wind: 'blue'
   solar: 'yellow'
   pv: 'yellow'
   electricity: 'red'
   iron ore: 'brown'
   steel: 'grey'
   hot briquetted iron: 'darkred'
+  electrolysis: 'magenta'
   hydrogen: 'magenta'
+  hydrogen storage: '#AF7AC5'
   Battery: purple
   Electricity: red
   HBI: darkred
