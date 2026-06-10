@@ -77,8 +77,8 @@ rule plot_global_supply:
             "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}{demand}.csv",
             allow_missing=True, region=config["regions"]),
     output:
-        network_curve="../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
-        network_curve_png="../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
+        network_curve="results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
+        network_curve_png="results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
         # supply_curves
     notebook:
         str(NOTEBOOKS_DIR / "analysis-globalsupplycurve.ipynb")
