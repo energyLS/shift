@@ -470,12 +470,7 @@ def _product_has_renewables(config: dict, product: str) -> bool:
     Returns True if the product should have renewable generators and reservation logic applied.
     Returns False if the product uses grid electricity only.
     """
-    try:
-        return bool(
-            build_product_components(config, product).get("has_renewables", False)
-        )
-    except Exception:
-        return False
+    return bool(build_product_components(config, product).get("has_renewables", False))
 
 
 def sanitize_and_fix(
@@ -849,7 +844,6 @@ def prepare_network(
     logger.info("Loading technology costs...")
     tech_costs = td.load_tech_costs(tech_costs_path)
 
-    # Load consolidated renewables for region (only if this stage needs renewables)
     # Check product_components config to see if product uses renewable_electricity
     product_uses_renewables = _product_has_renewables(config, route_label or product)
 
@@ -862,7 +856,7 @@ def prepare_network(
         cf_ts = None
         metadata = {}
     else:
-        logger.info("Loading consolidated renewables...")
+        logger.info("Loading clustered renewables...")
         techs_dict, cf_ts, metadata = load_regional_clustered_renewables(
             clustered_renewables_path, region
         )
