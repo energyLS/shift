@@ -19,7 +19,7 @@ outputs:
 #   - unreserved (FALLBACK): no domestic reservation; full renewable stack available.
 #     Can be generated without electricity demand data when demand data unavailable.
 supply_curve:
-  generate_unreserved: True  # Set to True to generate unreserved scenario as fallback
+  generate_unreserved: False  # Set to True to generate unreserved scenario as fallback
   default_scenario: allocated_share  # Default scenario for supply curve generation
   allocation_factor: 0.3  # Renewable capacity allocation factor for allocated_share scenario (0 < X <= 1)
 
@@ -142,7 +142,7 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
+steel_demand_levels: [0.1, 0.5, 1, 5, 10, 50, 100]  # Mt/year
 hydrogen_storage_cost: False
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
@@ -272,7 +272,6 @@ solver_options:
       AggFill: 0
       PreDual: 0
       GURO_PAR_BARDENSETHRESH: 200
-      NumericFocus: 2
 
 
 colors:
