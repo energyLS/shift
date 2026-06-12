@@ -101,14 +101,14 @@ rule plot_comparison:
     
 rule plot_compare_lcox:
     input:
-        south_america_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_0.1.nc",
-        south_america_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_1.nc",
-        south_america_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_10.nc",
-        south_america_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_unreserved/network_100.nc",
-        europe_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_0.1.nc",
-        europe_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_1.nc",
-        europe_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_10.nc",
-        europe_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_unreserved/network_100.nc",
+        south_america_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_0.1.nc",
+        south_america_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_1.nc",
+        south_america_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_10.nc",
+        south_america_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_100.nc",
+        europe_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_0.1.nc",
+        europe_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_1.nc",
+        europe_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_10.nc",
+        europe_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_100.nc",
     output:
         lcox_comparison="results/figures_general/comparison/lcox_comparison.pdf",
         lcox_comparison_png="results/figures_general/comparison/lcox_comparison.png",
