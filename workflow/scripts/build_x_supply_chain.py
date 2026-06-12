@@ -389,6 +389,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         fom_cost=0.0,  # No maintenance cost
         discount_rate=0.0,  # No cost, discount rate doesn't matter but required by PyPSA
         standing_loss=0.0,  # HBI storage doesn't lose energy
+        e_cyclic=True,
     )
 
     # Steel Storage: flexible intermediate inventory between EAF and demand
@@ -402,6 +403,7 @@ def _add_storage(network: pypsa.Network, tech_costs: pd.Series, config: dict) ->
         fom_cost=0.0,  # No maintenance cost
         discount_rate=0.0,  # No cost, discount rate doesn't matter but required by PyPSA
         standing_loss=0.0,  # Steel storage doesn't lose energy
+        e_cyclic=True,  # End state must equal start state
     )
 
 
