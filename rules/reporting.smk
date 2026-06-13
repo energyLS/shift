@@ -70,7 +70,7 @@ rule plot_trade_today:
 
 rule plot_global_supply:
     input:
-        trade_network="results/chain_id~newre_2050/cost_year~{cost_year}/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~{scenario}/network.nc",
+        trade_network="results/chain_id~{trade_chain}/cost_year~{cost_year}/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~{scenario}/network.nc",
         # supply = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
         # supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
         supply_curves_interone = expand(
@@ -85,7 +85,7 @@ rule plot_global_supply:
 
 rule plot_global_supply_all:
         input:
-            expand("../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", cost_year=[2050], wacc=["regional"], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
+            expand("../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/{trade_chain}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=["regional"], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
 
 rule plot_comparison:
     input:
