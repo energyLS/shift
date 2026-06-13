@@ -1,6 +1,7 @@
 enable:
-  run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
+  run_supply_chain: True # Enable for first run
+  run_supply_curve: True # Enable for first run
+  cluster_renewables: False # Enable for first run
 
 
 # Output toggles for Step 0/1 (greenfield supply curve generation)
@@ -9,13 +10,18 @@ outputs:
   keep_optimization_networks: True  # Keep .nc network files from optimization (set False to save disk space)
 
 # Supply curve scenario configuration
-# Two scenarios are supported:
-#   - reserved (DEFAULT): highest-performing (best CF) renewable generators reserved for domestic
+# Three scenarios are supported:
+#   - allocated_share (DEFAULT): each renewable generator available at X of nominal capacity,
+#     where X is the allocation_factor (0 < X < 1). Simulates grid-constrained or partially
+#     dedicated renewable infrastructure.
+#   - reserved: highest-performing (best CF) renewable generators reserved for domestic
 #     electricity demand; export/HBI supply stack reduced before optimization. Requires electricity demand data.
-#   - unreserved (OPTIONAL, FALLBACK): no domestic reservation; full renewable stack available.
+#   - unreserved (FALLBACK): no domestic reservation; full renewable stack available.
 #     Can be generated without electricity demand data when demand data unavailable.
 supply_curve:
-  generate_unreserved: True  # Set to True to generate unreserved scenario as fallback
+  generate_unreserved: False  # Set to True to generate unreserved scenario as fallback
+  default_scenario: allocated_share  # Default scenario for supply curve generation
+  allocation_factor: 0.3  # Renewable capacity allocation factor for allocated_share scenario (0 < X <= 1)
 
 
 # Config-native trade chain definitions
@@ -136,7 +142,7 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.01, 0.1, 1, 10, 100, 1000]  # Mt/year
+steel_demand_levels: [0.1, 0.5, 1, 5, 10, 50, 100]  # Mt/year
 hydrogen_storage_cost: False
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
@@ -168,31 +174,20 @@ regions:
   "East_East_Asia": ["JPN","KOR","PRK"]
   "Oceania": ["AUS","NZL"]
 
-# countries: [
-#   "BI","KM","DJ","ER","ET","KE","MG","MW","MU","MZ","RW","SC","SO","SS","TZ","UG","ZM","ZW", # Africa — Eastern Africa
-#   "AO","CM","CF","TD","CG","CD","GQ","GA","ST", # Africa — Middle Africa
-#   "DZ","EG","LY","MA","SD","TN", # Africa — Northern Africa
-#   "BW","SZ","LS","NA","ZA", # Africa — Southern Africa
-#   "BJ","BF","CV","CI","GM","GH","GN","GW","LR","ML","MR","NE","NG","SN","SL","TG", # Africa — Western Africa
-#   "CA","US", # Americas — Northern America
-#   "AG","BS","BB","CU","DM","DO","GD","HT","JM","KN","LC","VC","TT", # Americas — Caribbean
-#   "BZ","CR","SV","GT","HN","MX","NI","PA", # Americas — Central America
-#   "AR","BO","BR","CL","CO","EC","GY","PY","PE","SR","UY","VE", # Americas — South America
-#   "KZ","KG","TJ","TM","UZ", # Asia — Central Asia
-#   "CN","JP","KP","KR","MN","TW", # Asia — Eastern Asia
-#   "BN","KH","ID","LA","MY","MM","PH","SG","TH","TL","VN", # Asia — South-eastern Asia
-#   "AF","BD","BT","IN","IR","MV","NP","PK","LK", # Asia — Southern Asia
-#   "AM","AZ","BH","CY","GE","IQ","IL","JO","KW","LB","OM","QA","SA","PS","SY","TR","AE","YE", # Asia — Western Asia
-#   "BY","BG","CZ","HU","MD","PL","RO","RU","SK","UA", # Europe — Eastern Europe
-#   "DK","EE","FI","IS","IE","LV","LT","NO","SE","GB", # Europe — Northern Europe
-#   "AL","AD","BA","HR","GR","IT","MT","ME","MK","PT","SM","RS","SI","ES","VA", # Europe — Southern Europe
-#   "AT","BE","FR","DE","LI","LU","MC","NL","CH", # Europe — Western Europe
-#   "AU","NZ", # Oceania — Australia and New Zealand
-#   "FJ","PG","SB","VU", # Oceania — Melanesia
-#   "FM","KI","MH","NR","PW", # Oceania — Micronesia
-#   "TO","TV","WS" # Oceania — Polynesia
-# ]
-
+clustering:
+  strata_bin_width:
+    onwind: 0.05
+    solar: 0.02
+  top_n_strata_boost: 2        
+  tail_cluster_boost: 2.0
+  diversity_threshold: 0.02
+  min_capacity_for_split_mw: 1e5
+  cluster_count_policy:
+    base_clusters:
+      solar: 20
+      onwind: 20
+    min_clusters: 6
+    max_clusters: 50
 
 design:
   cost_penalty:

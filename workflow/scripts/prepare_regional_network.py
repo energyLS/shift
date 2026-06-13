@@ -1,8 +1,8 @@
 """
-Prepare regional network: load consolidated renewables and configure supply chain.
+Prepare regional network: load clustered renewables and configure supply chain.
 
 This is the simplified Step 1 workflow that:
-1. Loads the consolidated renewable profiles directly (region, technology, class, time)
+1. Loads the clustered renewable profiles directly (region, technology, class, time)
 2. Creates PyPSA generators for each technology and class
 3. Applies local demand reservation if configured
 4. Adds supply chain (electrolyzer, DRI, optional EAF)
@@ -12,7 +12,7 @@ Usage (Snakemake rule):
     rule prepare_regional_network:
         input:
             skeleton = "resources/networks/skeleton.nc",
-            renewables = "data/new_renewables_consolidated.nc",
+            renewables = "resources/clustered_renewables.nc",
             tech_costs = "resources/tech_database.csv",
         params:
             region = "{region}",
@@ -43,17 +43,17 @@ snakemake: Any = globals().get("snakemake")
 logger = setup_logging(__name__, snakemake=snakemake)
 
 
-def load_region_renewables_consolidated(
-    consolidated_path: str,
+def load_regional_clustered_renewables(
+    clustered_path: str,
     region: str,
 ) -> Tuple[Dict[str, np.ndarray], xr.DataArray, Dict]:
     """
-    Load renewable data for a region from consolidated NetCDF.
+    Load renewable data for a region from clustered NetCDF.
 
     Parameters
     ----------
-    consolidated_path : str
-        Path to data/new_renewables_consolidated.nc
+    clustered_path : str
+        Path to data/clustered_renewables.nc
     region : str
         Region name (e.g., 'Europe', 'North_America')
 
@@ -68,12 +68,12 @@ def load_region_renewables_consolidated(
     metadata : dict
         Summary info (n_classes, n_time, technologies, etc.)
     """
-    with xr.open_dataset(consolidated_path) as ds:
+    with xr.open_dataset(clustered_path) as ds:
         if region not in ds.region.values:
             available = ", ".join(ds.region.values)
             raise ValueError(f"Region '{region}' not found. Available: {available}")
 
-        logger.info(f"Loading consolidated renewables for {region}")
+        logger.info(f"Loading clustered renewables for {region}")
 
         # Select region (dims: technology, class)
         region_cap = ds["capacity"].sel(region=region)  # (tech, class)
@@ -84,9 +84,13 @@ def load_region_renewables_consolidated(
         technologies_dict = {}
 
         for tech in techs:
-            cap = region_cap.sel(technology=tech).values  # (class,)
-            technologies_dict[tech] = cap
-            logger.info(f"  {tech}: {len(cap)} sites, {cap.sum():.0f} MW total")
+            cap = region_cap.sel(technology=tech).values
+            # Drop NaN-padded trailing classes
+            valid = ~np.isnan(cap)
+            technologies_dict[tech] = cap[valid]
+            logger.info(
+                f"  {tech}: {valid.sum()} classes, {np.nansum(cap):.0f} MW total"
+            )
 
         # Capacity factor time series (keep full structure for now)
         cf_ts = region_cf  # (tech, class, time)
@@ -98,20 +102,28 @@ def load_region_renewables_consolidated(
         )
         cf_ts = cf_ts.clip(0, 1).fillna(0)
         if n_invalid_before > 0:
-            logger.warning(
-                f"Capacity factors validation: fixed {n_invalid_before} invalid values "
-                f"(clamped to [0,1], replaced NaN with 0)"
-            )
+            logger.warning(f"Fixed {n_invalid_before} invalid CF values (clamped/NaN)")
+
+        avg_cf_data = {}
+        if "avg_cf" in ds.data_vars:
+            for tech in techs:
+                avg = ds["avg_cf"].sel(region=region, technology=tech).values
+                valid = ~np.isnan(avg)
+                avg_cf_data[tech] = avg[valid]
 
         metadata = {
             "region": region,
-            "n_classes": region_cap.sizes["class"],
+            "n_classes": {
+                tech: int((~np.isnan(region_cap.sel(technology=tech).values)).sum())
+                for tech in techs
+            },
             "n_time": region_cf.sizes["time"],
             "n_technologies": len(techs),
             "technologies": techs,
             "time_start": pd.Timestamp(ds["time"].values[0]),
             "time_end": pd.Timestamp(ds["time"].values[-1]),
             "total_capacity_mw": float(region_cap.sum().values),
+            "avg_cf": avg_cf_data,
         }
 
         logger.info(
@@ -230,6 +242,60 @@ def reserve_top_sites_by_highest_cf(
         f"Reserved {len(reserved_set)} sites, {total_reserved_mw:.0f} MW for local demand"
     )
     return reserved
+
+
+def apply_capacity_allocation(
+    technologies_dict: Dict[str, np.ndarray],
+    allocation_factor: float,
+) -> Dict[str, np.ndarray]:
+    """
+    Scale all renewable generator capacities by allocation factor.
+
+    Used for allocated_share scenario where each generator can only provide
+    allocation_factor (0 < X <= 1) of its nominal capacity. This simulates
+    grid constraints or partial dedication of renewable infrastructure.
+
+    Parameters
+    ----------
+    technologies_dict : dict
+        {tech_name: capacity_array} where capacity_array is (n_classes,)
+    allocation_factor : float
+        Allocation factor (0 < X <= 1). Each generator's p_nom_max will be
+        multiplied by this factor.
+
+    Returns
+    -------
+    allocated_capacities : dict
+        Same structure as technologies_dict with scaled capacities.
+        Non-NaN entries are multiplied by allocation_factor.
+    """
+    if not (0 < allocation_factor <= 1):
+        logger.warning(
+            f"allocation_factor={allocation_factor} outside valid range (0, 1]; "
+            f"clamping to 1.0"
+        )
+        allocation_factor = min(max(allocation_factor, 0.0001), 1.0)
+
+    allocated = {}
+    total_original_mw = 0
+    total_allocated_mw = 0
+
+    for tech, capacities in technologies_dict.items():
+        allocated_array = np.full_like(capacities, np.nan, dtype=np.float32)
+        for site_idx, cap in enumerate(capacities):
+            if not np.isnan(cap) and cap > 0:
+                allocated_array[site_idx] = cap * allocation_factor
+                total_original_mw += cap
+                total_allocated_mw += allocated_array[site_idx]
+            else:
+                allocated_array[site_idx] = cap  # Keep NaN as-is
+        allocated[tech] = allocated_array
+
+    logger.info(
+        f"Applied capacity allocation factor {allocation_factor}: "
+        f"{total_original_mw:.0f} MW → {total_allocated_mw:.0f} MW"
+    )
+    return allocated
 
 
 def add_renewable_generators(
@@ -404,12 +470,7 @@ def _product_has_renewables(config: dict, product: str) -> bool:
     Returns True if the product should have renewable generators and reservation logic applied.
     Returns False if the product uses grid electricity only.
     """
-    try:
-        return bool(
-            build_product_components(config, product).get("has_renewables", False)
-        )
-    except Exception:
-        return False
+    return bool(build_product_components(config, product).get("has_renewables", False))
 
 
 def sanitize_and_fix(
@@ -594,7 +655,7 @@ def apply_product_cutoff(
 
 def prepare_network(
     skeleton_network_path: str,
-    consolidated_renewables_path: str,
+    clustered_renewables_path: str,
     tech_costs_path: str,
     local_demand_path: Optional[str],
     region: str,
@@ -604,14 +665,14 @@ def prepare_network(
     scenario: str = "reserved",
     route_label: Optional[str] = None,
 ) -> Tuple[pypsa.Network, Dict]:
-    """Prepare regional network with consolidated renewables.
+    """Prepare regional network with clustered renewables.
 
     Parameters
     ----------
     skeleton_network_path : str
         Path to base network topology
-    consolidated_renewables_path : str
-        Path to consolidated renewables NetCDF
+    clustered_renewables_path : str
+        Path to clustered renewables NetCDF
     tech_costs_path : str
         Path to technology cost database
     region : str
@@ -783,7 +844,6 @@ def prepare_network(
     logger.info("Loading technology costs...")
     tech_costs = td.load_tech_costs(tech_costs_path)
 
-    # Load consolidated renewables for region (only if this stage needs renewables)
     # Check product_components config to see if product uses renewable_electricity
     product_uses_renewables = _product_has_renewables(config, route_label or product)
 
@@ -796,34 +856,49 @@ def prepare_network(
         cf_ts = None
         metadata = {}
     else:
-        logger.info("Loading consolidated renewables...")
-        techs_dict, cf_ts, metadata = load_region_renewables_consolidated(
-            consolidated_renewables_path, region
+        logger.info("Loading clustered renewables...")
+        techs_dict, cf_ts, metadata = load_regional_clustered_renewables(
+            clustered_renewables_path, region
         )
-    # Apply local demand reservation if configured (only for products with renewable_electricity)
-    # For scenario="reserved", reserve high-CF sites; for "unreserved", skip reservation
+
+    # Apply capacity allocation or local demand reservation based on scenario
+    # (only for products with renewable_electricity)
     reserved_techs = None
     if product_uses_renewables:
-        reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
-        if reserve_capacity_mw <= 0 and scenario == "reserved":
-            reserve_capacity_mw = load_local_electricity_demand_mw(
-                local_demand_path, region
-            )
-            logger.info(
-                f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
-            )
         logger.info(f"Scenario: {scenario} (scenario flag passed from Snakemake rule)")
-        if reserve_capacity_mw > 0 or scenario == "reserved":
+
+        if scenario == "allocated_share":
+            # Apply capacity allocation: scale p_nom_max by allocation_factor
+            allocation_factor = config.get("supply_curve", {}).get(
+                "allocation_factor", 0.5
+            )
             logger.info(
-                f"Applying local demand reservation for scenario={scenario}: "
-                f"target {reserve_capacity_mw} MW"
+                f"Applying capacity allocation for scenario=allocated_share: "
+                f"allocation_factor={allocation_factor}"
             )
-            reserved_techs = reserve_top_sites_by_highest_cf(
-                techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
-            )
+            if techs_dict:
+                techs_dict = apply_capacity_allocation(techs_dict, allocation_factor)
+        else:
+            # For reserved/unreserved scenarios: apply local demand reservation
+            reserve_capacity_mw = config.get("reserve_local_demand_mw", 0)
+            if reserve_capacity_mw <= 0 and scenario == "reserved":
+                reserve_capacity_mw = load_local_electricity_demand_mw(
+                    local_demand_path, region
+                )
+                logger.info(
+                    f"Derived reservation target from local demand: {reserve_capacity_mw:.1f} MW"
+                )
+            if reserve_capacity_mw > 0 or scenario == "reserved":
+                logger.info(
+                    f"Applying local demand reservation for scenario={scenario}: "
+                    f"target {reserve_capacity_mw} MW"
+                )
+                reserved_techs = reserve_top_sites_by_highest_cf(
+                    techs_dict, cf_ts, reserve_capacity_mw, scenario=scenario
+                )
     else:
         logger.info(
-            f"Skipping reservation: product '{route_label}' does not use renewables"
+            f"Skipping reservation/allocation: product '{route_label}' does not use renewables"
         )
 
     # Add renewable generators (only if techs_dict is not empty)
@@ -1092,7 +1167,7 @@ if __name__ == "__main__":
         cost_year = (
             snakemake.wildcards.cost_year
             if hasattr(snakemake.wildcards, "cost_year")
-            else 2030
+            else 2050
         )
         scenario = (
             snakemake.wildcards.scenario
@@ -1108,7 +1183,7 @@ if __name__ == "__main__":
     # Prepare network
     network, audit = prepare_network(
         skeleton_network_path=skeleton_path,
-        consolidated_renewables_path=renewables_path,
+        clustered_renewables_path=renewables_path,
         tech_costs_path=tech_costs_path,
         local_demand_path=local_demand_path,
         region=region,

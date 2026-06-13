@@ -340,6 +340,7 @@ def build_product_components(config: Dict, product: str) -> Dict[str, object]:
     if has_renewables:
         stores.add("battery")
         buses.add("battery")
+        links.update({"batt_charge", "batt_discharge"})
     return {
         "links": links,
         "stores": stores,

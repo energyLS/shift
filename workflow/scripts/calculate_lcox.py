@@ -33,16 +33,6 @@ HOURS_PER_YEAR = 8760
 logger = setup_logging(__name__, snakemake=snakemake, log_filename="calculate_lcox.log")
 
 # ============================================================================
-# STAGE SLICING (legacy helpers removed)
-# ============================================================================
-
-# The stage-slicing helper and incremental-selection utilities were used in an
-# older workflow. They are no longer invoked by the main driver but kept in
-# history; they have been removed to simplify the codebase. If you need them
-# for advanced per-stage analyses, reintroduce a tested implementation.
-
-
-# ============================================================================
 # DEMAND LOADING
 # ============================================================================
 
@@ -78,23 +68,6 @@ def load_demands_for_region(region, config):
 
 
 # ============================================================================
-# RENEWABLE CONSTRAINT
-# ============================================================================
-
-
-# ============================================================================
-# INCREMENTAL RENEWABLE SELECTION (upstream filtering, Phase 3)
-# ============================================================================
-
-
-# NOTE: incremental generator selection was part of an older workflow where
-# incremental_sets were precomputed per demand level. The current driver skips
-# per-demand incremental filtering and therefore this function has been removed
-# to reduce maintenance burden. Reintroduce with tests if needed for custom
-# workflows.
-
-
-# ============================================================================
 # LOAD ADDITION
 # ============================================================================
 
@@ -103,12 +76,9 @@ def add_loads_to_network(network, product, demands):
     """Add hourly Load components and set storage boundary conditions.
 
     Converts annual demand to hourly load: hourly_load = annual_demand / HOURS_PER_YEAR.
-    Sets product storage e_initial and e_final to annual_demand / 52 (approx. 2-week buffer).
-    This provides flexibility while ensuring bounded stock levels.
     """
     if product == "hydrogen":
         bus_name = "hydrogen"
-        storage_name = "h2_storage"
         # Hydrogen is measured in kg/year, convert to kg/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
@@ -117,7 +87,6 @@ def add_loads_to_network(network, product, demands):
 
     elif product == "hbi":
         bus_name = "hbi"
-        storage_name = "hbi_storage"
         # HBI is measured in t/year, convert to t/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
@@ -126,7 +95,6 @@ def add_loads_to_network(network, product, demands):
 
     elif product == "steel":
         bus_name = "steel"
-        storage_name = "steel_storage"
         # Steel is measured in t/year, convert to t/h (hourly)
         hourly_demand_t = (
             demands["product_demand_mt"] * 1e6 / HOURS_PER_YEAR
@@ -155,22 +123,6 @@ def add_loads_to_network(network, product, demands):
         carrier=f"{product}_demand",
         p_set=p_set,  # Constant hourly demand
     )
-
-    # Set product storage boundary conditions: initial and final stock at annual_demand/52
-    annual_demand_t = demands["product_demand_mt"] * 1e6  # Mt → t
-    storage_buffer = annual_demand_t / 52  # Approx. 1 week of annual demand
-
-    if storage_name in network.stores.index:
-        network.stores.at[storage_name, "e_initial"] = storage_buffer
-        network.stores.at[storage_name, "e_final"] = storage_buffer
-        logger.info(
-            f"Set {storage_name} e_initial and e_final to {storage_buffer:.2f} t "
-            f"(annual_demand/52 for {hourly_demand_t:.4f} t/h demand)"
-        )
-    else:
-        logger.warning(
-            f"Storage '{storage_name}' not found in network; skipping boundary condition setup"
-        )
 
     logger.info(
         f"Added hourly load for {product}: {load_name} = {p_set:.4f} {unit_str} (constant all hours)"
@@ -617,11 +569,6 @@ if __name__ == "__main__":
     # Create scaled demands dict for this demand level
     scaled_demands = demands.copy()
     scaled_demands["product_demand_mt"] = product_demand_mt
-
-    # Load incremental generator sets and apply filtering
-    logger.info("Loading incremental generator sets...")
-    # Skip incremental filtering: use all generators for all demand levels
-    logger.info("Using all generators (no incremental filtering applied)")
 
     # Add hourly load for steel output
     # (This also sets HBI storage e_initial inside add_loads_to_network)

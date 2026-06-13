@@ -84,18 +84,18 @@ rule prepare_regional_network:
             if _process_label_for_product(wildcards.product)
             else f"resources/generic_production_model/generic_model_{wildcards.cost_year}.nc"
         ),
-        renewables="data/new_renewables_consolidated.nc",
+        renewables="resources/renewables_clustered.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
         local_demand="data/un_enerdata_demand_2050_final.csv",
-        wacc = "resources/wacc-clustered.csv",
-        labour_cost = "resources/labour_cost_clustered.csv",
+        wacc="resources/wacc-clustered.csv",
+        labour_cost="resources/labour_cost_clustered.csv",
     output:
         # Output keyed by product; route_label is internal to the script
         network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",
     log:
         "logs/prepare_regional_network_{cost_year}_{region}_{wacc}_{product}_{scenario}.log",
     wildcard_constraints:
-        scenario="reserved|unreserved",
+        scenario="reserved|unreserved|allocated_share",
         product="hbi|steel",
     threads: 1
     resources:
@@ -105,7 +105,7 @@ rule prepare_regional_network:
         product="{product}",
         route_label=lambda wildcards: _process_label_for_product(wildcards.product),
         config=config,
-        uniform_interest_rate=config["interest_rate"]["default"]
+        uniform_interest_rate=config["interest_rate"]["default"],
     message:
         "Preparing {wildcards.scenario} regional network: {wildcards.region} -> {wildcards.product} "
         "(cost_year={wildcards.cost_year})"
@@ -135,7 +135,7 @@ if config["enable"].get("run_supply_chain", True):
             "logs/calculate_regional_lcox_{cost_year}_{region}_{wacc}_{product}_{scenario}_{product_demand_mt}.log",
         wildcard_constraints:
             product_demand_mt=r"\d+(?:\.\d+)?",
-            scenario="reserved|unreserved",
+            scenario="reserved|unreserved|allocated_share",
             product="hbi|steel",
         threads: 2
         resources:
@@ -157,7 +157,10 @@ if config["enable"].get("run_supply_curve", True):
     rule create_supply_curve:
         input:
             lco_reserved=lambda wildcards: expand(
-                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_reserved/results_{{product_demand_mt}}.csv",
+                f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_{{scenario}}/results_{{product_demand_mt}}.csv",
+                scenario=config.get("supply_curve", {}).get(
+                    "default_scenario", "allocated_share"
+                ),
                 product_demand_mt=config.get("steel_demand_levels"),
             ),
             lco_unreserved=lambda wildcards: (
@@ -176,7 +179,7 @@ if config["enable"].get("run_supply_curve", True):
             # is only used to locate the correct upstream LCoX runs.
             supply="resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}.csv",
             supply_unreserved=(
-                "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}__unreserved.csv"
+                "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}_unreserved.csv"
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
                 and _product_uses_renewables("{product}")
                 else temp(
@@ -191,7 +194,11 @@ if config["enable"].get("run_supply_curve", True):
             wacc="uniform|regional",
         threads: 1
         message:
-            "Combining LCo results (reserved + unreserved scenarios) to create supply curve for {wildcards.region} {wildcards.product}."
+            "Combining LCo results (default={} + optional unreserved) to create supply curve for {{wildcards.region}} {{wildcards.product}}.".format(
+                config.get("supply_curve", {}).get(
+                    "default_scenario", "allocated_share"
+                )
+            )
         script:
             str(SCRIPT_DIR / "create_supply_curve.py")
 

@@ -97,13 +97,14 @@ def get_stage_metadata(product, stage_ratios):
 
 def create_supply_curve():
     """
-    Create supply curve from reserved and unreserved scenario LCoX results.
+    Create supply curve from default scenario LCoX results.
 
-    Loads results from two distinct optimization scenarios:
-      - reserved: highest-CF sites reserved for domestic demand
-            - unreserved: full renewable stack available (optional/fallback)
+    Loads results from configurable default scenario (e.g., allocated_share, reserved, unreserved)
+    and optional unreserved scenario for comparison:
+      - default (primary): configured via supply_curve.default_scenario
+      - unreserved (optional): full renewable stack available (fallback)
 
-    Combines results, validates they differ, and produces CSV/PDF outputs.
+    Combines results and produces CSV/PDF outputs.
     """
     stage_ratios = get_stage_ratios_from_skeleton()
     stage_meta = get_stage_metadata(product, stage_ratios)
@@ -111,12 +112,18 @@ def create_supply_curve():
     # route_label is derived from config to locate upstream LCoX files for this product
     route_label = route_label_for_product(snakemake.config, product) or product
 
-    reserved_files = snakemake.input.lco_reserved
-    logger.info(f"reserved scenario files: {reserved_files}")
+    # Load primary scenario (now uses default_scenario from config)
+    default_scenario = snakemake.config.get("supply_curve", {}).get(
+        "default_scenario", "allocated_share"
+    )
+    reserved_files = (
+        snakemake.input.lco_reserved
+    )  # This now holds default_scenario files
+    logger.info(f"default scenario ({default_scenario}) files: {reserved_files}")
     df_reserved = pd.concat(
         (pd.read_csv(f, sep=",") for f in reserved_files), ignore_index=True
     )
-    logger.info("reserved scenario data loaded")
+    logger.info(f"default scenario ({default_scenario}) data loaded")
 
     unreserved_files = snakemake.input.lco_unreserved
     if unreserved_files and len(unreserved_files) > 0:
@@ -128,7 +135,9 @@ def create_supply_curve():
         df_merged = df_reserved.copy()
         df_sub = df_unreserved.copy()
     else:
-        logger.info("unreserved scenario not provided; using reserved for both outputs")
+        logger.info(
+            f"unreserved scenario not provided; using {default_scenario} for both outputs"
+        )
         df_merged = df_reserved.copy()
         df_sub = df_reserved.copy()
 
