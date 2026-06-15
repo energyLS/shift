@@ -33,14 +33,14 @@ rule collect_figures:
 
 rule plot_mga:
     input:
-        network_mga_production = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-stability-weighted/network.nc",
-        network_mga_chokepoints = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-chokepoints/network.nc",
-        network_mga_blocks = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-blocs/network.nc",
+        network_mga_production = "results/chain_id~{trade_chain}/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-stability-weighted/network.nc",
+        network_mga_chokepoints = "results/chain_id~{trade_chain}/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-chokepoints/network.nc",
+        network_mga_blocks = "results/chain_id~{trade_chain}/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-blocs/network.nc",
         political_stability = "resources/political_stability_clustered.csv",
         trade_options_chokepoints = "resources/trade_opt_chokepoints.csv",
     output:
-        mga_plot = "results/figures_general/mga/wacc~{wacc}/mga_analysis.pdf",
-        mga_plot_png = "results/figures_general/mga/wacc~{wacc}/mga_analysis.png",
+        mga_plot = "results/figures_general/mga/chain_id~{trade_chain}/wacc~{wacc}/mga_analysis.pdf",
+        mga_plot_png = "results/figures_general/mga/chain_id~{trade_chain}/wacc~{wacc}/mga_analysis.png",
     resources:
         mem_mb=4000,
     threads: 2
@@ -49,7 +49,7 @@ rule plot_mga:
 
 rule plot_mga_all:
     input:
-        expand("results/figures_general/mga/wacc~{wacc}/mga_analysis.pdf", wacc=["regional"], allow_missing=True) #wacc=["uniform", "regional"]
+        expand("results/figures_general/mga/chain_id~{trade_chain}/wacc~{wacc}/mga_analysis.pdf", trade_chain=[config["trade_chains"]["id"]], wacc=[config["trade_chains"]["wacc"]], allow_missing=True) #wacc=["uniform", "regional"]
 
 
 rule plot_trade_today:
