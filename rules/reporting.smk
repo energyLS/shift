@@ -76,6 +76,7 @@ rule plot_global_supply:
         supply_curves_interone = expand(
             "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}{demand}.csv",
             allow_missing=True, region=config["regions"]),
+        steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
     output:
         network_curve="results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
         network_curve_png="results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
