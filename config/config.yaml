@@ -137,9 +137,9 @@ scenario:
         indicator: "blocks"
         threshold_value: 
           # Used "definition_C" from config/blocs_traceregions.yaml
-          block_1: ["Europe, Far_West_Europe, North_America"]
-          block_2: ["Middle_East, North_West_Africa, Subsaharan_Africa, Eurasia, South_America, South_South_America, Central_America, West_Asia, East_Asia, Pacific_Asia"]
-          block_3: ["East_East_Asia, Oceania"]
+          block_1: ["Europe", "Far_West_Europe", "North_America"]
+          block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "South_America", "South_South_America", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
+          block_3: ["East_East_Asia", "Oceania"]
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep

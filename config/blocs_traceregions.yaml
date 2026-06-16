@@ -67,21 +67,21 @@ regions:
 # Config-compatible bloc definitions based on the above region definitions. 
 
 definition_A:
-  block_1: ["Europe, Far_West_Europe, North_America, South_America, South_South_America, East_East_Asia, Oceania"]
-  block_2: ["Middle_East, North_West_Africa, Subsaharan_Africa, Eurasia, Central_America, West_Asia, East_Asia, Pacific_Asia"]
-  block_3: [""]
+  block_1: ["Europe", "Far_West_Europe", "North_America", "South_America", "South_South_America", "East_East_Asia", "Oceania"]
+  block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
+  block_3: []
 
 definition_B:
-  block_1: ["Europe, Far_West_Europe, North_America, East_East_Asia, Oceania"]
-  block_2: ["Middle_East, North_West_Africa, Subsaharan_Africa, Eurasia, South_America, South_South_America, Central_America, West_Asia, East_Asia, Pacific_Asia"]
-  block_3: [""]
+  block_1: ["Europe", "Far_West_Europe", "North_America", "East_East_Asia", "Oceania"]
+  block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "South_America", "South_South_America", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
+  block_3: []
 
 definition_C:
-  block_1: ["Europe, Far_West_Europe, North_America"]
-  block_2: ["Middle_East, North_West_Africa, Subsaharan_Africa, Eurasia, South_America, South_South_America, Central_America, West_Asia, East_Asia, Pacific_Asia"]
-  block_3: ["East_East_Asia, Oceania"]
+  block_1: ["Europe", "Far_West_Europe", "North_America"]
+  block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "South_America", "South_South_America", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
+  block_3: ["East_East_Asia", "Oceania"]
 
 definition_D:
-  block_1: ["Europe, Far_West_Europe, North_America"]
-  block_2: ["South_America, South_South_America, East_Asia, Pacific_Asia"]
-  block_3: ["Middle_East, North_West_Africa, Subsaharan_Africa, Eurasia, Central_America, West_Asia, East_East_Asia, Oceania"]
+  block_1: ["Europe", "Far_West_Europe", "North_America"]
+  block_2: ["South_America", "South_South_America", "East_Asia", "Pacific_Asia"]
+  block_3: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "Central_America", "West_Asia", "East_East_Asia", "Oceania"]
