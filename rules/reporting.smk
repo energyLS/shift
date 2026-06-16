@@ -78,15 +78,15 @@ rule plot_global_supply:
             allow_missing=True, region=config["regions"]),
         steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
     output:
-        network_curve="results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
-        network_curve_png="results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
+        network_curve="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
+        network_curve_png="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
         # supply_curves
     notebook:
         str(NOTEBOOKS_DIR / "analysis-globalsupplycurve.ipynb")
 
 rule plot_global_supply_all:
         input:
-            expand("../results/figures_general/global_supply_curve/cost_year~{cost_year}/{wacc}/{scenario}/{trade_chain}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=["regional"], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
+            expand("results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=[config["trade_chains"]["wacc"]], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
 
 rule plot_comparison:
     input:
@@ -102,16 +102,20 @@ rule plot_comparison:
     
 rule plot_compare_lcox:
     input:
-        south_america_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_0.1.nc",
-        south_america_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_1.nc",
-        south_america_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_10.nc",
-        south_america_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/South_America_allocated_share/network_100.nc",
-        europe_01 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_0.1.nc",
-        europe_1 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_1.nc",
-        europe_10 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_10.nc",
-        europe_100 = "resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_100.nc",
+        south_america_01 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_0.1.nc",
+        south_america_1 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_1.nc",
+        south_america_10 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_10.nc",
+        south_america_100 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_100.nc",
+        europe_01 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_0.1.nc",
+        europe_1 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_1.nc",
+        europe_10 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_10.nc",
+        europe_100 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_100.nc",
     output:
-        lcox_comparison="results/figures_general/comparison/lcox_comparison.pdf",
-        lcox_comparison_png="results/figures_general/comparison/lcox_comparison.png",
+        lcox_comparison="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.pdf",
+        lcox_comparison_png="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.png",
     notebook:
         str(NOTEBOOKS_DIR / "plot-compare-lcox.ipynb")
+
+rule plot_compare_lcox_all:
+    input:
+        expand("results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.pdf", cost_year=[2050], wacc=[config["trade_chains"]["wacc"]], allow_missing=True)
