@@ -886,14 +886,23 @@ def resolve_mga_links_from_blocks(n, mga):
     carrier = mga["carrier"]
     blocks = mga["threshold_value"]  # dict: block_name -> [regions]
 
-    # Build region -> block mapping
+    # Build region -> block mapping.
+    # Each entry in the regions list may itself be a comma-separated string
+    # (e.g. from YAML flow syntax), so split defensively.
     region_to_block = {}
     for block_name, regions in blocks.items():
-        for region in regions:
-            region_to_block[region] = block_name
+        for entry in regions:
+            for region in str(entry).split(","):
+                region = region.strip()
+                if region:
+                    region_to_block[region] = block_name
 
     logger.info(
-        "Blocks MGA: %s", ", ".join(f"{k}: {len(v)} regions" for k, v in blocks.items())
+        "Blocks MGA: %s",
+        ", ".join(
+            f"{k}: {sum(1 for v in region_to_block.values() if v == k)} regions"
+            for k in blocks
+        ),
     )
 
     # Select shipping links for the target carrier
@@ -1096,7 +1105,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf",
             final="steel",
-            scenario="default",
+            scenario="mga-blocs",
             wacc="regional",
             chain_id="newre1206_2050",
         )
