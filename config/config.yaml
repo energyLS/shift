@@ -209,7 +209,7 @@ techno-economic parameters:
     batt_standing_loss: 0.0001  # 0.01% per hour for battery (self-discharge)
 
 interest_rate: 
-  default: 0.05 # Used, if wildcard `wacc` is set to `uniform`
+  default: 0.084 # Used, if wildcard `wacc` is set to `uniform`. The proposed value of 0.084 (8.4%) is obtained from the notebook `prepare-wacc.ipynb` and represents a global average WACC weighted by GDP. T
 
 trade:
   shipping_routes:
