@@ -180,6 +180,8 @@ def building_model(
             p_set=load,
         )
 
+        p_nom_interone_installed = 0
+
         # --- Stage 1 supply: ore → interone (material) or direct supply (energy) ---
         for s in range(len(region_data_interone)):
 
@@ -189,6 +191,20 @@ def building_model(
                 p_nom_interone = float(
                     region_data_interone[f"demand [{unit}]"][s]
                 ) - float(region_data_interone[f"demand [{unit}]"][s - 1])
+
+            limit_per_supplier = 200 * 1e6  # Mt of HBI
+
+            if (p_nom_interone_installed + p_nom_interone) < limit_per_supplier:
+
+                pass
+
+            else:
+                p_nom_interone = limit_per_supplier - p_nom_interone_installed
+                # set p_nom_interone if smaller than 0
+                if p_nom_interone < 0:
+                    p_nom_interone = 0
+
+            p_nom_interone_installed += p_nom_interone
 
             m_cost = float(region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s])
 
@@ -1105,9 +1121,9 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf",
             final="steel",
-            scenario="mga-blocs",
+            scenario="default",
             wacc="regional",
-            chain_id="newre1206_2050",
+            chain_id="supplyconstraint",
         )
 
     final = snakemake.wildcards["final"]
