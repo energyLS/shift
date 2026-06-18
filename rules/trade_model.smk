@@ -42,6 +42,7 @@ rule model_trade:
         iron_ore_potential=config["iron_ore"]["potential_allowance"],
         cost_penalty=config["design"]["cost_penalty"],
         scenarios=config["scenario"],
+        trade=config["trade"],
     script:
         str(SCRIPT_DIR / "model_trade.py")
 

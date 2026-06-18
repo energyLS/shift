@@ -183,7 +183,12 @@ def building_model(
         # --- Stage 1 supply: ore → interone (material) or direct supply (energy) ---
         for s in range(len(region_data_interone)):
 
-            p_nom = float(region_data_interone[f"demand [{unit}]"][s])
+            if s == 0:
+                p_nom_interone = float(region_data_interone[f"demand [{unit}]"][s])
+            else:
+                p_nom_interone = float(
+                    region_data_interone[f"demand [{unit}]"][s]
+                ) - float(region_data_interone[f"demand [{unit}]"][s - 1])
 
             m_cost = float(region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s])
 
@@ -197,7 +202,7 @@ def building_model(
                     bus=region_name,
                     carrier=final,
                     p_nom_extendable=True,
-                    p_nom_max=p_nom,  # MWh, demand = potential supply
+                    p_nom_max=p_nom_interone,  # MWh, demand = potential supply
                     marginal_cost=m_cost,  # EUR/MWh
                     capital_cost=1 / 1000,  # to prevent optimisation shenanigans
                 )
@@ -214,7 +219,8 @@ def building_model(
                     bus0=region_name + "_ore",
                     bus1=region_name + "_" + interone,
                     carrier=interone,
-                    p_nom_max=p_nom * ore_ratio,  # t, demand = potential supply
+                    p_nom_max=p_nom_interone
+                    * ore_ratio,  # t, demand = potential supply
                     p_nom_extendable=True,
                     efficiency=1 / ore_ratio,
                     marginal_cost=m_cost / ore_ratio,  # referred to bus0
@@ -225,14 +231,19 @@ def building_model(
         if two_stage:
             for s in range(len(region_data_intertwo)):
 
-                p_nom = float(region_data_intertwo[f"demand [{unit}]"][s])
+                if s == 0:
+                    p_nom_intertwo = float(region_data_intertwo[f"demand [{unit}]"][s])
+                else:
+                    p_nom_intertwo = float(
+                        region_data_intertwo[f"demand [{unit}]"][s]
+                    ) - float(region_data_intertwo[f"demand [{unit}]"][s - 1])
 
                 # Override capacity for grid-connected EAF based on grid potential
                 if intertwo == "eaf-grid":
                     grid_potential = pd.read_csv(
                         snakemake.input.grid_potential, header=0, index_col=0
                     )
-                    p_nom = (
+                    p_nom_intertwo = (
                         grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
                     ) / len(
                         region_data_intertwo
@@ -250,7 +261,7 @@ def building_model(
                     bus0=region_name + "_" + interone,
                     bus1=region_name + "_" + final,
                     carrier=final,
-                    p_nom_max=p_nom,  # t, demand = potential supply
+                    p_nom_max=p_nom_intertwo,  # t, demand = potential supply
                     p_nom_extendable=True,
                     efficiency=1,  # direct conversion, no ratio needed
                     marginal_cost=m_cost,  # EUR/t
@@ -875,14 +886,23 @@ def resolve_mga_links_from_blocks(n, mga):
     carrier = mga["carrier"]
     blocks = mga["threshold_value"]  # dict: block_name -> [regions]
 
-    # Build region -> block mapping
+    # Build region -> block mapping.
+    # Each entry in the regions list may itself be a comma-separated string
+    # (e.g. from YAML flow syntax), so split defensively.
     region_to_block = {}
     for block_name, regions in blocks.items():
-        for region in regions:
-            region_to_block[region] = block_name
+        for entry in regions:
+            for region in str(entry).split(","):
+                region = region.strip()
+                if region:
+                    region_to_block[region] = block_name
 
     logger.info(
-        "Blocks MGA: %s", ", ".join(f"{k}: {len(v)} regions" for k, v in blocks.items())
+        "Blocks MGA: %s",
+        ", ".join(
+            f"{k}: {sum(1 for v in region_to_block.values() if v == k)} regions"
+            for k in blocks
+        ),
     )
 
     # Select shipping links for the target carrier
@@ -1085,9 +1105,9 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf",
             final="steel",
-            scenario="default",
+            scenario="mga-blocs",
             wacc="regional",
-            chain_id="newre_2050",
+            chain_id="newre1206_2050",
         )
 
     final = snakemake.wildcards["final"]

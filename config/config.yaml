@@ -1,6 +1,6 @@
 enable:
-  run_supply_chain: True # Enable for first run
-  run_supply_curve: True # Enable for first run
+  run_supply_chain: False # Enable for first run
+  run_supply_curve: False # Enable for first run
   cluster_renewables: False # Enable for first run
 
 
@@ -27,7 +27,7 @@ supply_curve:
 # Config-native trade chain definitions
 # Defines the commodity transformation chain with ordered stages and process labels
 trade_chains:
-  id: labour_2050
+  id: newre1206_2050
   cost_year: 2050
   final_product: steel
   wacc: regional #regional
@@ -52,6 +52,8 @@ trade_chains:
   trade_scenarios:
     - default
     - mga-stability-weighted
+    - mga-chokepoints
+    - mga-blocs
 
 
 scenario: 
@@ -134,15 +136,16 @@ scenario:
         carrier: "hbi"
         indicator: "blocks"
         threshold_value: 
-          block_a: ["Europe","Far_West_Europe","North_America","East_East_Asia","South_South_America", "Oceania"]
-          block_b: ["Middle_East","Subsaharan_Africa","North_West_Africa", "Eurasia","South_America","Central_America","West_Asia","East_Asia","Pacific_Asia"]
-
+          # Used "definition_C" from config/blocs_traceregions.yaml
+          block_1: ["Europe", "Far_West_Europe", "North_America"]
+          block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "South_America", "South_South_America", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
+          block_3: ["East_East_Asia", "Oceania"]
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.1, 0.5, 1, 5, 10, 50, 100]  # Mt/year
+steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 200, 300, 500, 1000] # Mt/year
 hydrogen_storage_cost: False
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
@@ -234,7 +237,7 @@ part_load:
 
 iron_ore:
   regionalise: "grade-dependent" #"uniform" or "grade-dependent"
-  marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
+  marginal_cost: 97.7 #97.7 EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data).
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
@@ -306,21 +309,21 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
-  Eurasia:              '#1B4F9C'  # deep blue
-  Europe:               '#F39C12'  # strong orange
-  Far_West_Europe:      '#2ECC71'  # vivid green
-  Middle_East:          '#C0392B'  # brick red
-  North_West_Africa:    '#7D3C98'  # dark purple
-  Subsaharan_Africa:    '#A04000'  # burnt sienna
-  North_America:        '#F1C40F'  # yellow (clearly distinct)
-  South_America:        '#16A085'  # teal
-  South_South_America:  '#EC7063'  # coral
-  Central_America:      '#27AE60'  # emerald (different from teal)
-  West_Asia:            '#2C3E50'  # blue-grey (almost navy)
-  East_Asia:            '#58D68D'  # light green (intentional contrast)
-  Pacific_Asia:         '#AF7AC5'  # lavender
-  East_East_Asia:       '#922B21'  # dark red
-  Oceania:              '#1F618D'  # steel blue
+  Eurasia:                 '#1A6FBF'  # mid blue (lighter than before)
+  Europe:                  '#E07B00'  # deep amber-orange
+  Far_West_Europe:         '#007A6E'  # dark teal (replaces vivid green)
+  Middle_East:             '#B5446E'  # magenta-rose (replaces brick red)
+  North_West_Africa:       '#6E3FA3'  # purple (kept, adjusted)
+  Subsaharan_Africa:       '#8B4513'  # saddle brown
+  North_America:           '#F5C518'  # yellow (kept)
+  South_America:           '#2DB3C8'  # cyan-teal (lighter, distinct from teal)
+  South_South_America:     '#F4845F'  # warm peach-orange
+  Central_America:         '#3D9970'  # muted green (darker, less vivid)
+  West_Asia:               '#2C3E50'  # blue-grey (kept, unique)
+  East_Asia:               '#A8D8A8'  # very light sage
+  Pacific_Asia:            '#C47AB0'  # pink-lavender
+  East_East_Asia:          '#0D47A1'  # deep navy (replaces dark red)
+  Oceania:                 '#546E7A'  # blue-grey slate (distinct from navy)
   trade_today:
     surplus:            '#d94801'  # orange-red  (net exporter bubble)
     deficit:            '#045a8d'  # dark blue   (net importer bubble)
