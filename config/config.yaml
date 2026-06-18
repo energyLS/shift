@@ -237,7 +237,7 @@ part_load:
 
 iron_ore:
   regionalise: "grade-dependent" #"uniform" or "grade-dependent"
-  marginal_cost: 97.7 #97.7 # EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
+  marginal_cost: 97.7 #97.7 EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data).
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
@@ -309,21 +309,21 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
-  Eurasia:              '#1B4F9C'  # deep blue
-  Europe:               '#F39C12'  # strong orange
-  Far_West_Europe:      '#2ECC71'  # vivid green
-  Middle_East:          '#C0392B'  # brick red
-  North_West_Africa:    '#7D3C98'  # dark purple
-  Subsaharan_Africa:    '#A04000'  # burnt sienna
-  North_America:        '#F1C40F'  # yellow (clearly distinct)
-  South_America:        '#16A085'  # teal
-  South_South_America:  '#EC7063'  # coral
-  Central_America:      '#27AE60'  # emerald (different from teal)
-  West_Asia:            '#2C3E50'  # blue-grey (almost navy)
-  East_Asia:            '#58D68D'  # light green (intentional contrast)
-  Pacific_Asia:         '#AF7AC5'  # lavender
-  East_East_Asia:       '#922B21'  # dark red
-  Oceania:              '#1F618D'  # steel blue
+  Eurasia:                 '#1A6FBF'  # mid blue (lighter than before)
+  Europe:                  '#E07B00'  # deep amber-orange
+  Far_West_Europe:         '#007A6E'  # dark teal (replaces vivid green)
+  Middle_East:             '#B5446E'  # magenta-rose (replaces brick red)
+  North_West_Africa:       '#6E3FA3'  # purple (kept, adjusted)
+  Subsaharan_Africa:       '#8B4513'  # saddle brown
+  North_America:           '#F5C518'  # yellow (kept)
+  South_America:           '#2DB3C8'  # cyan-teal (lighter, distinct from teal)
+  South_South_America:     '#F4845F'  # warm peach-orange
+  Central_America:         '#3D9970'  # muted green (darker, less vivid)
+  West_Asia:               '#2C3E50'  # blue-grey (kept, unique)
+  East_Asia:               '#A8D8A8'  # very light sage
+  Pacific_Asia:            '#C47AB0'  # pink-lavender
+  East_East_Asia:          '#0D47A1'  # deep navy (replaces dark red)
+  Oceania:                 '#546E7A'  # blue-grey slate (distinct from navy)
   trade_today:
     surplus:            '#d94801'  # orange-red  (net exporter bubble)
     deficit:            '#045a8d'  # dark blue   (net importer bubble)
