@@ -27,7 +27,7 @@ supply_curve:
 # Config-native trade chain definitions
 # Defines the commodity transformation chain with ordered stages and process labels
 trade_chains:
-  id: newre1206_2050
+  id: supplyconstraint
   cost_year: 2050
   final_product: steel
   wacc: regional #regional
@@ -50,10 +50,11 @@ trade_chains:
       output_commodity: steel
       process_label: eaf
   trade_scenarios:
-    - default
-    - mga-stability-weighted
+    # - default
+    # - mga-stability-weighted
     - mga-chokepoints
     - mga-blocs
+    - constrain-supply
 
 
 scenario: 
@@ -140,6 +141,13 @@ scenario:
           block_1: ["Europe", "Far_West_Europe", "North_America"]
           block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "South_America", "South_South_America", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
           block_3: ["East_East_Asia", "Oceania"]
+  constrain-supply:
+      modifiers:
+        cost_penalty:
+        pareto:
+          indicator: "supply"
+          threshold_value: [50, 100, 200, 300, 400] # Mt
+
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
