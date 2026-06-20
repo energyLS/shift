@@ -102,15 +102,19 @@ rule plot_comparison:
 
     
 rule plot_compare_lcox:
+    params:
+        low_cost = ["South_America"],
+        high_cost = ["Europe"],
+        quantities = [1,10,100],
+        comparison = ["Europe", "South_America"]
     input:
-        south_america_01 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_0.1.nc",
         south_america_1 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_1.nc",
         south_america_10 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_10.nc",
         south_america_100 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_100.nc",
-        europe_01 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_0.1.nc",
         europe_1 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_1.nc",
         europe_10 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_10.nc",
         europe_100 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_100.nc",
+        trade_result = "results/chain_id~{trade_chain}/cost_year~{cost_year}/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~default/network.nc",
     output:
         lcox_comparison="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.pdf",
         lcox_comparison_png="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.png",
