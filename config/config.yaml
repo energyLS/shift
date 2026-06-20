@@ -146,7 +146,7 @@ scenario:
         cost_penalty:
         pareto:
           indicator: "supply"
-          threshold_value: [50, 100, 200, 300, 400] # Mt
+          threshold_value: [100, 150, 200, 300, 400, 500] # Mt
 
 
 
