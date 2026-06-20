@@ -100,21 +100,31 @@ rule plot_comparison:
     notebook:
         str(NOTEBOOKS_DIR / "compare-scenarios.ipynb")
 
-    
+
+# Variables captured by the plot_compare_lcox input lambda (avoids two-argument lambda)
+_lcox_low_cost  = ["East_Asia", "South_America"]
+_lcox_high_cost = ["Europe", "East_East_Asia"]
+_lcox_quantities = [1, 10, 100]
+
 rule plot_compare_lcox:
     params:
-        low_cost = ["South_America"],
-        high_cost = ["Europe"],
-        quantities = [1,10,100],
-        comparison = ["Europe", "South_America"]
+        low_cost   = _lcox_low_cost,
+        high_cost  = _lcox_high_cost,
+        quantities = _lcox_quantities,
+        comparison = ["Europe", "East_Asia"]
     input:
-        south_america_1 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_1.nc",
-        south_america_10 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_10.nc",
-        south_america_100 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/South_America_allocated_share/network_100.nc",
-        europe_1 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_1.nc",
-        europe_10 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_10.nc",
-        europe_100 = "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/Europe_allocated_share/network_100.nc",
-        trade_result = "results/chain_id~{trade_chain}/cost_year~{cost_year}/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~default/network.nc",
+        supply_networks=lambda wildcards: expand(
+            "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/{region}_allocated_share/network_{qty}.nc",
+            cost_year=wildcards.cost_year,
+            wacc=wildcards.wacc,
+            region=_lcox_low_cost + _lcox_high_cost,
+            qty=_lcox_quantities,
+        ),
+        trade_result=lambda wildcards: (
+            f"results/chain_id~{config['trade_chains']['id']}"
+            f"/cost_year~{wildcards.cost_year}/interone~hbi/intertwo~eaf"
+            f"/wacc~{wildcards.wacc}/final~steel/scenario~default/network.nc"
+        ),
     output:
         lcox_comparison="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.pdf",
         lcox_comparison_png="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.png",
