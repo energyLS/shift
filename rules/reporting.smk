@@ -102,8 +102,22 @@ rule plot_comparison:
 
 
 # Variables captured by the plot_compare_lcox input lambda (avoids two-argument lambda)
-_lcox_low_cost  = ["East_Asia", "South_America"]
-_lcox_high_cost = ["Europe", "East_East_Asia"]
+
+# First case
+_lcox_low_cost  = ["East_Asia"]
+_lcox_high_cost = ["East_East_Asia"]
+_comparison = ["East_East_Asia", "East_Asia"]
+
+# Second case
+# _lcox_low_cost  = ["South_America"]
+# _lcox_high_cost = ["Europe"]
+# _comparison = ["Europe", "South_America"]
+
+# # Full case
+# _lcox_low_cost  = ["East_Asia", "South_America"]
+# _lcox_high_cost = ["Europe", "East_East_Asia"]
+# _comparison = ["Europe", "East_Asia"]
+
 _lcox_quantities = [1, 10, 100]
 
 rule plot_compare_lcox:
@@ -111,7 +125,7 @@ rule plot_compare_lcox:
         low_cost   = _lcox_low_cost,
         high_cost  = _lcox_high_cost,
         quantities = _lcox_quantities,
-        comparison = ["Europe", "East_Asia"]
+        comparison = _comparison,
     input:
         supply_networks=lambda wildcards: expand(
             "resources/lco-hbi/cost_year~{cost_year}/wacc~{wacc}/{region}_allocated_share/network_{qty}.nc",
