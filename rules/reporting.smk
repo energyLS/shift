@@ -4,6 +4,13 @@ Collects final figures and presentation artifacts produced by notebooks and the
 main optimization workflow.
 """
 
+rule plot_regions:
+    output:
+        global_map_countries = "results/figures_general/global_map_countries.pdf", #workflow/notebooks/plot_countries.ipynb
+        global_map_countries_png = "results/figures_general/global_map_countries.png", #workflow/notebooks/plot_countries.ipynb
+    notebook:
+        str(NOTEBOOKS_DIR / "plot_countries.ipynb")
+
 
 rule collect_figures:
     input:
