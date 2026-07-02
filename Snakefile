@@ -5,6 +5,7 @@ trade optimization, and reporting.
 """
 
 from pathlib import Path
+from shutil import copyfile
 import sys
 
 import pandas as pd

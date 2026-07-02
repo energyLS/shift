@@ -37,6 +37,23 @@ rule collect_figures:
         map_chokepoints_png = "../results/figures_general/chokepoints/map_chokepoints.png", # integrated in workflow
 
 
+rule get_figures:
+    input:
+        [
+        "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_East_Asia_East_East_Asia.pdf",
+        "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_South_America_Europe.pdf",
+        ]
+    output:
+        [
+        "results/figures_streamlined/lcox-east-asia.pdf",
+        "results/figures_streamlined/lcox-south-america.pdf",
+        ]
+    threads: 1
+    run:
+        for i in range(len(input)):
+            copyfile(input[i], output[i])
+
+
 
 rule plot_mga:
     input:
@@ -111,19 +128,15 @@ rule plot_comparison:
 # Variables captured by the plot_compare_lcox input lambda (avoids two-argument lambda)
 
 # First case
-_lcox_low_cost  = ["East_Asia"]
-_lcox_high_cost = ["East_East_Asia"]
-_comparison = ["East_East_Asia", "East_Asia"]
+# _lcox_low_cost  = ["East_Asia"]
+# _lcox_high_cost = ["East_East_Asia"]
+# _comparison = ["East_East_Asia", "East_Asia"]
 
 # Second case
-# _lcox_low_cost  = ["South_America"]
-# _lcox_high_cost = ["Europe"]
-# _comparison = ["Europe", "South_America"]
+_lcox_low_cost  = ["South_America"]
+_lcox_high_cost = ["Europe"]
+_comparison = ["Europe", "South_America"]
 
-# # Full case
-# _lcox_low_cost  = ["East_Asia", "South_America"]
-# _lcox_high_cost = ["Europe", "East_East_Asia"]
-# _comparison = ["Europe", "East_Asia"]
 
 _lcox_quantities = [1, 10, 100]
 
@@ -147,11 +160,11 @@ rule plot_compare_lcox:
             f"/wacc~{wildcards.wacc}/final~steel/scenario~default/network.nc"
         ),
     output:
-        lcox_comparison="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.pdf",
-        lcox_comparison_png="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.png",
+        lcox_comparison="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison_" + f"{_lcox_low_cost[0]}" + "_" + f"{_lcox_high_cost[0]}" + ".pdf",
+        lcox_comparison_png="results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison_" + f"{_lcox_low_cost[0]}" + "_" + f"{_lcox_high_cost[0]}" + ".png",
     notebook:
         str(NOTEBOOKS_DIR / "plot-compare-lcox.ipynb")
 
 rule plot_compare_lcox_all:
     input:
-        expand("results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison.pdf", cost_year=[2050], wacc=[config["trade_chains"]["wacc"]], allow_missing=True)
+        expand("results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison_" + f"{_lcox_low_cost[0]}" + "_" + f"{_lcox_high_cost[0]}" + ".pdf", cost_year=[2050], wacc=[config["trade_chains"]["wacc"]], low_cost=_lcox_low_cost, high_cost=_lcox_high_cost, allow_missing=True)
