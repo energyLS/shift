@@ -50,11 +50,11 @@ trade_chains:
       output_commodity: steel
       process_label: eaf
   trade_scenarios:
-    # - default
+    - default
+    # - mga-chokepoints
+    # - mga-blocs
+    # - constrain-supply
     # - mga-stability-weighted
-    - mga-chokepoints
-    - mga-blocs
-    - constrain-supply
 
 
 scenario: 
@@ -123,7 +123,7 @@ scenario:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03]
+        slack: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
         sense: "min"
         carrier: "hbi"
         indicator: "chokepoint"
@@ -132,7 +132,7 @@ scenario:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03] #[0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05] 
+        slack: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
         sense: "min"
         carrier: "hbi"
         indicator: "blocks"
@@ -146,14 +146,14 @@ scenario:
         cost_penalty:
         pareto:
           indicator: "supply"
-          threshold_value: [100, 150, 200, 300, 400, 500] # Mt
+          threshold_value: [100, 150, 175, 200, 250, 300, 350, 600] # Mt
 
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 200, 300, 500, 1000] # Mt/year
+steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 500, 1000] # Mt/year
 hydrogen_storage_cost: False
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
@@ -296,15 +296,14 @@ colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'grey'
   hydrogen direct iron reduction furnace: 'grey'
-  
   battery inverter: '#6A000E'
   battery inverter (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
   battery: 'purple'
   wind: 'blue'
   onshore wind: 'blue'
-  solar: 'yellow'
-  pv: 'yellow'
+  solar: '#bfbf04'
+  pv: '#bfbf04'
   electricity: 'red'
   iron ore: 'brown'
   steel: 'grey'
@@ -317,21 +316,36 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
-  Eurasia:                 '#1A6FBF'  # mid blue (lighter than before)
-  Europe:                  '#E07B00'  # deep amber-orange
-  Far_West_Europe:         '#007A6E'  # dark teal (replaces vivid green)
-  Middle_East:             '#B5446E'  # magenta-rose (replaces brick red)
-  North_West_Africa:       '#6E3FA3'  # purple (kept, adjusted)
-  Subsaharan_Africa:       '#8B4513'  # saddle brown
-  North_America:           '#F5C518'  # yellow (kept)
-  South_America:           '#2DB3C8'  # cyan-teal (lighter, distinct from teal)
-  South_South_America:     '#F4845F'  # warm peach-orange
-  Central_America:         '#3D9970'  # muted green (darker, less vivid)
-  West_Asia:               '#2C3E50'  # blue-grey (kept, unique)
-  East_Asia:               '#A8D8A8'  # very light sage
-  Pacific_Asia:            '#C47AB0'  # pink-lavender
-  East_East_Asia:          '#0D47A1'  # deep navy (replaces dark red)
-  Oceania:                 '#546E7A'  # blue-grey slate (distinct from navy)
+  # Eurasia:                 '#1A6FBF'  # mid blue (lighter than before)
+  # Europe:                  '#E07B00'  # deep amber-orange
+  # Far_West_Europe:         '#007A6E'  # dark teal (replaces vivid green)
+  # Middle_East:             '#B5446E'  # magenta-rose (replaces brick red)
+  # North_West_Africa:       '#6E3FA3'  # purple (kept, adjusted)
+  # Subsaharan_Africa:       '#8B4513'  # saddle brown
+  # North_America:           '#F5C518'  # yellow (kept)
+  # South_America:           '#2DB3C8'  # cyan-teal (lighter, distinct from teal)
+  # South_South_America:     '#F4845F'  # warm peach-orange
+  # Central_America:         '#3D9970'  # muted green (darker, less vivid)
+  # West_Asia:               '#2C3E50'  # blue-grey (kept, unique)
+  # East_Asia:               '#A8D8A8'  # very light sage
+  # Pacific_Asia:            '#C47AB0'  # pink-lavender
+  # East_East_Asia:          '#0D47A1'  # deep navy (replaces dark red)
+  # Oceania:                 '#546E7A'  # blue-grey slate (distinct from navy)
+  Central_America:          '#011959'
+  East_Asia:                '#FDB4B4'
+  East_East_Asia:           '#A18A2B'
+  Eurasia:                  '#CF9340'
+  Europe:                   '#416F53'
+  Far_West_Europe:          '#FAA587'
+  Middle_East:              '#F59F74'
+  North_America:            '#26635F'
+  North_West_Africa:        '#FCC3DF'
+  Oceania:                  '#ED9A62'
+  Pacific_Asia:             '#FDAFA7'
+  South_America:            '#50744B'
+  South_South_America:      '#114160'
+  Subsaharan_Africa:        '#33695A'
+  West_Asia:                '#FBA68C'
   trade_today:
     surplus:            '#d94801'  # orange-red  (net exporter bubble)
     deficit:            '#045a8d'  # dark blue   (net importer bubble)
@@ -345,6 +359,7 @@ colors:
   iron_ore_shipping: "#6A000E"
   hbi: 'darkred'
   hbi_shipping: 'firebrick'
+  shipping: 'black'
   steel_supply: 'lightsteelblue'
   steel_demand: 'seagreen'
   steel_link: 'skyblue'
