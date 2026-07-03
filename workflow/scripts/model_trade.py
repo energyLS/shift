@@ -475,7 +475,7 @@ def plot_trade_network(
     n,
     product="steel",
     alpha_supply=0.7,
-    alpha_demand=1,
+    alpha_demand=0.7,
     output_path=None,
     output_path_png=None,
     region_gdf=None,
