@@ -42,11 +42,37 @@ rule get_figures:
         [
         "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_East_Asia_East_East_Asia.pdf",
         "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_South_America_Europe.pdf",
+        "results/figures_general/mga/chain_id~supplyconstraint/wacc~regional/mga_analysis.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/map_hbi.pdf",
+        "results/figures_general/global_map_countries.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-chokepoints/map_hbi_0.002.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-chokepoints/map_ironore_0.002.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-blocs/map_hbi_0.001.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-blocs/map_ironore_0.001.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~constrain-supply/map_hbi_250.0.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~constrain-supply/map_ironore_250.0.pdf",
+        "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/uniform/default/global_supply_curve_cost_average_hbi.pdf",
+        "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/uniform/default/global_supply_curve_cost_global_hbi.pdf",
+        "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_average_hbi.pdf",
+        "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_global_hbi.pdf",
         ]
     output:
         [
         "results/figures_streamlined/lcox-east-asia.pdf",
         "results/figures_streamlined/lcox-south-america.pdf",
+        "results/figures_streamlined/mga-analysis.pdf",
+        "results/figures_streamlined/map-hbi-opti.pdf",
+        "results/figures_streamlined/map-countries.pdf",
+        "results/figures_streamlined/map-hbi-chokepoints.pdf",
+        "results/figures_streamlined/map-ironore-chokepoints.pdf",
+        "results/figures_streamlined/map-hbi-blocs.pdf",
+        "results/figures_streamlined/map-ironore-blocs.pdf",
+        "results/figures_streamlined/map-hbi-supply.pdf",
+        "results/figures_streamlined/map-ironore-supply.pdf",
+        "results/figures_streamlined/supply-sorted-homo.pdf",
+        "results/figures_streamlined/supply-unsorted-homo.pdf",
+        "results/figures_streamlined/supply-sorted-hetero.pdf",
+        "results/figures_streamlined/supply-unsorted-hetero.pdf",
         ]
     threads: 1
     run:
@@ -99,19 +125,19 @@ rule plot_global_supply:
         # supply = "../resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
         # supply_nodemand = "../resources/supply_curves_nodemand/cost_year~{cost_year}/wacc~{wacc}/{region}_{product}.csv",
         supply_curves_interone = expand(
-            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}{demand}.csv",
+            "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv",
             allow_missing=True, region=config["regions"]),
         steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
     output:
-        network_curve="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf",
-        network_curve_png="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.png",
+        network_curve="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.pdf",
+        network_curve_png="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.png",
         # supply_curves
     notebook:
         str(NOTEBOOKS_DIR / "analysis-globalsupplycurve.ipynb")
 
 rule plot_global_supply_all:
         input:
-            expand("results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_demand_{demand}_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=[config["trade_chains"]["wacc"]], interone=["hbi"], scenario=["default"], sort=[True,False], demand=[True,False], allow_missing=True)
+            expand("results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=["regional", "uniform"], interone=["hbi"], scenario=["default"], sort=["cost_average","cost_global"], allow_missing=True)
 
 rule plot_comparison:
     input:
@@ -128,14 +154,14 @@ rule plot_comparison:
 # Variables captured by the plot_compare_lcox input lambda (avoids two-argument lambda)
 
 # First case
-# _lcox_low_cost  = ["East_Asia"]
-# _lcox_high_cost = ["East_East_Asia"]
-# _comparison = ["East_East_Asia", "East_Asia"]
+_lcox_low_cost  = ["East_Asia"]
+_lcox_high_cost = ["East_East_Asia"]
+_comparison = ["East_East_Asia", "East_Asia"]
 
 # Second case
-_lcox_low_cost  = ["South_America"]
-_lcox_high_cost = ["Europe"]
-_comparison = ["Europe", "South_America"]
+# _lcox_low_cost  = ["South_America"]
+# _lcox_high_cost = ["Europe"]
+# _comparison = ["Europe", "South_America"]
 
 
 _lcox_quantities = [1, 10, 100]
