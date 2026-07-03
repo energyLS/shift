@@ -367,8 +367,8 @@ colors:
   steel_demand: 'seagreen'
   steel_link: 'skyblue'
   iron_ore_supply: 'black'
-  iron_ore_demand: 'lightsteelblue'
+  iron_ore_demand: 'green'
   iron_ore_link: "#6A000E"
-  hbi_demand: 'green'
+  hbi_demand: '#17679E'
   hbi_supply: 'darkred'
   hbi_link: 'firebrick'
