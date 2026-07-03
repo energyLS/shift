@@ -334,36 +334,21 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
-  # Eurasia:                 '#1A6FBF'  # mid blue (lighter than before)
-  # Europe:                  '#E07B00'  # deep amber-orange
-  # Far_West_Europe:         '#007A6E'  # dark teal (replaces vivid green)
-  # Middle_East:             '#B5446E'  # magenta-rose (replaces brick red)
-  # North_West_Africa:       '#6E3FA3'  # purple (kept, adjusted)
-  # Subsaharan_Africa:       '#8B4513'  # saddle brown
-  # North_America:           '#F5C518'  # yellow (kept)
-  # South_America:           '#2DB3C8'  # cyan-teal (lighter, distinct from teal)
-  # South_South_America:     '#F4845F'  # warm peach-orange
-  # Central_America:         '#3D9970'  # muted green (darker, less vivid)
-  # West_Asia:               '#2C3E50'  # blue-grey (kept, unique)
-  # East_Asia:               '#A8D8A8'  # very light sage
-  # Pacific_Asia:            '#C47AB0'  # pink-lavender
-  # East_East_Asia:          '#0D47A1'  # deep navy (replaces dark red)
-  # Oceania:                 '#546E7A'  # blue-grey slate (distinct from navy)
-  Central_America:          '#011959'
-  East_Asia:                '#FDB4B4'
-  East_East_Asia:           '#A18A2B'
-  Eurasia:                  '#CF9340'
-  Europe:                   '#416F53'
-  Far_West_Europe:          '#FAA587'
-  Middle_East:              '#F59F74'
-  North_America:            '#26635F'
-  North_West_Africa:        '#FCC3DF'
-  Oceania:                  '#ED9A62'
-  Pacific_Asia:             '#FDAFA7'
-  South_America:            '#50744B'
-  South_South_America:      '#114160'
-  Subsaharan_Africa:        '#33695A'
-  West_Asia:                '#FBA68C'
+  Europe:                "#17679E"  # blue
+  Far_West_Europe:       "#237F8C"  # teal-blue
+  Eurasia:               "#7E84E5"  # blue-purple
+  Middle_East:           "#8352D8"  # purple
+  West_Asia:             "#590B72"  # dark purple  
+  East_Asia:             "#BF39B0"  # magenta       
+  Pacific_Asia:          "#8C234F"  # dark magenta-red
+  East_East_Asia:        "#BF9A39"  # mustard/gold  
+  North_West_Africa:     "#378C23"  # green
+  Subsaharan_Africa:     "#720B16"  # dark red
+  North_America:         "#0B722B"  # dark green 
+  Central_America:       "#E5977E"  # peach
+  South_America:         "#39BF99"  # teal-green
+  South_South_America:   "#99D852"  # yellow-green  
+  Oceania:               "#D7E57E"  # light yellow-green 
   trade_today:
     surplus:            '#d94801'  # orange-red  (net exporter bubble)
     deficit:            '#045a8d'  # dark blue   (net importer bubble)
