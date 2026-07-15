@@ -372,3 +372,19 @@ colors:
   hbi_demand: '#17679E'
   hbi_supply: 'darkred'
   hbi_link: 'firebrick'
+  # Maritime chokepoint colors (mapped to geographically relevant region colors)
+  babalmandab: "#8352D8"    # Middle_East (Bab el-Mandeb)
+  bosporus: "#720B16"       # Swapped with Subsaharan_Africa
+  gibraltar: "#237F8C"      # Far_West_Europe (Strait of Gibraltar)
+  suez: "#378C23"           # North_West_Africa (Suez Canal)
+  panama: "#E5977E"         # Central_America (Panama Canal)
+  ormuz: "#590B72"          # West_Asia (Strait of Hormuz)
+  malacca: "#8C234F"        # Pacific_Asia (Strait of Malacca)
+  south_africa: "#17679E"   #  swapped with Europe
+  northwest: "#0B722B"      # North_America (Northwest Passage)
+  sunda: "#BF39B0"          # East_Asia (Sunda Strait)
+  chili: "#99D852"          # South_South_America (Drake Passage)
+  # Friendshoring bloc colors
+  bloc_1: "#17679E"         # Europe (Western bloc: Europe + Far West Europe + North America)
+  bloc_2: "#8352D8"         # Middle_East (Global South bloc)
+  bloc_3: "#BF9A39"         # East_East_Asia (East Asia + Oceania bloc)
