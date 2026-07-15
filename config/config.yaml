@@ -27,10 +27,10 @@ supply_curve:
 # Config-native trade chain definitions
 # Defines the commodity transformation chain with ordered stages and process labels
 trade_chains:
-  id: newre1206_2050
+  id: supplyconstraint
   cost_year: 2050
   final_product: steel
-  wacc: regional #regional
+  wacc: regional #regional or uniform
   labour_cost: True #Include labour cost
   tradeable_commodities: [iron_ore, hbi]
   stages:
@@ -51,9 +51,10 @@ trade_chains:
       process_label: eaf
   trade_scenarios:
     - default
-    - mga-stability-weighted
-    - mga-chokepoints
-    - mga-blocs
+    # - mga-chokepoints
+    # - mga-blocs
+    # - constrain-supply
+    # - mga-stability-weighted
 
 
 scenario: 
@@ -122,7 +123,7 @@ scenario:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03]
+        slack: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
         sense: "min"
         carrier: "hbi"
         indicator: "chokepoint"
@@ -131,7 +132,7 @@ scenario:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.0025, 0.005, 0.0075, 0.01, 0.015, 0.02, 0.025, 0.03] #[0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05] 
+        slack: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
         sense: "min"
         carrier: "hbi"
         indicator: "blocks"
@@ -140,12 +141,20 @@ scenario:
           block_1: ["Europe", "Far_West_Europe", "North_America"]
           block_2: ["Middle_East", "North_West_Africa", "Subsaharan_Africa", "Eurasia", "South_America", "South_South_America", "Central_America", "West_Asia", "East_Asia", "Pacific_Asia"]
           block_3: ["East_East_Asia", "Oceania"]
+  constrain-supply:
+      modifiers:
+        cost_penalty:
+        pareto:
+          indicator: "supply"
+          threshold_value: [100, 150, 175, 200, 250, 300, 350, 600] # Mt
+
 
 
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 200, 300, 500, 1000] # Mt/year
+steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
+
 hydrogen_storage_cost: False
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
@@ -176,6 +185,23 @@ regions:
   "Pacific_Asia": ["BRN","KHM","IDN","LAO","MYS","MMR","PNG","PHL","SGP","THA","VNM"]
   "East_East_Asia": ["JPN","KOR","PRK"]
   "Oceania": ["AUS","NZL"]
+
+region_nice_names:
+  "Europe": "Europe"
+  "Far_West_Europe": "Far West Europe"
+  "Middle_East": "Middle East"
+  "North_West_Africa": "North West Africa"
+  "Subsaharan_Africa": "Subsaharan Africa"
+  "North_America": "USA & Canada"
+  "Eurasia": "Eurasia"
+  "South_America": "South America"
+  "South_South_America": "South Cone"
+  "Central_America": "Central America"
+  "West_Asia": "South Asia"
+  "East_Asia": "East Asia (China-dominated)"
+  "Pacific_Asia": "Pacific Asia"
+  "East_East_Asia": "Japan & Korea"
+  "Oceania": "Australia & New Zealand"
 
 clustering:
   strata_bin_width:
@@ -209,7 +235,7 @@ techno-economic parameters:
     batt_standing_loss: 0.0001  # 0.01% per hour for battery (self-discharge)
 
 interest_rate: 
-  default: 0.05 # Used, if wildcard `wacc` is set to `uniform`
+  default: 0.084 # Used, if wildcard `wacc` is set to `uniform`. The value of 0.084 (8.4%) is obtained from the notebook `prepare-wacc.ipynb` and represents a global average WACC weighted by GDP.
 
 trade:
   shipping_routes:
@@ -239,7 +265,7 @@ iron_ore:
   regionalise: "grade-dependent" #"uniform" or "grade-dependent"
   marginal_cost: 97.7 #97.7 EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data).
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
-  potential_allowance: 2 # Factor, which the current iron ore production is multiplied with
+  potential_allowance: 1.2 # Factor, which the current iron ore production is multiplied with
   shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
 
 plot:
@@ -288,15 +314,14 @@ colors:
   electric arc furnace: 'orange'
   direct reduction furnace: 'grey'
   hydrogen direct iron reduction furnace: 'grey'
-  
   battery inverter: '#6A000E'
   battery inverter (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
   battery: 'purple'
   wind: 'blue'
   onshore wind: 'blue'
-  solar: 'yellow'
-  pv: 'yellow'
+  solar: '#bfbf04'
+  pv: '#bfbf04'
   electricity: 'red'
   iron ore: 'brown'
   steel: 'grey'
@@ -309,21 +334,21 @@ colors:
   HBI: darkred
   Photovoltaics: yellow
   Wind energy: blue
-  Eurasia:                 '#1A6FBF'  # mid blue (lighter than before)
-  Europe:                  '#E07B00'  # deep amber-orange
-  Far_West_Europe:         '#007A6E'  # dark teal (replaces vivid green)
-  Middle_East:             '#B5446E'  # magenta-rose (replaces brick red)
-  North_West_Africa:       '#6E3FA3'  # purple (kept, adjusted)
-  Subsaharan_Africa:       '#8B4513'  # saddle brown
-  North_America:           '#F5C518'  # yellow (kept)
-  South_America:           '#2DB3C8'  # cyan-teal (lighter, distinct from teal)
-  South_South_America:     '#F4845F'  # warm peach-orange
-  Central_America:         '#3D9970'  # muted green (darker, less vivid)
-  West_Asia:               '#2C3E50'  # blue-grey (kept, unique)
-  East_Asia:               '#A8D8A8'  # very light sage
-  Pacific_Asia:            '#C47AB0'  # pink-lavender
-  East_East_Asia:          '#0D47A1'  # deep navy (replaces dark red)
-  Oceania:                 '#546E7A'  # blue-grey slate (distinct from navy)
+  Europe:                "#17679E"  # blue
+  Far_West_Europe:       "#237F8C"  # teal-blue
+  Eurasia:               "#7E84E5"  # blue-purple
+  Middle_East:           "#8352D8"  # purple
+  West_Asia:             "#590B72"  # dark purple  
+  East_Asia:             "#BF39B0"  # magenta       
+  Pacific_Asia:          "#8C234F"  # dark magenta-red
+  East_East_Asia:        "#BF9A39"  # mustard/gold  
+  North_West_Africa:     "#378C23"  # green
+  Subsaharan_Africa:     "#720B16"  # dark red
+  North_America:         "#0B722B"  # dark green 
+  Central_America:       "#E5977E"  # peach
+  South_America:         "#39BF99"  # teal-green
+  South_South_America:   "#99D852"  # yellow-green  
+  Oceania:               "#D7E57E"  # light yellow-green 
   trade_today:
     surplus:            '#d94801'  # orange-red  (net exporter bubble)
     deficit:            '#045a8d'  # dark blue   (net importer bubble)
@@ -337,12 +362,29 @@ colors:
   iron_ore_shipping: "#6A000E"
   hbi: 'darkred'
   hbi_shipping: 'firebrick'
+  shipping: 'black'
   steel_supply: 'lightsteelblue'
   steel_demand: 'seagreen'
   steel_link: 'skyblue'
   iron_ore_supply: 'black'
-  iron_ore_demand: 'lightsteelblue'
+  iron_ore_demand: 'green'
   iron_ore_link: "#6A000E"
-  hbi_demand: 'green'
+  hbi_demand: '#17679E'
   hbi_supply: 'darkred'
   hbi_link: 'firebrick'
+  # Maritime chokepoint colors (mapped to geographically relevant region colors)
+  babalmandab: "#8352D8"    # Middle_East (Bab el-Mandeb)
+  bosporus: "#720B16"       # Swapped with Subsaharan_Africa
+  gibraltar: "#237F8C"      # Far_West_Europe (Strait of Gibraltar)
+  suez: "#378C23"           # North_West_Africa (Suez Canal)
+  panama: "#E5977E"         # Central_America (Panama Canal)
+  ormuz: "#590B72"          # West_Asia (Strait of Hormuz)
+  malacca: "#8C234F"        # Pacific_Asia (Strait of Malacca)
+  south_africa: "#17679E"   #  swapped with Europe
+  northwest: "#0B722B"      # North_America (Northwest Passage)
+  sunda: "#BF39B0"          # East_Asia (Sunda Strait)
+  chili: "#99D852"          # South_South_America (Drake Passage)
+  # Friendshoring bloc colors
+  bloc_1: "#17679E"         # Europe (Western bloc: Europe + Far West Europe + North America)
+  bloc_2: "#8352D8"         # Middle_East (Global South bloc)
+  bloc_3: "#BF9A39"         # East_East_Asia (East Asia + Oceania bloc)

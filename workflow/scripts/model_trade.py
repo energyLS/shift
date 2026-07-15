@@ -475,7 +475,7 @@ def plot_trade_network(
     n,
     product="steel",
     alpha_supply=0.7,
-    alpha_demand=1,
+    alpha_demand=0.7,
     output_path=None,
     output_path_png=None,
     region_gdf=None,
@@ -689,6 +689,74 @@ def apply_hbi_diversity_constraint(n, diversity_factor, demands):
             max_from_single_supplier,
         )
 
+    return n
+
+
+def apply_supply_constraint(n, limit_per_supplier, interone, final, is_material_chain):
+    """
+    Cap each region's interone production capacity to limit_per_supplier tonnes
+    by adjusting p_nom_max on the relevant links (material chain) or generators
+    (energy chain) in an already-built network.
+
+    Capacity steps are capped in marginal-cost order (cheapest first), mirroring
+    the merit-order logic of the supply curves.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        The built network to constrain.
+    limit_per_supplier : float
+        Maximum interone production per region in tonnes.
+    interone : str
+        Intermediate product carrier name (e.g. "hbi").
+    final : str
+        Final product carrier name (e.g. "steel").
+    is_material_chain : bool
+        True for ore→interone→final chains; False for direct energy chains.
+
+    Returns
+    -------
+    pypsa.Network
+        The network with adjusted p_nom_max values.
+    """
+    if is_material_chain:
+        ore_ratio = snakemake.config["iron_ore"]["ore_to_steel_ratio"]
+        supply_links = n.links[
+            (n.links.carrier == interone) & n.links.bus1.str.endswith(f"_{interone}")
+        ]
+        for _region_bus, group in supply_links.groupby("bus1"):
+            group_sorted = group.sort_values("marginal_cost")
+            running = 0.0  # cumulative interone capacity (t)
+            for link_name in group_sorted.index:
+                cap_ore = n.links.at[link_name, "p_nom_max"]
+                cap_interone = cap_ore / ore_ratio
+                if running >= limit_per_supplier:
+                    n.links.at[link_name, "p_nom_max"] = 0.0
+                elif running + cap_interone <= limit_per_supplier:
+                    running += cap_interone
+                else:
+                    remaining = limit_per_supplier - running
+                    n.links.at[link_name, "p_nom_max"] = remaining * ore_ratio
+                    running = limit_per_supplier
+    else:
+        supply_gens = n.generators[n.generators.carrier == final]
+        for _region_bus, group in supply_gens.groupby("bus"):
+            group_sorted = group.sort_values("marginal_cost")
+            running = 0.0
+            for gen_name in group_sorted.index:
+                cap = n.generators.at[gen_name, "p_nom_max"]
+                if running >= limit_per_supplier:
+                    n.generators.at[gen_name, "p_nom_max"] = 0.0
+                elif running + cap <= limit_per_supplier:
+                    running += cap
+                else:
+                    remaining = limit_per_supplier - running
+                    n.generators.at[gen_name, "p_nom_max"] = remaining
+                    running = limit_per_supplier
+
+    logger.info(
+        "Supply constraint applied: %.0f Mt per region", limit_per_supplier / 1e6
+    )
     return n
 
 
@@ -1095,6 +1163,88 @@ def solve_network(n, mga=None, indicators=None):
     return (optimal_network, nc)
 
 
+def solve_pareto(n, pareto_config, interone, final, is_material_chain):
+    """
+    Solve the network for each supply-limit threshold in pareto_config, building
+    the Pareto front of cost vs. per-region supply cap.
+
+    An unconstrained solve is run first (key=None) as the reference point, then
+    one constrained solve per threshold value via apply_supply_constraint.
+
+    Parameters
+    ----------
+    n : pypsa.Network
+        The built (unsolved) network.
+    pareto_config : dict
+        Config dict with key ``threshold_value`` (list of Mt values,
+        e.g. [100, 500, 1000]).
+    interone : str
+        Intermediate product carrier name (e.g. "hbi").
+    final : str
+        Final product carrier name (e.g. "steel").
+    is_material_chain : bool
+        True for ore→interone→final chains; False for direct energy chains.
+
+    Returns
+    -------
+    tuple(pypsa.Network, pypsa.NetworkCollection)
+        (optimal_network, NetworkCollection) where NetworkCollection contains
+        the unconstrained solution (key=None) and one entry per threshold value
+        (key = Mt limit as provided in config).
+    """
+    solver_name = snakemake.config["solver"]["name"]
+    options = snakemake.config["solver_options"][snakemake.config["solver"]["options"]]
+    threshold_values = pareto_config["threshold_value"]
+
+    # Solve unconstrained reference
+    logger.info("Solving unconstrained reference network for Pareto front")
+    n.optimize(n.snapshots, solver_name=solver_name, solver_options=options)
+
+    try:
+        if hasattr(n, "model") and getattr(n.model, "solver_model", None) is not None:
+            n.model.solver_model = None
+    except Exception as e:
+        logger.warning(f"Warning clearing solver model before copying network: {e}")
+
+    optimal_network = n.copy()
+    networks = {None: optimal_network}
+
+    for limit_mt in threshold_values:
+        limit_t = float(limit_mt) * 1e6
+        logger.info(f"\n--- Pareto: solving with supply limit = {limit_mt} Mt ---")
+
+        n_copy = n.copy()
+        apply_supply_constraint(n_copy, limit_t, interone, final, is_material_chain)
+        n_copy.optimize(
+            n_copy.snapshots, solver_name=solver_name, solver_options=options
+        )
+
+        try:
+            if (
+                hasattr(n_copy, "model")
+                and getattr(n_copy.model, "solver_model", None) is not None
+            ):
+                n_copy.model.solver_model = None
+        except Exception as e:
+            logger.warning(
+                f"Warning clearing solver model for limit {limit_mt} Mt: {e}"
+            )
+
+        tsc = (
+            pd.concat([n_copy.statistics.capex(), n_copy.statistics.opex()], axis=1)
+            .sum(axis=1)
+            .div(1e9)
+        )
+        logger.info(
+            f"Pareto limit {limit_mt} Mt: total system cost = {tsc.sum():.2f} B\u20ac"
+        )
+
+        networks[limit_mt] = n_copy
+
+    nc = pypsa.NetworkCollection(networks)
+    return (optimal_network, nc)
+
+
 if __name__ == "__main__":
     if snakemake is None:
         from _helpers import mock_snakemake
@@ -1105,9 +1255,9 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf",
             final="steel",
-            scenario="mga-blocs",
+            scenario="constrain-supply",
             wacc="regional",
-            chain_id="newre1206_2050",
+            chain_id="supplyconstraint",
         )
 
     final = snakemake.wildcards["final"]
@@ -1125,6 +1275,7 @@ if __name__ == "__main__":
     interone = next(c for c in tradeable if c != "iron_ore")
     stages = trade_chain["stages"]
     intertwo = stages[max(stages.keys())]["process_label"]
+    is_material_chain = "iron_ore" in tradeable
 
     logger.info(
         "intermediate 1 (%s) and intermediate 2 (%s) to final product %s",
@@ -1226,6 +1377,15 @@ if __name__ == "__main__":
     else:
         logger.info("HBI diversity constraint disabled")
 
+    # Pareto supply constraint
+    pareto = snakemake.config["scenario"][scenario]["modifiers"].get("pareto")
+    if pareto is not None:
+        logger.info(
+            f"Pareto supply constraint activated with thresholds {pareto['threshold_value']} Mt"
+        )
+    else:
+        logger.info("Pareto supply constraint not activated")
+
     # MGA
     if "mga" not in snakemake.config["scenario"][scenario]["modifiers"].keys():
         mga = None
@@ -1236,7 +1396,12 @@ if __name__ == "__main__":
 
     # solving model
     logger.info("solving model")
-    result = solve_network(n, mga=mga, indicators=indicators if indicators else None)
+    if pareto is not None:
+        result = solve_pareto(n, pareto, interone, final, is_material_chain)
+    else:
+        result = solve_network(
+            n, mga=mga, indicators=indicators if indicators else None
+        )
     logger.info("network was solved")
 
     # Export result: always a tuple (optimal_network, NetworkCollection)
