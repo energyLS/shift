@@ -103,8 +103,7 @@ It can also be reconciled with scenarios for demand, policy constraints, and inf
 
 Thanks to:
 - Oda Agdal and her Master's Thesis on the [Investigation of Future Global Trade of Hydrogen from Renewable Energy Sources](https://ntnuopen.ntnu.no/ntnu-xmlui/handle/11250/3031513)
-- TRACE?
-- PYPSA-earth?
+- Johannes Hampp and [TRACE](https://github.com/euronion/trace)
 
 
 ## Licence
