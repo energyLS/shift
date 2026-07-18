@@ -91,6 +91,7 @@ rule plot_mga:
         network_pareto_supply = "results/chain_id~{trade_chain}/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~constrain-supply/network.nc",
         political_stability = "resources/political_stability_clustered.csv",
         trade_options_chokepoints = "resources/trade_opt_chokepoints.csv",
+        steel_demand = "resources/steel_demand_clustered_2050.csv",
     output:
         mga_plot = "results/figures_general/mga/chain_id~{trade_chain}/wacc~{wacc}/mga_analysis.pdf",
         mga_plot_png = "results/figures_general/mga/chain_id~{trade_chain}/wacc~{wacc}/mga_analysis.png",
