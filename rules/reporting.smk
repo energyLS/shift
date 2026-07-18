@@ -144,9 +144,9 @@ rule plot_global_supply_all:
 
 rule plot_comparison:
     input:
-        default = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
-        stability = "results/chain_id~labour_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-stability-weighted/network_0.02.nc",
-        hightrans = "results/chain_id~hightrans_2050/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
+        default = "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
+        constraint100 = "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~constrain-supply/network_100.0.nc",
+        hightrans = "results/chain_id~hightrans/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/network.nc",
     output:
         cost_comparison="results/figures_general/comparison/cost_comparison.pdf",
         cost_comparison_png="results/figures_general/comparison/cost_comparison.png",
