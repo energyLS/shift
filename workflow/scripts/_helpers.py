@@ -1,35 +1,78 @@
-import calendar
-import io
 import logging
-import os
-import shutil
-import subprocess
-import sys
-import time
-import zipfile
-from datetime import datetime, timedelta
 from pathlib import Path
 
-import country_converter as coco
-import geopandas as gpd
-import numpy as np
-import pandas as pd
 import requests
 import yaml
 
 # from fake_useragent import UserAgent
 # from pypsa.components import component_attrs, components
-from shapely.geometry import Point
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
+
+def setup_logging(
+    name: str,
+    snakemake=None,
+    level: int = logging.INFO,
+    log_filename: str | None = None,
+) -> logging.Logger:
+    """Configure a module logger with shared package conventions.
+
+    Parameters
+    ----------
+    name : str
+        Logger name, usually `__name__`.
+    snakemake : object, optional
+        Snakemake object. If it provides `log`, a file handler is added.
+    level : int
+        Logging level for the logger and handlers.
+    log_filename : str, optional
+        Fallback filename used when `snakemake.log` is unavailable.
+
+    Returns
+    -------
+    logging.Logger
+        Configured logger instance.
+    """
+    log = logging.getLogger(name)
+    log.setLevel(level)
+
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+
+    if not any(getattr(h, "_shift_console_handler", False) for h in log.handlers):
+        stream_handler = logging.StreamHandler()
+        stream_handler.setLevel(level)
+        stream_handler.setFormatter(formatter)
+        stream_handler._shift_console_handler = True  # type: ignore[attr-defined]
+        log.addHandler(stream_handler)
+
+    log_path = None
+    if snakemake is not None and getattr(snakemake, "log", None):
+        log_path = Path(snakemake.log[0])
+    elif log_filename is not None:
+        log_path = Path("../logs") / log_filename
+
+    if log_path is not None and not any(
+        getattr(h, "baseFilename", None) == str(log_path) for h in log.handlers
+    ):
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        file_handler._shift_file_handler = True  # type: ignore[attr-defined]
+        log.addHandler(file_handler)
+
+    return log
+
 
 def load_config(config):
     with open(config, "r") as stream:
         try:
             config = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
-            print(exc)
+            logger.exception("Failed to load config %s", config)
+            raise exc
     return config
 
 
@@ -79,7 +122,7 @@ def mock_snakemake(
 
     script_dir = Path(__file__).parent.resolve()
     if root_dir is None:
-        root_dir = script_dir.parent
+        root_dir = script_dir.parent.parent
     else:
         root_dir = Path(root_dir).resolve()
 

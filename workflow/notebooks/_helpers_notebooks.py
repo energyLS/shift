@@ -1,28 +1,16 @@
-import calendar
-import io
 import logging
 import os
-import shutil
-import subprocess
-import sys
-import time
-import zipfile
-from datetime import datetime, timedelta
 from pathlib import Path
 
-import country_converter as coco
-import geopandas as gpd
-import numpy as np
-import pandas as pd
 import requests
 import yaml
 
 # from fake_useragent import UserAgent
 # from pypsa.components import component_attrs, components
-from shapely.geometry import Point
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
+
 
 def load_config(config):
     with open(config, "r") as stream:
@@ -62,7 +50,6 @@ def mock_snakemake(
         keyword arguments fixing the wildcards. Only necessary if wildcards are
         needed.
     """
-    import os
 
     import snakemake as sm
     from pypsa.definitions.structures import Dict
@@ -79,7 +66,7 @@ def mock_snakemake(
 
     script_dir = Path(__file__).parent.resolve()
     if root_dir is None:
-        root_dir = script_dir.parent
+        root_dir = script_dir.parent.parent
     else:
         root_dir = Path(root_dir).resolve()
 

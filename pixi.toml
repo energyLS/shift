@@ -2,44 +2,73 @@
 authors = ["energyls <leon1.schumm@oth-regensburg.de>"]
 channels = ["conda-forge", "bioconda", "gurobi"]
 name = "shift"
-platforms = ["linux-64"]
+description = "Techno-economic optimization of global iron and steel supply chains under decarbonization"
+platforms = ["linux-64", "win-64"]
 version = "0.1.0"
 
 [tasks]
 
 [dependencies]
-
-
-python = ">=3.11,<3.14"
+atlite = ">=0.3,!=0.5.0"
+cartopy = ">=0.25.0"
+geojson = ">=3.2.0"
+geohash2 = "*"
+geopandas = ">=1"
+geopy = ">=2.4.1"
+joblib = ">=1.3.0"
+jupyter = ">=1.0"
+libgdal-netcdf = ">=3.10.3"
+linopy = ">=0.6.1"
+matplotlib = ">=3.10.7"
+netcdf4 = ">=1.7.2,!=1.7.4"
+networkx = ">=3.5"
+numpy = ">=1.26.4"
+pandas = ">=2.1"
+pycountry = ">=24.6.1"
 pypsa = ">=1.1.2"
-pandas = ">=2.0"
-numpy = ">=1.24"
-matplotlib = ">=3.5"
-seaborn = ">=0.13"
-xarray = "==2025.6.1"
-netcdf4 = ">=1.6"
-cartopy = ">=0.23"
-geopandas = ">=0.13"
-pyproj = ">=3.0"
-pyyaml = ">=6.0"
-requests = ">=2.25"
+python = ">=3.10"
+pyyaml = "*"
+scipy = ">=1.16.3"
+scikit-learn = ">=1.0"
+kmedoids = "*"
+seaborn = ">=0.13.2"
 searoute = ">=1.5.0"
-tqdm = ">=4.64"
-country_converter = ">=0.7"
-linopy = ">=0.3"
-gurobi = ">=12.0.3"
-# gurobipy = "*" # Gurobi is required by some solver calls; version managed via gurobi channel/license
-snakemake-executor-plugin-cluster-generic = ">=1.0.9"
-snakemake-executor-plugin-slurm = ">=1.9.2"
+shapely = ">=2.1.2,<3"
 snakemake-minimal = "==9.6.2"
 snakemake-storage-plugin-http = ">=0.3"
-snakemake-storage-plugin-cached-http = ">=0.1.0"
-pycountry = ">=24.6.1"
-# Further requirements
-ipykernel = ">=7.0.0"
-coincbc = "*"
-shapely = ">=2.1.2,<3"
-openpyxl = ">=3.1.5"
+tqdm = "*"
+xarray = ">=2026.0.0"
 
 [pypi-dependencies]
-wbdata = ">=0.3.0"
+# pip-installable packages (always included)
+gurobipy = "*"
+wbdata = ">=1.1.0"
+
+[feature.test.dependencies]
+pytest = "*"
+pytest-cov = "*"
+
+[feature.test.tasks]
+unit-tests = "pytest tests"
+
+[feature.dev.dependencies]
+ruff = "*"
+pre-commit = "*"
+pylint = "*"
+ipykernel = "*"
+ipython = "*"
+nbqa = "*"
+
+[environments]
+default = { features = [], solve-group = "default" }
+test = { features = ["test"], solve-group = "default" }
+dev = { features = ["dev", "test"], solve-group = "default" }
+
+[tool.ruff]
+# Ruff linter configuration
+line-length = 88
+target-version = "py310"
+exclude = ["**/*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]  # Basic style, logical and import checks

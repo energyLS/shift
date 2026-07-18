@@ -1,0 +1,94 @@
+"""Root Snakemake entrypoint for the Shift workflow.
+
+Loads shared configuration and includes the modular rule files for supply curves,
+trade optimization, and reporting.
+"""
+
+from pathlib import Path
+from shutil import copyfile
+import sys
+
+import pandas as pd
+from snakemake.utils import Paramspace
+
+
+WORKFLOW_DIR = Path(workflow.basedir) / "workflow"
+SCRIPT_DIR = WORKFLOW_DIR / "scripts"
+NOTEBOOKS_DIR = WORKFLOW_DIR / "notebooks"
+# DATA_
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+if str(NOTEBOOKS_DIR) not in sys.path:
+    sys.path.insert(0, str(NOTEBOOKS_DIR))
+
+from trade_chain_utils import (  # noqa: E402
+    derive_supply_curve_products,
+    get_ordered_stages,
+    get_stage_groups,
+    get_trade_chain,
+)
+
+
+configfile: "config/config.yaml"
+
+
+def _load_trade_scenarios():
+    trade_chains = config.get("trade_chains")
+    if trade_chains:
+        rows = []
+        chain = get_trade_chain(config)
+        stages_sorted = get_ordered_stages(chain)
+        if len(stages_sorted) < 2:
+            raise ValueError(
+                f"Trade chain '{chain.get('id', '<unnamed>')}' needs at least 2 stages"
+            )
+        stage_groups = get_stage_groups(chain)
+        if not stage_groups:
+            raise ValueError(
+                f"Trade chain '{chain.get('id', '<unnamed>')}' produced no stage groups"
+            )
+        scenarios = chain.get("trade_scenarios", "default")
+        if isinstance(scenarios, str):
+            scenarios = [scenarios]
+        for scenario in scenarios:
+            rows.append(
+                {
+                    "chain_id": str(chain.get("id", "default")),
+                    "cost_year": str(chain.get("cost_year", 2050)),
+                    "interone": str(stage_groups[0]["label"]),
+                    "intertwo": str(
+                        stages_sorted[-1].get(
+                            "process_label", stages_sorted[-1]["output_commodity"]
+                        )
+                    ),
+                    "wacc": str(chain.get("wacc", "regional")),
+                    "final": str(chain.get("final_product", "steel")),
+                    "scenario": str(scenario),
+                }
+            )
+        return Paramspace(pd.DataFrame(rows, dtype=str))
+
+    return Paramspace(pd.read_csv("config/trade_scenarios.csv", dtype=str))
+
+
+trade_scenarios = _load_trade_scenarios()
+
+
+def _derive_supply_curve_products():
+    return derive_supply_curve_products(config)
+
+
+SUPPLY_CURVE_PRODUCTS = _derive_supply_curve_products()
+
+
+wildcard_constraints:
+    country="[a-zA-Z]+",
+    sweep="[a-zA-Z]+",
+    rule="(0|[1-9][0-9]?|100)",
+
+
+include: "rules/supply_curves.smk"
+include: "rules/preparation.smk"
+include: "rules/trade_model.smk"
+include: "rules/reporting.smk"
