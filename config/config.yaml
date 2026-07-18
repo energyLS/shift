@@ -3,6 +3,8 @@ enable:
   run_supply_curve: False # Enable for first run
   cluster_renewables: False # Enable for first run
 
+run:
+  disable_progressbar: false
 
 # Output toggles for Step 0/1 (greenfield supply curve generation)
 outputs:
@@ -51,9 +53,9 @@ trade_chains:
       process_label: eaf
   trade_scenarios:
     - default
-    # - mga-chokepoints
-    # - mga-blocs
-    # - constrain-supply
+    - mga-chokepoints
+    - mga-blocs
+    - constrain-supply
     # - mga-stability-weighted
 
 
@@ -61,23 +63,11 @@ scenario:
   default:
     modifiers:
       cost_penalty:
-  penalty-nwa:
+  penalty-nwa: # Scenario to demonstrate cost penalty functionality
     modifiers:
       cost_penalty:
         North_West_Africa: 1.1
-  penalty-ea:
-    modifiers:
-      cost_penalty:
-        Eurasia: 1.1
-  penalty-sa:
-    modifiers:
-      cost_penalty:
-        South_America: 0.7
-  penalty-oc:
-    modifiers:
-      cost_penalty:
-        Oceania: 0.8
-  mga-eur-nwa-2:
+  mga-eur-nwa-2: # Scenario to demonstrate MGA functionality with two regions (Europe and North West Africa)
     modifiers:
       cost_penalty:
       mga:
@@ -86,14 +76,6 @@ scenario:
         carrier: "hbi"
         export: "North_West_Africa"
         import: "Europe"
-  mga-nwa-iso:
-    modifiers:
-      cost_penalty:
-      mga:
-        slack: 0.01
-        sense: "min"
-        carrier: "hbi"
-        export: "North_West_Africa"
   mga-stability:
     modifiers:
       cost_penalty:
@@ -155,18 +137,9 @@ scenario:
 # Values represent different production scales
 steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
 
-hydrogen_storage_cost: False
-
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 
-run:
-  # prefix: ""
-  # name: ""
-  # scenarios:
-  #   enable: false
-  #   file: config/scenarios.yaml
-  disable_progressbar: false
 
 # Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
@@ -219,8 +192,8 @@ clustering:
     max_clusters: 50
 
 design:
-  cost_penalty:
-    # North_West_Africa: 1.1 # Relative cost pentalty on all technlogies in this region. 1: no change
+  cost_penalty: # Feature to impose cost penalties. Should not be enabled for standard runs
+    # North_West_Africa: 1.1 # Relative cost pentalty on all technologies in this region. 1: no change
     # Eurasia: 1.1
     # South_America: 0.7
     # Oceania: 0.8
@@ -251,8 +224,7 @@ trade:
     nm_to_km: 1.852  # 1 nautical mile equals 1.852 kilometers
   
 grid_electricity:
-  marginal_cost: 80 # EUR/MWh, guesstimate for average grid electricity cost in 2030
-  capital_cost: 0 # EUR/MW, guesstimate for average grid electricity cost in 2030
+  marginal_cost: 80 # EUR/MWh, estimate for average grid electricity cost in 2050, based on doi.org/10.1016/j.apenergy.2025.126189 (higher end of Table D3)
   grid_potential_custom: true # Use custom grid potential for eaf-grid from data/grid_potential_custom.csv in Mt steel
 
 part_load:
@@ -263,10 +235,9 @@ part_load:
 
 iron_ore:
   regionalise: "grade-dependent" #"uniform" or "grade-dependent"
-  marginal_cost: 97.7 #97.7 EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data).
+  marginal_cost: 97.7 #97.7 EUR/t_ore # See https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   ore_to_steel_ratio: 1.59 # t_ore/t_steel, see https://www.nature.com/articles/s41467-025-60652-1 from mission possible steel model (see also technology-data)
   potential_allowance: 1.2 # Factor, which the current iron ore production is multiplied with
-  shipping_cost_per_km: 0.005 # €/(t*km) # Guesstimate
 
 plot:
   world_map:
@@ -384,7 +355,7 @@ colors:
   northwest: "#0B722B"      # North_America (Northwest Passage)
   sunda: "#BF39B0"          # East_Asia (Sunda Strait)
   chili: "#99D852"          # South_South_America (Drake Passage)
-  # Friendshoring bloc colors
+  # Friendshoring colors
   bloc_1: "#17679E"         # Europe (Western bloc: Europe + Far West Europe + North America)
   bloc_2: "#8352D8"         # Middle_East (Global South bloc)
   bloc_3: "#BF9A39"         # East_East_Asia (East Asia + Oceania bloc)
