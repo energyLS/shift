@@ -131,6 +131,7 @@ rule plot_global_supply:
             "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv",
             allow_missing=True, region=config["regions"]),
         steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
+        population="data/owid-population/population.csv",
     output:
         network_curve="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.pdf",
         network_curve_png="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.png",
@@ -152,6 +153,23 @@ rule plot_comparison:
         cost_comparison_png="results/figures_general/comparison/cost_comparison.png",
     notebook:
         str(NOTEBOOKS_DIR / "compare-scenarios.ipynb")
+
+
+rule plot_magnitude_pull:
+    input:
+        steel_production = "resources/steel_production.csv",
+        supply_curves_interone = expand("resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv", allow_missing=True, region=config["regions"]),
+        steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
+        population="data/owid-population/population.csv",
+    output:
+        magnitude_pull="results/figures_general/pull/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/magnitude_pull_{interone}.pdf",
+        magnitude_pull_png="results/figures_general/pull/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/magnitude_pull_{interone}.png",
+    notebook:
+        str(NOTEBOOKS_DIR / "plot-magnitude-pull.ipynb")
+
+rule plot_magnitude_pull_all:
+        input:
+            expand("results/figures_general/pull/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/magnitude_pull_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=["regional", "uniform"], interone=["hbi"], scenario=["default"], allow_missing=True)
 
 
 # Variables captured by the plot_compare_lcox input lambda (avoids two-argument lambda)
