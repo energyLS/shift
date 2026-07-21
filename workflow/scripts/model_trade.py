@@ -20,6 +20,41 @@ logger = setup_logging(__name__, snakemake=snakemake, log_filename="model_trade.
 plt.style.use("bmh")
 
 
+def add_link_cost_column(df, quantity_col, cost_col, link_cost_col):
+    """
+    Convert cumulative quantity / average cost data into stepwise link costs.
+
+    Example:
+    - 50 Mt at 500 EUR/t
+    - 100 Mt at 1000 EUR/t
+
+    becomes:
+    - first 50 Mt at 500 EUR/t
+    - next 50 Mt at 1500 EUR/t
+    """
+
+    df = df.copy()
+
+    quantity = df[quantity_col].astype(float)
+    average_cost = df[cost_col].astype(float)
+
+    previous_quantity = quantity.shift(fill_value=0.0)
+    total_cost = quantity * average_cost
+    previous_total_cost = total_cost.shift(fill_value=0.0)
+
+    incremental_quantity = quantity - previous_quantity
+    incremental_total_cost = total_cost - previous_total_cost
+
+    if (incremental_quantity <= 0).any():
+        raise ValueError(
+            f"Column '{quantity_col}' must be strictly increasing to derive link_cost."
+        )
+
+    df[link_cost_col] = incremental_total_cost / incremental_quantity
+
+    return df
+
+
 def build_region_geodataframe(config):
     """
     Build a dissolved GeoDataFrame of model regions from the config country lists.
@@ -110,11 +145,23 @@ def building_model(
             .dropna(subset=[f"{cost_descriptor} [EUR/{unit}]"])
             .reset_index(drop=True)
         )  # Filter out rows where "lcox [EUR/t]" is NaN
+        region_data_interone = add_link_cost_column(
+            region_data_interone,
+            quantity_col=f"demand [{unit}]",
+            cost_col=f"{cost_descriptor} [EUR/{unit}]",
+            link_cost_col=f"link_cost [EUR/{unit}]",
+        )
         region_data_intertwo = (
             pd.read_csv(region_file_intertwo, header=0)
             .dropna(subset=[f"{cost_descriptor} [EUR/{unit}]"])
             .reset_index(drop=True)
         )  # Filter out rows where "lcox [EUR/t]" is NaN
+        region_data_intertwo = add_link_cost_column(
+            region_data_intertwo,
+            quantity_col=f"demand [{unit}]",
+            cost_col=f"{cost_descriptor} [EUR/{unit}]",
+            link_cost_col=f"link_cost [EUR/{unit}]",
+        )
 
         region_name = os.path.basename(region_file_interone).rsplit(
             "_marginal_cost_", 1
@@ -190,7 +237,7 @@ def building_model(
                     region_data_interone[f"demand [{unit}]"][s]
                 ) - float(region_data_interone[f"demand [{unit}]"][s - 1])
 
-            m_cost = float(region_data_interone[f"{cost_descriptor} [EUR/{unit}]"][s])
+            m_cost = float(region_data_interone[f"link_cost [EUR/{unit}]"][s])
 
             if not is_material_chain:
                 # Pure energy chain (e.g. hydrogen): Generator directly on final bus
@@ -249,9 +296,7 @@ def building_model(
                         region_data_intertwo
                     )  # split evenly across supply steps
 
-                m_cost = float(
-                    region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
-                )
+                m_cost = float(region_data_intertwo[f"link_cost [EUR/{unit}]"][s])
 
                 n.add(
                     "Link",
@@ -555,6 +600,7 @@ def plot_trade_network(
         bus_colors=supply_color,
         bus_alpha=alpha_supply,
         link_widths=trade * plot_config["link_width"],
+        link_alpha=0.7,
         branch_components=["Link"],
         link_colors=link_colors,
         geomap=False,
@@ -1255,7 +1301,7 @@ if __name__ == "__main__":
             interone="hbi",
             intertwo="eaf",
             final="steel",
-            scenario="constrain-supply",
+            scenario="default",
             wacc="regional",
             chain_id="supplyconstraint",
         )
