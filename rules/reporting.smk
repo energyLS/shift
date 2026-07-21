@@ -157,7 +157,7 @@ rule plot_comparison:
 
 rule plot_magnitude_pull:
     input:
-        steel_production = "resources/steel_production.csv",
+        steel_production = "data/brownfield-steel/country_crude_steel_production_population_per_capita_2024.csv",
         supply_curves_interone = expand("resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv", allow_missing=True, region=config["regions"]),
         steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
         population="data/owid-population/population.csv",
