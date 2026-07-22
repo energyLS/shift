@@ -171,7 +171,7 @@ region_nice_names:
   "South_South_America": "South Cone"
   "Central_America": "Central America"
   "West_Asia": "South Asia"
-  "East_Asia": "East Asia (China-dominated)"
+  "East_Asia": "China, Mongolia, TWN & HKG" #East Asia (China-dominated)"
   "Pacific_Asia": "Pacific Asia"
   "East_East_Asia": "Japan & Korea"
   "Oceania": "Australia & New Zealand"
