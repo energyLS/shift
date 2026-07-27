@@ -189,9 +189,9 @@ rule plot_magnitude_pull_all:
 
 rule plot_robust_map:
     input:
-        chokepoints="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-chokepoints/map_hbi_0.002.nc",
-        blocs="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-blocs/map_hbi_0.001.nc",
-        constrain_supply="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~constrain-supply/map_hbi_250.nc",
+        chokepoints="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-chokepoints/network_0.002.nc",
+        blocs="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-blocs/network_0.001.nc",
+        constrain_supply="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~constrain-supply/network_250.0.nc",
     output:
         robust_map_pdf="results/figures_general/mga/map_robust.pdf",
         robust_map_png="results/figures_general/mga/map_robust.png",
