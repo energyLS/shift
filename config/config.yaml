@@ -1,7 +1,7 @@
 enable:
-  run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
-  cluster_renewables: False # Enable for first run
+  run_supply_chain: True # Enable for first run
+  run_supply_curve: True # Enable for first run
+  cluster_renewables: False # Renewable clustering already done for these regions
 
 run:
   disable_progressbar: false
@@ -30,7 +30,7 @@ supply_curve:
 # Defines the commodity transformation chain with ordered stages and process labels
 trade_chains:
   id: supplyconstraint
-  cost_year: 2050
+  cost_year: 2030
   final_product: steel
   wacc: regional #regional or uniform
   labour_cost: True #Include labour cost
@@ -143,21 +143,33 @@ embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 
 # Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
-  "Europe": ["ALB","AUT","BLR","BEL","BIH","BGR","HRV","CYP","CZE","DNK","EST","FIN","DEU","GRC","HUN","ITA","XKX","LVA","LTU","LUX","MKD","MDA","MNE","NLD","NOR","POL","ROU","SRB","SVK","SVN","SWE","CHE","TUR","UKR"]
-  "Far_West_Europe": ["FRA","GRL","ISL","IRL","PRT","ESP","GBR"]
-  "Middle_East": ["BHR","IRN","IRQ","ISR","JOR","KWT","LBN","OMN","PSE","QAT","SAU","SYR","ARE","YEM"]
-  "North_West_Africa": ["BEN","BFA","CIV","GMB","GHA","GIN","GNB","LBR","NGA","SEN","SLE","TGO","DZA","TCD","EGY","ERI","LBY","MLI","MRT","MAR","NER","SDN","TUN","ESH"]
-  "Subsaharan_Africa": ["AGO","BWA","BDI","CMR","CAF","COD","ETH","KEN","GAB","MDG","MWI","MOZ","NAM","COG","RWA","SOM","ZAF","SSD","TZA","UGA","ZMB","ZWE"]
-  "North_America": ["CAN","USA"]
-  "Eurasia": ["ARM","AZE","GEO","KAZ","KGZ","TJK","TKM","UZB","RUS"]
-  "South_America": ["BOL","BRA","COL","ECU","GUF","GUY","PRY","PER","SUR","VEN"]
-  "South_South_America": ["ARG","CHL","URY"]
-  "Central_America": ["CRI","SLV","GTM","HND","MEX","NIC","PAN","CUB","DOM","JAM","HTI"]
-  "West_Asia": ["AFG","BGD","BTN","IND","NPL","PAK","LKA"]
-  "East_Asia": ["CHN","HKG","MNG","TWN"]
-  "Pacific_Asia": ["BRN","KHM","IDN","LAO","MYS","MMR","PNG","PHL","SGP","THA","VNM"]
-  "East_East_Asia": ["JPN","KOR","PRK"]
-  "Oceania": ["AUS","NZL"]
+  "BRA": ["BRA"]
+  "CAM": ["ABW", "AIA", "ATG", "BES", "BHS", "BLM", "BLZ", "BMU", "BRB", "CRI", "CUB", "CUW", "CYM", "DMA", "DOM", "GLP", "GRD", "GTM", "HND", "HTI", "JAM", "KNA", "LCA", "MAF", "MSR", "MTQ", "NIC", "PAN", "PRI", "SLV", "SXM", "TCA", "TTO", "VCT", "VGB", "VIR"]
+  "CAN": ["CAN", "SPM"]
+  "CHA": ["CHN", "HKG", "MAC", "PRK", "TWN"]
+  "EAF": ["BDI", "DJI", "ETH", "KEN", "RWA", "SOM", "SSD", "TZA", "UGA"]
+  "EUR": ["ALA", "AUT", "BEL", "BGR", "CYP", "CZE", "DEU", "DNK", "ESP", "EST", "FIN", "FRA", "GRC", "HRV", "HUN", "IRL", "ITA", "LTU", "LUX", "LVA", "MLT", "NLD", "POL", "PRT", "ROU", "SVK", "SVN", "SWE"]
+  "GCC": ["ARE", "BHR", "KWT", "OMN", "QAT", "SAU"]
+  "IDN": ["IDN"]
+  "IND": ["IND"]
+  "JPN": ["JPN"]
+  "KOR": ["KOR"]
+  "MEX": ["MEX"]
+  "NAC": ["DZA", "EGY", "ESH", "LBY", "MAR", "SDN", "TUN"]
+  "NEU": ["ALB", "AND", "BIH", "CHE", "FRO", "GBR", "GGY", "GIB", "GRL", "IMN", "ISL", "JEY", "LIE", "MCO", "MKD", "MNE", "NOR", "SJM", "SMR", "SRB", "VAT"]
+  "OZE": ["ASM", "ATF", "AUS", "CCK", "COK", "CXR", "FJI", "FSM", "GUM", "HMD", "IOT", "KIR", "MDV", "MHL", "MNP", "NCL", "NFK", "NIU", "NRU", "NZL", "PCN", "PLW", "PYF", "SLB", "TKL", "TLS", "TON", "TUV", "UMI", "VUT", "WLF", "WSM"]
+  "REF": ["ARM", "AZE", "GEO", "KAZ", "KGZ", "MDA", "MNG", "TJK", "TKM", "UZB"]
+  "RME": ["IRN", "IRQ", "ISR", "JOR", "LBN", "PSE", "SYR", "YEM"]
+  "RUS": ["BLR", "RUS"]
+  "SAF": ["AGO", "BWA", "CAF", "CMR", "COD", "COG", "COM", "GAB", "GNQ", "LSO", "MDG", "MOZ", "MUS", "MWI", "MYT", "NAM", "REU", "SHN", "STP", "SWZ", "SYC", "ZAF", "ZMB", "ZWE"]
+  "SAM": ["BOL", "COL", "ECU", "FLK", "GUF", "GUY", "PER", "PRY", "SGS", "SUR", "VEN"]
+  "SEA": ["BRN", "KHM", "LAO", "MMR", "MYS", "PHL", "PNG", "SGP", "THA", "VNM"]
+  "SSM": ["ARG", "ATA", "BVT", "CHL", "URY"]
+  "TUR": ["TUR"]
+  "UKR": ["UKR"]
+  "USA": ["USA"]
+  "WAS": ["AFG", "BGD", "BTN", "LKA", "NPL", "PAK"]
+  "WSA": ["BEN", "BFA", "CIV", "CPV", "ERI", "GHA", "GIN", "GMB", "GNB", "LBR", "MLI", "MRT", "NER", "NGA", "SEN", "SLE", "TCD", "TGO"]
 
 region_nice_names:
   "Europe": "Europe"
