@@ -5,6 +5,8 @@ main optimization workflow.
 """
 
 rule plot_regions:
+    params:
+        region_nice_names=config["region_nice_names"],
     output:
         global_map_countries = "results/figures_general/global_map_countries.pdf", #workflow/notebooks/plot_countries.ipynb
         global_map_countries_png = "results/figures_general/global_map_countries.png", #workflow/notebooks/plot_countries.ipynb
@@ -56,6 +58,11 @@ rule get_figures:
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/uniform/default/global_supply_curve_cost_global_hbi.pdf",
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_average_hbi.pdf",
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_global_hbi.pdf",
+        "results/figures_general/pull/chain_id~supplyconstraint/cost_year~2050/regional/default/magnitude_pull_hbi.pdf",
+        # Supplementary
+        "results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
+        "results/figures_general/trade-today/DRI-HBI_net_flow.pdf",
+        "results/figures_general/trade-today/Steel_net_flow.pdf",
         ]
     output:
         [
@@ -75,6 +82,10 @@ rule get_figures:
         "results/figures_streamlined/supply-unsorted-homo.pdf",
         "results/figures_streamlined/supply-sorted-hetero.pdf",
         "results/figures_streamlined/supply-unsorted-hetero.pdf",
+        "results/figures_streamlined/magnitude-pull.pdf",
+        "results/figures_streamlined/today-ironore.pdf",
+        "results/figures_streamlined/today-dri-hbi.pdf",
+        "results/figures_streamlined/today-steel.pdf",
         ]
     threads: 1
     run:
@@ -84,6 +95,8 @@ rule get_figures:
 
 
 rule plot_mga:
+    params:
+        region_nice_names=config["region_nice_names"],
     input:
         network_mga_production = "results/chain_id~{trade_chain}/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-stability-weighted/network.nc",
         network_mga_chokepoints = "results/chain_id~{trade_chain}/cost_year~2050/interone~hbi/intertwo~eaf/wacc~{wacc}/final~steel/scenario~mga-chokepoints/network.nc",
@@ -108,19 +121,19 @@ rule plot_mga_all:
 
 rule plot_trade_today:
     input:
-        baci_folder = ancient("../data/BACI_HS22_V202601"),
+        baci_folder = ancient("data/BACI_HS22_V202601"),
     output:
-        iron_ore       = "../results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
-        iron_ore_png   = "../results/figures_general/trade-today/Iron_Ore_net_flow.png",
-        dri_hbi        = "../results/figures_general/trade-today/DRI-HBI_net_flow.pdf",
-        dri_hbi_png    = "../results/figures_general/trade-today/DRI-HBI_net_flow.png",
-        steel_raw      = "../results/figures_general/trade-today/Steel_raw_net_flow.pdf",
-        steel_raw_png  = "../results/figures_general/trade-today/Steel_raw_net_flow.png",
-        iron_ore_csv   = "../results/figures_general/trade-today/Iron_Ore_trade_iso3.csv",
-        dri_hbi_csv    = "../results/figures_general/trade-today/DRI-HBI_trade_iso3.csv",
-        steel_raw_csv  = "../results/figures_general/trade-today/Steel_raw_trade_iso3.csv",
+        iron_ore       = "results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
+        iron_ore_png   = "results/figures_general/trade-today/Iron_Ore_net_flow.png",
+        dri_hbi        = "results/figures_general/trade-today/DRI-HBI_net_flow.pdf",
+        dri_hbi_png    = "results/figures_general/trade-today/DRI-HBI_net_flow.png",
+        steel      = "results/figures_general/trade-today/Steel_net_flow.pdf",
+        steel_png  = "results/figures_general/trade-today/Steel_net_flow.png",
+        iron_ore_csv   = "results/figures_general/trade-today/Iron_Ore_trade_iso3.csv",
+        dri_hbi_csv    = "results/figures_general/trade-today/DRI-HBI_trade_iso3.csv",
+        steel_csv  = "results/figures_general/trade-today/Steel_trade_iso3.csv",
     script:
-        "notebooks/plot_todays-trade.py"
+        str(NOTEBOOKS_DIR / "plot_todays-trade.py")
 
 rule plot_global_supply:
     input:
