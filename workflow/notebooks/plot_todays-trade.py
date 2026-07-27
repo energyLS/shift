@@ -1,11 +1,11 @@
 """
 Today's steel trade:
 
-Data: https://www.cepii.fr/CEPII/en/bdd_modele/bdd_modele_item.asp?id=37  
--> https://www.cepii.fr/DATA_DOWNLOAD/baci/data/BACI_HS22_V202601.zip (2022-2024) - Latest update from BACI.  
+Data: https://www.cepii.fr/CEPII/en/bdd_modele/bdd_modele_item.asp?id=37
+-> https://www.cepii.fr/DATA_DOWNLOAD/baci/data/BACI_HS22_V202601.zip (2022-2024) - Latest update from BACI.
 -> workflow/notebooks/BACI_HS22_V202601
 
-Process (in general): 
+Process (in general):
 Iron ore -> DRI/HBI -> steel (raw)
 
 Relevant HS product codes for iron ore trade:
@@ -25,7 +25,6 @@ Relevant HS product codes for steel trade (raw):
 - 720720,"Iron or non-alloy steel: semi-finished products of iron or non-alloy steel, containing by weight 0.25% or more of carbon"
 - Source: product_codes_HS22_V202601.csv
 """
-
 
 import os
 import sys
@@ -48,57 +47,165 @@ plt.style.use("bmh")
 # ==============================================================================
 # Resolved at runtime from snakemake (see __main__ block below)
 PRODUCT_OPTIONS = {
-    "Iron Ore":    [260111, 260112],
-    "DRI-HBI":     [720310],  # 720390 excluded: covers electrolytic/carbonyl iron (≥99.94% Fe), not commercial DRI/HBI
+    "Iron Ore": [260111, 260112],
+    "DRI-HBI": [
+        720310
+    ],  # 720390 excluded: covers electrolytic/carbonyl iron (≥99.94% Fe), not commercial DRI/HBI
     # Semi-finished (7207) + flat-rolled (7208-7212) + long products (7213-7217)
     # + stainless (7218-7223) + other alloy steel (7224-7229).
     # Excludes pig iron/ferro-alloys/scrap (7201-7205) and DRI/HBI (7203, already above).
-    "Steel (raw)": [
+    "Steel": [
         # Semi-finished billets / slabs
-        720711, 720712, 720719, 720720,
+        720711,
+        720712,
+        720719,
+        720720,
         # Hot-rolled flat, wide strip
-        720810, 720825, 720826, 720827, 720836, 720837, 720838, 720839,
-        720840, 720851, 720852, 720853, 720854, 720890,
+        720810,
+        720825,
+        720826,
+        720827,
+        720836,
+        720837,
+        720838,
+        720839,
+        720840,
+        720851,
+        720852,
+        720853,
+        720854,
+        720890,
         # Cold-rolled flat, wide strip
-        720915, 720916, 720917, 720918, 720925, 720926, 720927, 720928, 720990,
+        720915,
+        720916,
+        720917,
+        720918,
+        720925,
+        720926,
+        720927,
+        720928,
+        720990,
         # Coated / painted flat, wide strip
-        721011, 721012, 721020, 721030, 721041, 721049, 721050,
-        721061, 721069, 721070, 721090,
+        721011,
+        721012,
+        721020,
+        721030,
+        721041,
+        721049,
+        721050,
+        721061,
+        721069,
+        721070,
+        721090,
         # Flat-rolled, narrow strip (< 600 mm)
-        721113, 721114, 721119, 721123, 721129, 721190,
-        721210, 721220, 721230, 721240,
+        721113,
+        721114,
+        721119,
+        721123,
+        721129,
+        721190,
+        721210,
+        721220,
+        721230,
+        721240,
         # Wire rod
-        721310, 721320, 721391, 721399,
+        721310,
+        721320,
+        721391,
+        721399,
         # Bars and rods
-        721410, 721420, 721430, 721491, 721499,
-        721510, 721550, 721590,
+        721410,
+        721420,
+        721430,
+        721491,
+        721499,
+        721510,
+        721550,
+        721590,
         # Sections (angles, beams, channels)
-        721610, 721621, 721622, 721631, 721632, 721633,
-        721640, 721650, 721661, 721669, 721691, 721699,
+        721610,
+        721621,
+        721622,
+        721631,
+        721632,
+        721633,
+        721640,
+        721650,
+        721661,
+        721669,
+        721691,
+        721699,
         # Wire
-        721710, 721720, 721730, 721790,
+        721710,
+        721720,
+        721730,
+        721790,
         # Stainless steel (flat, long, wire)
-        721810, 721891, 721899,
-        721911, 721912, 721913, 721914, 721921, 721922, 721923, 721924,
-        721931, 721932, 721933, 721934, 721935,
-        722011, 722012, 722020, 722090,
-        722110, 722190, 722210, 722220, 722230, 722240, 722290,
+        721810,
+        721891,
+        721899,
+        721911,
+        721912,
+        721913,
+        721914,
+        721921,
+        721922,
+        721923,
+        721924,
+        721931,
+        721932,
+        721933,
+        721934,
+        721935,
+        722011,
+        722012,
+        722020,
+        722090,
+        722110,
+        722190,
+        722210,
+        722220,
+        722230,
+        722240,
+        722290,
         722300,
         # Other alloy steel (flat, long, wire)
-        722410, 722490,
-        722511, 722519, 722520, 722530, 722540, 722550,
-        722611, 722619, 722620, 722691, 722699,
-        722710, 722720, 722790,
-        722810, 722820, 722830, 722840, 722850, 722860, 722870, 722880, 722890,
-        722910, 722920, 722990,
+        722410,
+        722490,
+        722511,
+        722519,
+        722520,
+        722530,
+        722540,
+        722550,
+        722611,
+        722619,
+        722620,
+        722691,
+        722699,
+        722710,
+        722720,
+        722790,
+        722810,
+        722820,
+        722830,
+        722840,
+        722850,
+        722860,
+        722870,
+        722880,
+        722890,
+        722910,
+        722920,
+        722990,
     ],
 }
 
 # Safe filename stems matching Snakemake output keys
 PRODUCT_SAFE_NAMES = {
-    "Iron Ore":    "Iron_Ore",
-    "DRI-HBI":     "DRI-HBI",
-    "Steel (raw)": "Steel_raw",
+    "Iron Ore": "Iron_Ore",
+    "DRI-HBI": "DRI-HBI",
+    "Steel": "Steel",
 }
 
 # How many bilateral net-flow arrows to draw on the map.
@@ -109,7 +216,6 @@ TOP_N_FLOWS = 300
 # "quantity"    → physical volume (metric tonnes) — best for comparing trade magnitude.
 # "trade_value" → USD value — useful if price differences between products matter.
 VALUE_COLUMN = "quantity"
-
 
 
 # ==============================================================================
@@ -128,8 +234,7 @@ def prepare_trade(baci_folder, product_name, product_codes, out_csv, year):
 
     print("Aggregating bilateral trade")
     trade_pair = (
-        df
-        .groupby(["i", "j"], as_index=False)
+        df.groupby(["i", "j"], as_index=False)
         .agg(trade_value=("v", "sum"), quantity=("q", "sum"))
         .rename(columns={"i": "exporter", "j": "importer"})
     )
@@ -143,12 +248,14 @@ def prepare_trade(baci_folder, product_name, product_codes, out_csv, year):
         cc[["country_code", "country_iso3"]].rename(
             columns={"country_code": "exporter", "country_iso3": "exporter_iso3"}
         ),
-        on="exporter", how="left"
+        on="exporter",
+        how="left",
     ).merge(
         cc[["country_code", "country_iso3"]].rename(
             columns={"country_code": "importer", "country_iso3": "importer_iso3"}
         ),
-        on="importer", how="left"
+        on="importer",
+        how="left",
     )
 
     out_iso3 = out_csv
@@ -167,36 +274,41 @@ def get_net_pairwise_flows(df_trade, exp_col, imp_col, val_col):
     pairs.columns = ["node1", "node2", "val"]
 
     pairs["pair_key"] = pairs.apply(
-        lambda x: "-".join(sorted([str(x["node1"]), str(x["node2"])])),
-        axis=1
+        lambda x: "-".join(sorted([str(x["node1"]), str(x["node2"])])), axis=1
     )
 
     net_flows = []
     for _, group in pairs.groupby("pair_key"):
         if len(group) == 1:
             row = group.iloc[0]
-            net_flows.append({
-                "exporter": row["node1"],
-                "importer": row["node2"],
-                "quantity": row["val"]
-            })
+            net_flows.append(
+                {
+                    "exporter": row["node1"],
+                    "importer": row["node2"],
+                    "quantity": row["val"],
+                }
+            )
         else:
             row_a = group.iloc[0]
             row_b = group.iloc[1]
             diff = row_a["val"] - row_b["val"]
 
             if diff > 0:
-                net_flows.append({
-                    "exporter": row_a["node1"],
-                    "importer": row_a["node2"],
-                    "quantity": diff
-                })
+                net_flows.append(
+                    {
+                        "exporter": row_a["node1"],
+                        "importer": row_a["node2"],
+                        "quantity": diff,
+                    }
+                )
             elif diff < 0:
-                net_flows.append({
-                    "exporter": row_b["node1"],
-                    "importer": row_b["node2"],
-                    "quantity": abs(diff)
-                })
+                net_flows.append(
+                    {
+                        "exporter": row_b["node1"],
+                        "importer": row_b["node2"],
+                        "quantity": abs(diff),
+                    }
+                )
 
     return pd.DataFrame(net_flows)
 
@@ -227,12 +339,16 @@ def process_data_for_plot(trade_file, world_gdf, value_column):
     )
 
     net_pairwise = get_net_pairwise_flows(df_trade, exp_col, imp_col, val_col)
-    top_net_flows = net_pairwise.sort_values("quantity", ascending=False).head(TOP_N_FLOWS)
+    top_net_flows = net_pairwise.sort_values("quantity", ascending=False).head(
+        TOP_N_FLOWS
+    )
 
     temp_world = world_gdf.copy()
     temp_world = temp_world.merge(total_exp, on="iso3", how="left")
     temp_world = temp_world.merge(total_imp, on="iso3", how="left")
-    temp_world[["total_exp", "total_imp"]] = temp_world[["total_exp", "total_imp"]].fillna(0)
+    temp_world[["total_exp", "total_imp"]] = temp_world[
+        ["total_exp", "total_imp"]
+    ].fillna(0)
     temp_world["net_export"] = temp_world["total_exp"] - temp_world["total_imp"]
     temp_world["centroid"] = temp_world.geometry.centroid
 
@@ -242,11 +358,21 @@ def process_data_for_plot(trade_file, world_gdf, value_column):
 # ==============================================================================
 # 4. PLOT
 # ==============================================================================
-def plot(data_plot, year, product_name, value_column, colors, output_path=None, output_path_pdf=None):
+def plot(
+    data_plot,
+    year,
+    product_name,
+    value_column,
+    colors,
+    output_path=None,
+    output_path_pdf=None,
+):
     fig, ax = plt.subplots(1, 1, figsize=(18, 9))
 
     world_df, flow_df = data_plot
-    world_df.plot(ax=ax, color=colors["land"], edgecolor=colors["border"], linewidth=0.4)
+    world_df.plot(
+        ax=ax, color=colors["land"], edgecolor=colors["border"], linewidth=0.4
+    )
 
     global_max_bubble = world_df["net_export"].abs().max()
     global_max_line = flow_df["quantity"].max() if len(flow_df) > 0 else 0
@@ -260,19 +386,26 @@ def plot(data_plot, year, product_name, value_column, colors, output_path=None, 
     def get_radius(val):
         if abs(val) <= 0 or global_max_bubble == 0:
             return 0
-        return min_r + (max_r - min_r) * (np.sqrt(abs(val)) / np.sqrt(global_max_bubble))
+        return min_r + (max_r - min_r) * (
+            np.sqrt(abs(val)) / np.sqrt(global_max_bubble)
+        )
 
     # --- trade flow lines (thickness ∝ quantity) ---
     for _, row in flow_df.iterrows():
-        if row["exporter"] in loc_map and row["importer"] in loc_map and global_max_line > 0:
+        if (
+            row["exporter"] in loc_map
+            and row["importer"] in loc_map
+            and global_max_line > 0
+        ):
             p1, p2 = loc_map[row["exporter"]], loc_map[row["importer"]]
             lw = (row["quantity"] / global_max_line) * 5.5
             ax.plot(
-                [p1.x, p2.x], [p1.y, p2.y],
+                [p1.x, p2.x],
+                [p1.y, p2.y],
                 color=colors["flow_line"],
                 linewidth=max(lw, 0.3),
                 alpha=0.35,
-                zorder=2
+                zorder=2,
             )
 
     # --- net-export / net-import bubbles (area ∝ quantity) ---
@@ -289,28 +422,41 @@ def plot(data_plot, year, product_name, value_column, colors, output_path=None, 
                     alpha=0.7,
                     edgecolor="white",
                     linewidth=0.5,
-                    zorder=5
+                    zorder=5,
                 )
             )
 
     ax.set_title(
-        f"Global {product_name} Trade ({year})",
-        fontsize=22,
-        fontweight="bold",
-        pad=20
+        f"Global {product_name} Trade ({year})", fontsize=22, fontweight="bold", pad=20
     )
     ax.axis("off")
 
     # ------------------------------------------------------------------ legend
     # 1) Category legend (surplus / deficit / flow line)
     cat_elements = [
-        Line2D([0], [0], marker='o', color='w', label='Net exporter',
-               markerfacecolor=colors["surplus"], markeredgecolor='white',
-               markersize=12, alpha=0.7),
-        Line2D([0], [0], marker='o', color='w', label='Net importer',
-               markerfacecolor=colors["deficit"], markeredgecolor='white',
-               markersize=12, alpha=0.7),
-        Line2D([0], [0], color=colors["flow_line"], lw=2, label='Trade flow'),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Net exporter",
+            markerfacecolor=colors["surplus"],
+            markeredgecolor="white",
+            markersize=12,
+            alpha=0.7,
+        ),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label="Net importer",
+            markerfacecolor=colors["deficit"],
+            markeredgecolor="white",
+            markersize=12,
+            alpha=0.7,
+        ),
+        Line2D([0], [0], color=colors["flow_line"], lw=2, label="Trade flow"),
     ]
     leg1 = ax.legend(
         handles=cat_elements,
@@ -329,78 +475,104 @@ def plot(data_plot, year, product_name, value_column, colors, output_path=None, 
     #    Stacked vertically (graduated-circles style) in the upper-left corner,
     #    below the category legend.
     if global_max_bubble > 0:
-        unit  = "Mt"  if value_column == "quantity" else "M USD"
-        denom = 1e6   if value_column == "quantity" else 1e6
-        scale_fracs = [1.0, 0.50, 0.25]          # largest on top
-        scale_labels = [f"{frac * global_max_bubble / denom:.0f} {unit}"
-                        for frac in scale_fracs]
+        unit = "Mt" if value_column == "quantity" else "M USD"
+        denom = 1e6 if value_column == "quantity" else 1e6
+        scale_fracs = [1.0, 0.50, 0.25]  # largest on top
+        scale_labels = [
+            f"{frac * global_max_bubble / denom:.0f} {unit}" for frac in scale_fracs
+        ]
 
         map_height = bounds[3] - bounds[1]
         # anchor: upper-left, leave a small margin
-        margin_x = map_width  * 0.03
+        margin_x = map_width * 0.03
         margin_y = map_height * 0.03
         cx = bounds[0] + margin_x + max_r * 1.6  # centre x of all circles
 
         # stack circles top-to-bottom: largest first at the top
-        title_h  = max_r * 1.1
-        pad_y    = max_r * 0.4
-        y_start  = bounds[3] - margin_y - title_h  # top of first circle centre
+        title_h = max_r * 1.1
+        pad_y = max_r * 0.4
+        y_start = bounds[3] - margin_y - title_h  # top of first circle centre
 
         centres_y = []
-        y_cursor  = y_start
+        y_cursor = y_start
         for frac in scale_fracs:
             r_i = get_radius(frac * global_max_bubble)
-            y_cursor -= r_i                        # move down by radius
+            y_cursor -= r_i  # move down by radius
             centres_y.append(y_cursor)
-            y_cursor -= r_i + max_r * 0.25         # gap between circles
+            y_cursor -= r_i + max_r * 0.25  # gap between circles
 
         # extra room to the right for labels — use 3× max_r so values fit
-        pad_x_left  = max_r * 0.6
+        pad_x_left = max_r * 0.6
         pad_x_right = max_r * 3.2
-        box_left   = cx - max_r - pad_x_left
-        box_top    = bounds[3] - margin_y
+        box_left = cx - max_r - pad_x_left
+        box_top = bounds[3] - margin_y
         box_bottom = centres_y[-1] - max_r - pad_y
-        box_width  = max_r + pad_x_left + pad_x_right
+        box_width = max_r + pad_x_left + pad_x_right
         box_height = box_top - box_bottom
 
         from matplotlib.patches import FancyBboxPatch
-        ax.add_patch(FancyBboxPatch(
-            (box_left, box_bottom), box_width, box_height,
-            boxstyle="round,pad=0.02",
-            facecolor=colors["legend_bg"],
-            edgecolor=colors["legend_edge"],
-            linewidth=0.8, zorder=8,
-        ))
+
+        ax.add_patch(
+            FancyBboxPatch(
+                (box_left, box_bottom),
+                box_width,
+                box_height,
+                boxstyle="round,pad=0.02",
+                facecolor=colors["legend_bg"],
+                edgecolor=colors["legend_edge"],
+                linewidth=0.8,
+                zorder=8,
+            )
+        )
 
         # title at the top of the box
-        ax.text(box_left + box_width / 2,
-                box_top - pad_y * 0.5,
-                "Net trade\nvolume",
-                ha="center", va="top", fontsize=9, zorder=9)
+        ax.text(
+            box_left + box_width / 2,
+            box_top - pad_y * 0.5,
+            "Net trade\nvolume",
+            ha="center",
+            va="top",
+            fontsize=9,
+            zorder=9,
+        )
 
         for frac, label, cy_i in zip(scale_fracs, scale_labels, centres_y):
             r_i = get_radius(frac * global_max_bubble)
-            ax.add_patch(Circle(
-                (cx, cy_i), r_i,
-                facecolor=colors["surplus"], alpha=0.7,
-                edgecolor="white", linewidth=0.5, zorder=9,
-            ))
+            ax.add_patch(
+                Circle(
+                    (cx, cy_i),
+                    r_i,
+                    facecolor=colors["surplus"],
+                    alpha=0.7,
+                    edgecolor="white",
+                    linewidth=0.5,
+                    zorder=9,
+                )
+            )
             # label to the right of each circle
-            ax.text(cx + max_r + pad_x_left * 0.5, cy_i, label,
-                    ha="left", va="center", fontsize=8, zorder=9)
+            ax.text(
+                cx + max_r + pad_x_left * 0.5,
+                cy_i,
+                label,
+                ha="left",
+                va="center",
+                fontsize=8,
+                zorder=9,
+            )
 
     # 3) Line-width scale: show 3 reference flow sizes
     if global_max_line > 0:
-        unit  = "Mt"  if value_column == "quantity" else "M USD"
-        denom = 1e6   if value_column == "quantity" else 1e6
+        unit = "Mt" if value_column == "quantity" else "M USD"
+        denom = 1e6 if value_column == "quantity" else 1e6
         line_fracs = [0.25, 0.50, 1.0]
         line_handles = []
         for frac in line_fracs:
-            lw    = max(frac * 5.5, 0.3)
+            lw = max(frac * 5.5, 0.3)
             label = f"{frac * global_max_line / denom:.0f} {unit}"
             line_handles.append(
-                Line2D([0], [0], color=colors["flow_line"], lw=lw,
-                       alpha=0.7, label=label)
+                Line2D(
+                    [0], [0], color=colors["flow_line"], lw=lw, alpha=0.7, label=label
+                )
             )
         leg3 = ax.legend(
             handles=line_handles,
@@ -441,9 +613,21 @@ if __name__ == "__main__":
 
     # Map product names to snakemake output paths
     output_map = {
-        "Iron Ore":    {"pdf": str(snakemake.output.iron_ore),    "png": str(snakemake.output.iron_ore_png),  "csv": str(snakemake.output.iron_ore_csv)},
-        "DRI-HBI":     {"pdf": str(snakemake.output.dri_hbi),     "png": str(snakemake.output.dri_hbi_png),   "csv": str(snakemake.output.dri_hbi_csv)},
-        "Steel (raw)": {"pdf": str(snakemake.output.steel_raw),   "png": str(snakemake.output.steel_raw_png), "csv": str(snakemake.output.steel_raw_csv)},
+        "Iron Ore": {
+            "pdf": str(snakemake.output.iron_ore),
+            "png": str(snakemake.output.iron_ore_png),
+            "csv": str(snakemake.output.iron_ore_csv),
+        },
+        "DRI-HBI": {
+            "pdf": str(snakemake.output.dri_hbi),
+            "png": str(snakemake.output.dri_hbi_png),
+            "csv": str(snakemake.output.dri_hbi_csv),
+        },
+        "Steel": {
+            "pdf": str(snakemake.output.steel),
+            "png": str(snakemake.output.steel_png),
+            "csv": str(snakemake.output.steel_csv),
+        },
     }
 
     print("Loading world geometry")
