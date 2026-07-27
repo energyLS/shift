@@ -37,11 +37,12 @@ def _product_uses_renewables(product):
 
 def _all_supply_curve_targets():
     targets = []
+    cost_year = config["trade_chains"].get("cost_year", 2050)
     for region in config["regions"]:
         wacc = config["trade_chains"].get("wacc", "uniform")
         for product in SUPPLY_CURVE_PRODUCTS:
             targets.append(
-                f"resources/supply_curves/cost_year~2050/wacc~{wacc}/{region}_marginal_cost_{product}.csv"
+                f"resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}.csv"
             )
     return targets
 
