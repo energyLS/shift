@@ -408,7 +408,7 @@ def solve_network(network, config):
         logger.error(f"Solver exception: {e}")
         raise
 
-    return network
+    return network, status_ok
 
 
 # ============================================================================
@@ -416,7 +416,7 @@ def solve_network(network, config):
 # ============================================================================
 
 
-def extract_lcox(network, product, demands):
+def extract_lcox(network, product, demands, status_ok=True):
     """Extract LCOX from an optimized network.
 
     Parameters
@@ -428,6 +428,13 @@ def extract_lcox(network, product, demands):
     demands : dict
         Must include key `'product_demand_mt'` (float, Mt/year) used to
         compute annual production and per-unit LCOX.
+    status_ok : bool
+        Whether the solver reported a genuinely optimal termination status.
+        A non-optimal solve (e.g. numerical trouble during the barrier
+        method) can leave a stale but finite `network.objective` behind even
+        though the result isn't trustworthy; checking only `None`/`NaN` lets
+        that garbage value through as if it were a valid LCOX. Requiring
+        `status_ok` closes that gap.
 
     Returns
     -------
@@ -455,6 +462,9 @@ def extract_lcox(network, product, demands):
     )
 
     try:
+        if not status_ok:
+            raise ValueError("Optimization did not report an optimal status")
+
         obj_value = network.objective
         if obj_value is None or np.isnan(obj_value):
             raise ValueError("Optimization failed to return valid objective")
@@ -598,16 +608,19 @@ if __name__ == "__main__":
     if snakemake.config.get("debug_network_inspection", False):
         inspect_network(network, product)  # Debug inspection
     try:
-        solve_network(network, snakemake.config)
+        network, status_ok = solve_network(network, snakemake.config)
         optimization_status = (
             "optimal"
-            if network.objective is not None and not np.isnan(network.objective)
+            if status_ok
+            and network.objective is not None
+            and not np.isnan(network.objective)
             else "infeasible"
         )
     except Exception as e:
         logger.warning(
             f"Solver error for product demand {product_demand_mt} Mt/year: {e}"
         )
+        status_ok = False
         optimization_status = "error"
 
     if optimization_status != "optimal":
@@ -620,6 +633,7 @@ if __name__ == "__main__":
     results_df = extract_lcox(
         network=network,
         product=product,
+        status_ok=status_ok,
         demands=scaled_demands,
     )
 
