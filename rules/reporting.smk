@@ -59,6 +59,7 @@ rule get_figures:
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_average_hbi.pdf",
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_global_hbi.pdf",
         "results/figures_general/pull/chain_id~supplyconstraint/cost_year~2050/regional/default/magnitude_pull_hbi.pdf",
+        "results/figures_general/mga/map_robust.pdf",
         # Supplementary
         "results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
         "results/figures_general/trade-today/DRI-HBI_net_flow.pdf",
@@ -83,6 +84,7 @@ rule get_figures:
         "results/figures_streamlined/supply-sorted-hetero.pdf",
         "results/figures_streamlined/supply-unsorted-hetero.pdf",
         "results/figures_streamlined/magnitude-pull.pdf",
+        "results/figures_streamlined/map-robust.pdf",
         "results/figures_streamlined/today-ironore.pdf",
         "results/figures_streamlined/today-dri-hbi.pdf",
         "results/figures_streamlined/today-steel.pdf",
@@ -183,6 +185,18 @@ rule plot_magnitude_pull:
 rule plot_magnitude_pull_all:
         input:
             expand("results/figures_general/pull/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/magnitude_pull_{interone}.pdf", trade_chain=[config["trade_chains"]["id"]],  cost_year=[2050], wacc=["regional", "uniform"], interone=["hbi"], scenario=["default"], allow_missing=True)
+
+
+rule plot_robust_map:
+    input:
+        chokepoints="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-chokepoints/map_hbi_0.002.nc",
+        blocs="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-blocs/map_hbi_0.001.nc",
+        constrain_supply="results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~constrain-supply/map_hbi_250.nc",
+    output:
+        robust_map_pdf="results/figures_general/mga/map_robust.pdf",
+        robust_map_png="results/figures_general/mga/map_robust.png",
+    notebook:
+        str(NOTEBOOKS_DIR / "plot-robust-map.ipynb")
 
 
 # Variables captured by the plot_compare_lcox input lambda (avoids two-argument lambda)
