@@ -58,6 +58,7 @@ rule get_figures:
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/uniform/default/global_supply_curve_cost_global_hbi.pdf",
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_average_hbi.pdf",
         "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/global_supply_curve_cost_global_hbi.pdf",
+        "results/figures_general/global_supply_curve/chain_id~supplyconstraint/cost_year~2050/regional/default/supply_curve_details_global_hbi.pdf",
         "results/figures_general/pull/chain_id~supplyconstraint/cost_year~2050/regional/default/magnitude_pull_hbi.pdf",
         "results/figures_general/mga/map_robust.pdf",
         # Supplementary
@@ -83,6 +84,7 @@ rule get_figures:
         "results/figures_streamlined/supply-unsorted-homo.pdf",
         "results/figures_streamlined/supply-sorted-hetero.pdf",
         "results/figures_streamlined/supply-unsorted-hetero.pdf",
+        "results/figures_streamlined/supply-details.pdf",
         "results/figures_streamlined/magnitude-pull.pdf",
         "results/figures_streamlined/map-robust.pdf",
         "results/figures_streamlined/today-ironore.pdf",
@@ -150,6 +152,9 @@ rule plot_global_supply:
     output:
         network_curve="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.pdf",
         network_curve_png="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/global_supply_curve_{sort}_{interone}.png",
+        # supply_curves
+        network_curve_details="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/supply_curve_details_{sort}_{interone}.pdf",
+        network_curve_details_png="results/figures_general/global_supply_curve/chain_id~{trade_chain}/cost_year~{cost_year}/{wacc}/{scenario}/supply_curve_details_{sort}_{interone}.png",
         # supply_curves
     notebook:
         str(NOTEBOOKS_DIR / "analysis-globalsupplycurve.ipynb")
