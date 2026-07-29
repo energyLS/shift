@@ -42,6 +42,8 @@ rule collect_figures:
 rule get_figures:
     input:
         [
+        "results/figures_general/comparison/cost_year~2050/wacc~uniform/lcox_comparison_East_Asia_East_East_Asia.pdf",
+        "results/figures_general/comparison/cost_year~2050/wacc~uniform/lcox_comparison_South_America_Europe.pdf",
         "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_East_Asia_East_East_Asia.pdf",
         "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_South_America_Europe.pdf",
         "results/figures_general/mga/chain_id~supplyconstraint/wacc~regional/mga_analysis.pdf",
@@ -68,6 +70,8 @@ rule get_figures:
         ]
     output:
         [
+        "results/figures_streamlined/lcox-east-asia-homogenous.pdf",
+        "results/figures_streamlined/lcox-south-america-homogenous.pdf",
         "results/figures_streamlined/lcox-east-asia.pdf",
         "results/figures_streamlined/lcox-south-america.pdf",
         "results/figures_streamlined/mga-analysis.pdf",
