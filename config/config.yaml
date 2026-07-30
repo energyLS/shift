@@ -32,7 +32,7 @@ trade_chains:
   id: supplyconstraint
   cost_year: 2050
   final_product: steel
-  wacc: regional #regional or uniform
+  wacc: uniform #regional or uniform
   labour_cost: True #Include labour cost
   tradeable_commodities: [iron_ore, hbi]
   stages:
@@ -287,7 +287,9 @@ colors:
   hydrogen direct iron reduction furnace: 'grey'
   battery inverter: '#6A000E'
   battery inverter (charging): '#6A000E'
+  battery (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
+  battery (discharging): '#FF5733'
   battery: 'purple'
   wind: 'blue'
   onshore wind: 'blue'

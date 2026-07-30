@@ -67,6 +67,7 @@ rule get_figures:
         "results/figures_general/trade-today/Iron_Ore_net_flow.pdf",
         "results/figures_general/trade-today/DRI-HBI_net_flow.pdf",
         "results/figures_general/trade-today/Steel_net_flow.pdf",
+        "results/figures_general/hourly/hourly-example.pdf",
         ]
     output:
         [
@@ -94,6 +95,7 @@ rule get_figures:
         "results/figures_streamlined/today-ironore.pdf",
         "results/figures_streamlined/today-dri-hbi.pdf",
         "results/figures_streamlined/today-steel.pdf",
+        "results/figures_streamlined/hourly.pdf",
         ]
     threads: 1
     run:
@@ -177,6 +179,15 @@ rule plot_comparison:
         cost_comparison_png="results/figures_general/comparison/cost_comparison.png",
     notebook:
         str(NOTEBOOKS_DIR / "compare-scenarios.ipynb")
+
+
+rule plot_hourly:
+    input:
+        network="resources/lco-hbi/cost_year~2050/wacc~regional/Europe_allocated_share/network_1.nc"
+    output:
+        hourly_plot = "results/figures_general/hourly/hourly-example.pdf",
+    notebook:
+        str(NOTEBOOKS_DIR / "analysis-hourly.ipynb")
 
 
 rule plot_magnitude_pull:
