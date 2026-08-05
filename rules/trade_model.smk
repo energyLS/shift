@@ -10,14 +10,12 @@ rule model_trade:
         supply_curves_interone=expand(
             "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{interone}.csv",
             allow_missing=True,
-            cost_year=[2050],
             region=config["regions"],
             interone=["hbi"],
         ),
         supply_curves_intertwo=expand(
             "resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{intertwo}.csv",
             allow_missing=True,
-            cost_year=[2050],
             region=config["regions"],
             intertwo=["steel"],
         ),
