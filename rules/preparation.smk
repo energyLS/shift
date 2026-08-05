@@ -2,6 +2,8 @@
 
 
 rule download_labour_data:
+    input:
+        unido_raw="data/labour/unido-raw/data.csv",
     output:
         merged="resources/merged_labour_inputs.csv",
     threads: 1
