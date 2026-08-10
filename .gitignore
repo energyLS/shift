@@ -20,3 +20,5 @@
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+
+shift_data.zip
