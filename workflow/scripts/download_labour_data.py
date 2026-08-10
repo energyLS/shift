@@ -760,5 +760,6 @@ if __name__ == "__main__":
 
     merge_all_data(
         target_year=2020,
+        unido_filepath=snakemake.input.unido_raw,
         output_filepath=snakemake.output.merged,
     )
