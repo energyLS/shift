@@ -6,7 +6,7 @@ storage:
 rule retrieve_data:
     input:
         data_url=storage(
-            f"https://zenodo.org/records/"
+            f"https://zenodo.org/records/21875103/files/shift_data.zip"
         ),
     output:
         bus_locations="data/bus_locations.csv",
