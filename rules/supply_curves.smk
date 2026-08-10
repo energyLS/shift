@@ -35,13 +35,32 @@ def _product_uses_renewables(product):
     return True
 
 
+def _demand_levels_for_product(product):
+    """Demand levels to sweep when solving LCoX for a product.
+
+    Renewable-fed routes (e.g. hbi/dri) get costlier at scale as cheaper
+    resource classes are exhausted, so the full sweep is needed to trace
+    the curve. Grid-connected routes (e.g. steel/eaf) draw on grid
+    electricity at a fixed, uncapped marginal cost in this stage, so their
+    LCoX is flat with respect to volume (verified: identical across all
+    demand levels for every region). Solving all levels for those products
+    is redundant; one point at the top of the range is enough and keeps
+    capacity headroom for the trade model.
+    """
+    demand_levels = config.get("steel_demand_levels")
+    if _product_uses_renewables(product):
+        return demand_levels
+    return [max(demand_levels)]
+
+
 def _all_supply_curve_targets():
     targets = []
+    cost_year = config["trade_chains"].get("cost_year", 2050)
     for region in config["regions"]:
         wacc = config["trade_chains"].get("wacc", "uniform")
         for product in SUPPLY_CURVE_PRODUCTS:
             targets.append(
-                f"resources/supply_curves/cost_year~2050/wacc~{wacc}/{region}_marginal_cost_{product}.csv"
+                f"resources/supply_curves/cost_year~{cost_year}/wacc~{wacc}/{region}_marginal_cost_{product}.csv"
             )
     return targets
 
@@ -161,12 +180,12 @@ if config["enable"].get("run_supply_curve", True):
                 scenario=config.get("supply_curve", {}).get(
                     "default_scenario", "allocated_share"
                 ),
-                product_demand_mt=config.get("steel_demand_levels"),
+                product_demand_mt=_demand_levels_for_product(wildcards.product),
             ),
             lco_unreserved=lambda wildcards: (
                 expand(
                     f"resources/lco-{wildcards.product}/cost_year~{wildcards.cost_year}/wacc~{wildcards.wacc}/{wildcards.region}_unreserved/results_{{product_demand_mt}}.csv",
-                    product_demand_mt=config.get("steel_demand_levels"),
+                    product_demand_mt=_demand_levels_for_product(wildcards.product),
                 )
                 if config.get("supply_curve", {}).get("generate_unreserved", False)
                 and _product_uses_renewables(wildcards.product)
