@@ -182,7 +182,6 @@ def building_model(
 
         # --- Stage 1 supply: ore → interone (material) or direct supply (energy) ---
         for s in range(len(region_data_interone)):
-
             if s == 0:
                 p_nom_interone = float(region_data_interone[f"demand [{unit}]"][s])
             else:
@@ -230,7 +229,6 @@ def building_model(
         # --- Stage 2 supply: interone → final (two-stage material chain only) ---
         if two_stage:
             for s in range(len(region_data_intertwo)):
-
                 if s == 0:
                     p_nom_intertwo = float(region_data_intertwo[f"demand [{unit}]"][s])
                 else:
@@ -245,9 +243,7 @@ def building_model(
                     )
                     p_nom_intertwo = (
                         grid_potential.loc[region_name, "potential_mt_steel"] * 1e6
-                    ) / len(
-                        region_data_intertwo
-                    )  # split evenly across supply steps
+                    ) / len(region_data_intertwo)  # split evenly across supply steps
 
                 m_cost = float(
                     region_data_intertwo[f"{cost_descriptor} [EUR/{unit}]"][s]
@@ -345,26 +341,16 @@ def create_links(trade_options):
 
         # checking if the row connects with pipeline
         if (trade_options["pipeline"][r] == 1) & (final == "hydrogen"):
-            r_from = trade_options["region_from"][r]
-            r_to = trade_options["region_to"][r]
-            p_cost = int(float(trade_options["pipeline_distance [km]"][r]) * pipe_mc)
-            filling_demand = 1.5 / 100  # DEA, energy transport datasheet, 2050, %
-            losses = 1.7 / 100  # DEA, energy transport datasheet 2022, 2050, %/1000km
-            eff = (1 - filling_demand) * (1 - losses) ** (
-                float(trade_options["pipeline_distance [km]"][r]) / 1000
+            raise NotImplementedError(
+                "Pipeline-based trade links (trade_options rows with "
+                "pipeline=1, final_product='hydrogen') are not currently "
+                "supported: the pipeline marginal cost used to come from a "
+                "'transport_costs' input that no longer exists in this "
+                "codebase - shipping costs were migrated to "
+                "config['trade']['shipping'], but the pipeline cost path "
+                "was never updated to match. Configure a pipeline cost "
+                "source before enabling this trade_options combination."
             )
-
-            n.add(
-                "Link",
-                "pipeline {}-{}".format(r_from, r_to),
-                bus0=r_from,
-                bus1=r_to,
-                efficiency=eff,  # calculated above
-                marginal_cost=p_cost,  # EUR/MWh
-                p_nom_extendable=True,
-                capital_cost=1 / 1000,  # to prevent optimisation shenenigans
-            )
-            logger.info("pipeline link made from %s to %s - eff %s", r_from, r_to, eff)
 
     return
 
@@ -471,6 +457,19 @@ def save_network_collection(nc, output_path, optimal_network=None):
     logger.info(f"Saved {total_saved} networks to {output_dir}")
 
 
+def _carrier_values(stats, carrier):
+    """Select a carrier's per-bus values from an n.statistics(...) result.
+
+    Returns 0 (matching plot_trade_network's existing "not applicable"
+    convention, which n.plot.map already handles) when the carrier has no
+    entries in the network at all, instead of letting pandas raise KeyError
+    on a missing MultiIndex level.
+    """
+    if carrier not in stats.index.get_level_values(-1):
+        return 0
+    return stats.loc[:, :, carrier].droplevel(0)
+
+
 def plot_trade_network(
     n,
     product="steel",
@@ -508,15 +507,13 @@ def plot_trade_network(
     }.get(product)
 
     if product in [interone, intertwo, final, "iron_ore"]:
-        supply = (
-            n.statistics.supply(comps=[supply_comp], groupby=["bus", "carrier"])
-            .loc[:, :, supply_carrier]
-            .droplevel(0)
+        supply = _carrier_values(
+            n.statistics.supply(comps=[supply_comp], groupby=["bus", "carrier"]),
+            supply_carrier,
         )
-        demand = (
-            n.statistics.withdrawal(comps=[demand_comp], groupby=["bus", "carrier"])
-            .loc[:, :, demand_carrier]
-            .droplevel(0)
+        demand = _carrier_values(
+            n.statistics.withdrawal(comps=[demand_comp], groupby=["bus", "carrier"]),
+            demand_carrier,
         )
         trade = n.links[n.links.carrier == trade_carrier].p_nom_opt.astype(int)
     else:
