@@ -5,7 +5,7 @@ trade optimization, and reporting.
 """
 
 from pathlib import Path
-from shutil import copyfile
+from shutil import copyfile, unpack_archive
 import sys
 
 import pandas as pd
@@ -87,7 +87,7 @@ wildcard_constraints:
     sweep="[a-zA-Z]+",
     rule="(0|[1-9][0-9]?|100)",
 
-
+include: "rules/retrieve.smk"
 include: "rules/supply_curves.smk"
 include: "rules/preparation.smk"
 include: "rules/trade_model.smk"
