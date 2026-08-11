@@ -32,7 +32,9 @@ Outputs (saved to data/labour/)
 
 Usage
 -----
-  python workflow/scripts/data_downloader.py [--target-year 2020] [--force]
+```
+python workflow/scripts/data_downloader.py [--target-year 2020] [--force]
+```
 """
 
 import sys

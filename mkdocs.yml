@@ -1,0 +1,28 @@
+site_name: SHIFT
+site_description: Techno-economic optimization of global iron and steel supply chains under decarbonization
+repo_url: https://github.com/energyLS/shift
+
+nav:
+  - Home: index.md
+  - Installation & running: installation.md
+  - Workflow overview: workflow.md
+  - Module reference: modules.md
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [workflow/scripts]
+          options:
+            show_source: true
+            show_root_heading: true
+            heading_level: 3
+            docstring_style: numpy
+            members_order: source

@@ -63,10 +63,20 @@ ipykernel = "*"
 ipython = "*"
 nbqa = "*"
 
+[feature.docs.dependencies]
+mkdocs = "*"
+mkdocs-material = "*"
+mkdocstrings-python = "*"
+
+[feature.docs.tasks]
+docs-serve = "mkdocs serve"
+docs-build = "mkdocs build"
+
 [environments]
 default = { features = [], solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
 dev = { features = ["dev", "test"], solve-group = "default" }
+docs = { features = ["docs"], solve-group = "default" }
 
 [tool.ruff]
 # Ruff linter configuration
