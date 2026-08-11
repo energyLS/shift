@@ -39,11 +39,14 @@ snakemake-minimal = "==9.6.2"
 snakemake-storage-plugin-http = ">=0.3"
 tqdm = "*"
 xarray = ">=2026.0.0"
+openpyxl = ">=3.1.5,<4"
 
 [pypi-dependencies]
 # pip-installable packages (always included)
 gurobipy = "*"
 wbdata = ">=1.1.0"
+wbgapi = ">=1.0.14, <2"
+highspy = "*"
 
 [feature.test.dependencies]
 pytest = "*"

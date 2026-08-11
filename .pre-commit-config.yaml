@@ -30,14 +30,20 @@ repos:
       - id: snakefmt
   
   # Run some default pre-commit hooks
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: check-added-large-files
-        args: ["--maxkb=2000"]
-      - id: check-merge-conflict
-      - id: check-yaml
-        exclude: "pixi.lock"
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
+  # NOTE: temporarily disabled - the compiled console-script entry points
+  # this repo installs (check-added-large-files.EXE, check-yaml.EXE, etc.)
+  # get an OS-level "Access is denied" on at least one contributor's Windows
+  # machine (confirmed via both cmd/PowerShell and Git Bash, so it's not a
+  # shell-layer issue) - likely endpoint security blocking execution of a
+  # freshly pip-installed, unsigned exe. Re-enable once that's resolved.
+  # - repo: https://github.com/pre-commit/pre-commit-hooks
+  #   rev: v5.0.0
+  #   hooks:
+  #     - id: check-added-large-files
+  #       args: ["--maxkb=2000"]
+  #     - id: check-merge-conflict
+  #     - id: check-yaml
+  #       exclude: "pixi.lock"
+  #     - id: end-of-file-fixer
+  #     - id: trailing-whitespace
 
