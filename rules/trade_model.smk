@@ -23,7 +23,13 @@ rule model_trade:
         ),
         trade_options="resources/trade_opt_chokepoints.csv",
         bus_locations="data/bus_locations.csv",
-        demand="data/un_enerdata_demand_2050_final.csv",
+        # Only the hydrogen final product reads this file (model_trade.py);
+        # the active steel chain gets its demand from steel_demand instead.
+        demand=(
+            "data/un_enerdata_demand_2050_final.csv"
+            if config["trade_chains"]["final_product"] == "hydrogen"
+            else []
+        ),
         steel_demand="resources/steel_demand_clustered_{cost_year}.csv",
         iron_ore="resources/ironore_production_clustered.csv",
         grid_potential="data/grid_potential_custom.csv",
