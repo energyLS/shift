@@ -12,6 +12,20 @@ def _process_label_for_product(product):
     return route_label_for_product(config, product)
 
 
+def _local_demand_input(wildcards):
+    """Local electricity demand data, only when the 'reserved' scenario needs it.
+
+    The 'reserved' scenario derives its capacity-reservation target from this
+    file unless reserve_local_demand_mw is set explicitly in config; the
+    'unreserved' and 'allocated_share' scenarios never read it.
+    """
+    needs_demand = (
+        wildcards.scenario == "reserved"
+        and config.get("reserve_local_demand_mw", 0) <= 0
+    )
+    return "data/un_enerdata_demand_2050_final.csv" if needs_demand else []
+
+
 def _product_uses_renewables(product):
     """Check if a product's stage group uses renewable_electricity.
 
@@ -105,7 +119,7 @@ rule prepare_regional_network:
         ),
         renewables="resources/renewables_clustered.nc",
         tech_costs="resources/technology_data/costs_{cost_year}.csv",
-        local_demand="data/un_enerdata_demand_2050_final.csv",
+        local_demand=_local_demand_input,
         wacc="resources/wacc-clustered.csv",
         labour_cost="resources/labour_cost_clustered.csv",
     output:
@@ -137,7 +151,7 @@ if config["enable"].get("run_supply_chain", True):
     rule calculate_regional_lcox:
         input:
             base_network="resources/networks/base_{cost_year}_{region}_{wacc}_{product}_{scenario}.nc",
-            local_demand="data/un_enerdata_demand_2050_final.csv",
+            local_demand=_local_demand_input,
         output:
             # Internal cache keyed by route_label for reuse; only products matter for supply curves
             results="resources/lco-{product}/cost_year~{cost_year}/wacc~{wacc}/{region}_{scenario}/results_{product_demand_mt}.csv",

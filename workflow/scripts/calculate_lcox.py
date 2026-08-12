@@ -42,7 +42,14 @@ def load_demands_for_region(region, config):
 
     Returns dict with:
       - local_el_demand_mwh: MWh/year (for renewable constraint calculation)
+
+    local_demand is only provided as an input for the 'reserved' scenario
+    (see _local_demand_input in rules/supply_curves.smk); other scenarios
+    don't use it and get 0 here.
     """
+    if not snakemake.input.local_demand:
+        return {"local_el_demand_mwh": 0}
+
     # Load local electricity demand (for renewable constraint calculation)
     try:
         local_df = pd.read_csv(snakemake.input.local_demand)
