@@ -8,15 +8,23 @@ capital availability, using a two-stage pipeline (greenfield supply curves,
 then cross-region LP trade) built on [PyPSA](https://pypsa.org/) and
 orchestrated with [Snakemake](https://snakemake.readthedocs.io/).
 
-## Quick start
+## Quick start – installation & execution
 
 ```sh
 git clone https://github.com/energyLS/shift.git
 cd shift
 pixi install
-pixi shell
 pixi run snakemake model_trade_all
 ```
+
+## Key results
+
+`model_trade_all` populates `results/<scenario>/` for each configured trade
+scenario with:
+
+- `result.csv` – regional production volumes and shipped quantities
+- `map_ironore.pdf`, `map_hbi.pdf`, `map_steel.pdf` – trade-flow maps by product
+- `network.nc` – the full PyPSA network, for further analysis
 
 ## Documentation
 

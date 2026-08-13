@@ -1,7 +1,7 @@
 enable:
-  run_supply_chain: False # Enable for first run
-  run_supply_curve: False # Enable for first run
-  cluster_renewables: False # Enable for first run
+  run_supply_chain: True # Set False to skip re-deriving once resources exist on disk
+  run_supply_curve: True # Set False to skip re-deriving once resources exist on disk
+  cluster_renewables: True # Set False to skip re-deriving once resources exist on disk
 
 run:
   disable_progressbar: false

@@ -11,16 +11,17 @@ These expand into a deterministic wildcard space (cost_year, region,
 product, scenario) that drives all downstream rule creation. This
 bootstrap is handled automatically by Snakemake; no user action required.
 
-### First-run `enable` flags
+### The `enable` flags
 
 `config/config.yaml`'s `enable` block gates three of the most expensive
-rules in the pipeline:
+rules in the pipeline, and ships **`True`** by default so a fresh clone
+runs end-to-end with no manual edits:
 
 ```yaml
 enable:
-  run_supply_chain: False   # gates rule calculate_regional_lcox
-  run_supply_curve: False   # gates rule create_supply_curve
-  cluster_renewables: False # gates rule cluster_renewables
+  run_supply_chain: True   # gates rule calculate_regional_lcox
+  run_supply_curve: True   # gates rule create_supply_curve
+  cluster_renewables: True # gates rule cluster_renewables
 ```
 
 These aren't ordinary "skip if already done" toggles - each one wraps an
@@ -38,12 +39,13 @@ re-running that rule, **the rule doesn't exist in the DAG at all**:
   (`resources/supply_curves/.../{region}_marginal_cost_{product}.csv`)
   must already exist.
 
-**On a first run against a given config (regions, cost year, scenarios),
-set all three to `True`** so Snakemake actually generates these
-resources. Once they exist on disk, you can set them back to `False` to
-skip re-deriving them on subsequent runs - useful because renewable
-clustering alone takes on the order of 10+ minutes, and LCOX/supply-curve
-generation scales with the number of configured regions.
+`resources/` is gitignored - nothing under it ships in the repo - so all
+three flags must be `True` the first time you run against a given config
+(regions, cost year, scenarios). Once the resources exist on disk, you
+can set them back to `False` to skip re-deriving them on subsequent runs
+- useful because renewable clustering alone takes on the order of 10+
+minutes, and LCOX/supply-curve generation scales with the number of
+configured regions.
 
 The trap: if you change something the cached resources depend on (most
 obviously `regions`, but also `cost_year` or clustering parameters) while
