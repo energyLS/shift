@@ -48,6 +48,7 @@ rule get_figures:
         "results/figures_general/comparison/cost_year~2050/wacc~regional/lcox_comparison_South_America_Europe.pdf",
         "results/figures_general/mga/chain_id~supplyconstraint/wacc~regional/mga_analysis.pdf",
         "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/map_hbi.pdf",
+        "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~default/map_ironore.pdf",
         "results/figures_general/global_map_countries.pdf",
         "results/figures_general/chokepoints/map_chokepoints.pdf",
         "results/chain_id~supplyconstraint/cost_year~2050/interone~hbi/intertwo~eaf/wacc~regional/final~steel/scenario~mga-chokepoints/map_hbi_0.002.pdf",
@@ -77,6 +78,7 @@ rule get_figures:
         "results/figures_streamlined/lcox-south-america.pdf",
         "results/figures_streamlined/mga-analysis.pdf",
         "results/figures_streamlined/map-hbi-opti.pdf",
+        "results/figures_streamlined/map-ironore-opti.pdf",
         "results/figures_streamlined/map-countries.pdf",
         "results/figures_streamlined/map-chokepoints.pdf",
         "results/figures_streamlined/map-hbi-chokepoints.pdf",
@@ -261,4 +263,4 @@ rule plot_compare_lcox:
 
 rule plot_compare_lcox_all:
     input:
-        expand("results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison_" + f"{_lcox_low_cost[0]}" + "_" + f"{_lcox_high_cost[0]}" + ".pdf", cost_year=[2050], wacc=[config["trade_chains"]["wacc"]], low_cost=_lcox_low_cost, high_cost=_lcox_high_cost, allow_missing=True)
+        expand("results/figures_general/comparison/cost_year~{cost_year}/wacc~{wacc}/lcox_comparison_" + f"{_lcox_low_cost[0]}" + "_" + f"{_lcox_high_cost[0]}" + ".pdf", cost_year=[2050],  wacc=["regional", "uniform"], low_cost=_lcox_low_cost, high_cost=_lcox_high_cost, allow_missing=True)
