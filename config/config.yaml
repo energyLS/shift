@@ -32,7 +32,7 @@ trade_chains:
   id: supplyconstraint
   cost_year: 2050
   final_product: steel
-  wacc: regional #regional or uniform
+  wacc: uniform #regional or uniform
   labour_cost: True #Include labour cost
   tradeable_commodities: [iron_ore, hbi]
   stages:
@@ -114,7 +114,7 @@ scenario:
     modifiers:
       cost_penalty:
       mga:
-        slack: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+        slack: [0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01, 0.011, 0.012]
         sense: "min"
         carrier: "hbi"
         indicator: "blocks"
@@ -171,7 +171,7 @@ region_nice_names:
   "South_South_America": "South Cone"
   "Central_America": "Central America"
   "West_Asia": "South Asia"
-  "East_Asia": "East Asia (China-dominated)"
+  "East_Asia": "China, Mongolia, TWN & HKG" #East Asia (China-dominated)"
   "Pacific_Asia": "Pacific Asia"
   "East_East_Asia": "Japan & Korea"
   "Oceania": "Australia & New Zealand"
@@ -287,7 +287,9 @@ colors:
   hydrogen direct iron reduction furnace: 'grey'
   battery inverter: '#6A000E'
   battery inverter (charging): '#6A000E'
+  battery (charging): '#6A000E'
   battery inverter (discharging): '#FF5733'
+  battery (discharging): '#FF5733'
   battery: 'purple'
   wind: 'blue'
   onshore wind: 'blue'

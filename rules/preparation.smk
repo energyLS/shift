@@ -31,6 +31,7 @@ rule prepare_wacc:
         bus_locations="data/bus_locations.csv",
     output:
         wacc="resources/wacc-clustered.csv",
+        wacc_latex="resources/wacc-clustered.tex",
     threads: 2
     resources:
         mem_mb=5000,
