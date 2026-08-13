@@ -1,4 +1,5 @@
 import logging
+import sys
 from pathlib import Path
 
 import requests
@@ -41,7 +42,30 @@ def setup_logging(
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
     if not any(getattr(h, "_shift_console_handler", False) for h in log.handlers):
-        stream_handler = logging.StreamHandler()
+        # Windows consoles default to a legacy codepage (e.g. cp1252) that
+        # can't encode characters like the arrows some log messages use
+        # (e.g. "3462 rows → gni_per_capita.csv"), so the bare stream write
+        # inside logging.StreamHandler.emit() raises UnicodeEncodeError.
+        # logging swallows that (prints a "--- Logging error ---" banner
+        # instead of the intended message and moves on), so this never
+        # crashes a run, but it does silently eat log output. Wrap our own
+        # handle to sys.stderr's underlying fd with errors="backslashreplace"
+        # instead of mutating sys.stderr itself, since reconfiguring the
+        # shared sys.stderr object doesn't reliably propagate to handlers/
+        # codecs that already hold a reference to it.
+        console_stream = sys.stderr
+        if hasattr(sys.stderr, "fileno"):
+            try:
+                console_stream = open(
+                    sys.stderr.fileno(),
+                    mode="w",
+                    encoding=sys.stderr.encoding or "utf-8",
+                    errors="backslashreplace",
+                    closefd=False,
+                )
+            except (OSError, ValueError):
+                pass
+        stream_handler = logging.StreamHandler(console_stream)
         stream_handler.setLevel(level)
         stream_handler.setFormatter(formatter)
         stream_handler._shift_console_handler = True  # type: ignore[attr-defined]
@@ -57,7 +81,12 @@ def setup_logging(
         getattr(h, "baseFilename", None) == str(log_path) for h in log.handlers
     ):
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_path)
+        # Explicit encoding: without it, FileHandler defaults to the
+        # platform locale's preferred encoding (cp1252 on Windows), which
+        # can't represent characters like the arrows some log messages use
+        # and raises UnicodeEncodeError on emit. A log file has no display
+        # constraint the way a console does, so just use UTF-8.
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         file_handler._shift_file_handler = True  # type: ignore[attr-defined]
