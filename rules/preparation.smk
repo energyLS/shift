@@ -28,7 +28,6 @@ rule prepare_labour_cost:
 rule prepare_wacc:
     input:
         wacc="data/wacc-global.csv",
-        bus_locations="data/bus_locations.csv",
     output:
         wacc="resources/wacc-clustered.csv",
         wacc_latex="resources/wacc-clustered.tex",
