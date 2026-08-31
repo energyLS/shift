@@ -1,6 +1,6 @@
 # SHIFT – Steel & Hydrogen Integrated Freight Trade
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21875103.svg)](https://doi.org/10.5281/zenodo.21875103)
 
 **SHIFT** is a spatially resolved techno-economic optimization of global iron
