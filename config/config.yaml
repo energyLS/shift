@@ -275,8 +275,9 @@ solver_options:
       # No crossover: calculate_lcox.py only reads network.objective and the
       # primal capacity mix, never duals, so a basic (vertex) solution is not
       # required and skipping crossover saves the simplex clean-up pass.
+      # solver left as "choose" so HiGHS can pick simplex over IPM where cheaper.
       threads: 4
-      solver: "ipm"
+      solver: "choose"
       run_crossover: "off"
       small_matrix_value: 1e-6
       large_matrix_value: 1e15
