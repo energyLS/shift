@@ -13,6 +13,8 @@ orchestrated with [Snakemake](https://snakemake.readthedocs.io/).
 
 ## Quick start – installation & execution
 
+SHIFT is written in Python and uses [pixi](https://pixi.sh/latest/installation/) to manage the environment. Install pixi before you continue.
+
 ```sh
 git clone https://github.com/energyLS/shift.git
 cd shift
