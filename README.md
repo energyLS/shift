@@ -17,6 +17,16 @@ pixi install
 pixi run snakemake model_trade_all
 ```
 
+Approximate runtimes:
+
+- Installation (`pixi install`): ~5 minutes
+- Full model (`model_trade_all`): ~5 hours
+
+> [!TIP]
+> For a quick, low-resolution run, check out the
+> [`demo` branch](https://github.com/energyLS/shift/tree/demo), which uses
+> fewer regions and quantities and completes in ~1 hour.
+
 ## Key results
 
 `model_trade_all` populates `results/<scenario>/` for each configured trade
