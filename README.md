@@ -1,5 +1,8 @@
 # SHIFT – Steel & Hydrogen Integrated Freight Trade
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENCE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21875103.svg)](https://doi.org/10.5281/zenodo.21875103)
+
 **SHIFT** is a spatially resolved techno-economic optimization of global iron
 and steel supply chains under decarbonization. It explores how
 hydrogen-based direct reduced iron (DRI) production and hot-briquetted iron
