@@ -1,3 +1,26 @@
+"""model_trade
+
+Build and solve the interregional trade model: consumes the per-region
+supply curves (from create_supply_curve.py) plus trade options (shipping
+routes, chokepoints, iron ore/political-stability data) and produces the
+Step 2 global trade optimization described in the README.
+
+This module provides utilities to:
+- build a PyPSA network from the trade_chain config, wiring each region's
+  supply curve in as piecewise-linear generators/links and adding shipping
+  (and, where configured, pipeline) links between regions,
+- apply scenario modifiers - cost penalties, HBI import diversity
+  constraints, supply-threshold (pareto) sweeps, and MGA (modeling to
+  generate alternatives, including chokepoint/bloc-based exporter
+  resolution) - on top of the base network,
+- solve the resulting LP/network (optionally as a NetworkCollection across
+  MGA slack values or pareto thresholds), and
+- save the solved network(s)/results and plot trade flow world maps per
+  product (iron ore, HBI, steel).
+
+The script entry point is intended to be invoked from Snakemake.
+"""
+
 from typing import Any
 
 import pypsa

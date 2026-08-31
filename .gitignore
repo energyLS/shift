@@ -22,3 +22,6 @@
 !.pixi/config.toml
 
 shift_data.zip
+
+# mkdocs build output
+/site

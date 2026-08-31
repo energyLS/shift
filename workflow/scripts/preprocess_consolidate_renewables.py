@@ -4,7 +4,9 @@ Input: regional files from `data/new_renewables/supply_{Region}_2013_cleaned.nc`
 Output: `data/new_renewables_consolidated.nc` with dimensions `(region, site_id, time)`.
 
 Usage:
-    python workflow/scripts/preprocess_consolidate_renewables.py [--input-dir data/new_renewables] [--output data/new_renewables_consolidated.nc]
+```
+python workflow/scripts/preprocess_consolidate_renewables.py [--input-dir data/new_renewables] [--output data/new_renewables_consolidated.nc]
+```
 """
 
 from pathlib import Path

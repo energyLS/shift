@@ -1,3 +1,18 @@
+"""_helpers
+
+Shared utilities imported by every workflow script:
+- setup_logging(): configures a per-module logger with a console handler
+  and (when run under Snakemake) a file handler pointed at the rule's log
+  path, with Windows-safe encoding on both.
+- load_config(): thin YAML config loader with error logging.
+- mock_snakemake(): builds a snakemake.script.Snakemake object outside of
+  an actual Snakemake run, for exercising a rule's script interactively
+  (e.g. in a notebook or a debugger) against the real Snakefile/DAG.
+- progress_retrieve(): download helper for retrieve-style rules.
+
+Not a script entry point itself - imported by the other workflow scripts.
+"""
+
 import logging
 import sys
 from pathlib import Path

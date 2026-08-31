@@ -1,3 +1,17 @@
+"""create_supply_curve
+
+Combine per-demand-level LCOX results (from calculate_lcox.py) for one
+region and product into a single piecewise supply curve.
+
+Loads results for the configured default scenario (e.g. allocated_share,
+reserved) plus an optional unreserved scenario for comparison, drops
+infeasible demand levels, attaches stage metadata (input/output commodity,
+conversion ratio) derived from the generic supply-chain skeleton, and
+writes the combined curve as CSV plus a plot (PDF).
+
+The script entry point is intended to be invoked from Snakemake.
+"""
+
 import os
 import sys
 from typing import Any
