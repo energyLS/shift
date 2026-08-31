@@ -135,7 +135,7 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.1, 100, 500, 1000] #[0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
+steel_demand_levels: [1, 10, 100] #[0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
