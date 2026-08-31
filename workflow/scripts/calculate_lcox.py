@@ -365,7 +365,8 @@ def solve_network(network, config):
     solver_cfg = config.get("solver", {})
     solver_name = os.getenv("SHIFT_SOLVER", solver_cfg.get("name", "glpk"))
     solver_options_key = os.getenv(
-        "SHIFT_SOLVER_OPTIONS", solver_cfg.get("options", "default")
+        "SHIFT_SOLVER_OPTIONS",
+        solver_cfg.get("options_lcox", solver_cfg.get("options", "default")),
     )
     solver_options = config.get("solver_options", {}).get(solver_options_key, {})
 
