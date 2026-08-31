@@ -22,6 +22,10 @@ Approximate runtimes:
 - Installation (`pixi install`): ~5 minutes
 - Full model (`model_trade_all`): ~5 hours
 
+By default, the model solves with [HiGHS](https://highs.dev/), a license-free
+solver. If you have a [Gurobi](https://www.gurobi.com/) license, set
+`solver.name: gurobi` in `config/config.yaml` for faster solves.
+
 > [!TIP]
 > For a quick, low-resolution run, check out the
 > [`demo` branch](https://github.com/energyLS/shift/tree/demo), which uses

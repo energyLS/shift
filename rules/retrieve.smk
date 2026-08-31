@@ -3,11 +3,10 @@ storage:
     keep_local=True,
     retries=3,
 
+
 rule retrieve_data:
     input:
-        data_url=storage(
-            f"https://zenodo.org/records/21875103/files/shift_data.zip"
-        ),
+        data_url=storage(f"https://zenodo.org/records/21875103/files/shift_data.zip"),
     output:
         bus_locations="data/bus_locations.csv",
         ip_market_fabrication="data/demand/ip_market__fabrication.csv",
@@ -17,6 +16,7 @@ rule retrieve_data:
         unido_raw="data/labour/unido-raw/data.csv",
         iron_ore_production="data/owid-iron-ore/iron-ore-crude-ore-production.csv",
         political_stability="data/political-stability/globaleconomy.csv",
+        trade_opt="data/trade_opt.csv",
         renewable_profiles_geojson="data/renewable_profiles_global_merged.geojson",
         renewable_profiles_nc="data/renewable_profiles_global_merged.nc",
     log:

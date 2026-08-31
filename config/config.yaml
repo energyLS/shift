@@ -254,8 +254,8 @@ plot:
       bus_size: 2.0e-7
       link_width: 3.0e-8
 solver:
-  name: gurobi
-  options: gurobi-default
+  name: highs  # license-free by default; set to "gurobi" (with a valid license) for faster solves
+  options: highs-default
   compute_iis: False  # Set to false to skip expensive IIS computation for infeasible models
 solver_options:
     highs-default:
