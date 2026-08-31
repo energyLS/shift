@@ -135,7 +135,7 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
+steel_demand_levels: [0.1, 100, 500, 1000] #[0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
@@ -144,19 +144,19 @@ embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
 # Region definitions (ISO3 codes matching renewable clusters metadata)
 regions:
   "Europe": ["ALB","AUT","BLR","BEL","BIH","BGR","HRV","CYP","CZE","DNK","EST","FIN","DEU","GRC","HUN","ITA","XKX","LVA","LTU","LUX","MKD","MDA","MNE","NLD","NOR","POL","ROU","SRB","SVK","SVN","SWE","CHE","TUR","UKR"]
-  "Far_West_Europe": ["FRA","GRL","ISL","IRL","PRT","ESP","GBR"]
-  "Middle_East": ["BHR","IRN","IRQ","ISR","JOR","KWT","LBN","OMN","PSE","QAT","SAU","SYR","ARE","YEM"]
-  "North_West_Africa": ["BEN","BFA","CIV","GMB","GHA","GIN","GNB","LBR","NGA","SEN","SLE","TGO","DZA","TCD","EGY","ERI","LBY","MLI","MRT","MAR","NER","SDN","TUN","ESH"]
-  "Subsaharan_Africa": ["AGO","BWA","BDI","CMR","CAF","COD","ETH","KEN","GAB","MDG","MWI","MOZ","NAM","COG","RWA","SOM","ZAF","SSD","TZA","UGA","ZMB","ZWE"]
+  # "Far_West_Europe": ["FRA","GRL","ISL","IRL","PRT","ESP","GBR"]
+  # "Middle_East": ["BHR","IRN","IRQ","ISR","JOR","KWT","LBN","OMN","PSE","QAT","SAU","SYR","ARE","YEM"]
+  # "North_West_Africa": ["BEN","BFA","CIV","GMB","GHA","GIN","GNB","LBR","NGA","SEN","SLE","TGO","DZA","TCD","EGY","ERI","LBY","MLI","MRT","MAR","NER","SDN","TUN","ESH"]
+  # "Subsaharan_Africa": ["AGO","BWA","BDI","CMR","CAF","COD","ETH","KEN","GAB","MDG","MWI","MOZ","NAM","COG","RWA","SOM","ZAF","SSD","TZA","UGA","ZMB","ZWE"]
   "North_America": ["CAN","USA"]
-  "Eurasia": ["ARM","AZE","GEO","KAZ","KGZ","TJK","TKM","UZB","RUS"]
-  "South_America": ["BOL","BRA","COL","ECU","GUF","GUY","PRY","PER","SUR","VEN"]
-  "South_South_America": ["ARG","CHL","URY"]
-  "Central_America": ["CRI","SLV","GTM","HND","MEX","NIC","PAN","CUB","DOM","JAM","HTI"]
-  "West_Asia": ["AFG","BGD","BTN","IND","NPL","PAK","LKA"]
-  "East_Asia": ["CHN","HKG","MNG","TWN"]
-  "Pacific_Asia": ["BRN","KHM","IDN","LAO","MYS","MMR","PNG","PHL","SGP","THA","VNM"]
-  "East_East_Asia": ["JPN","KOR","PRK"]
+  # "Eurasia": ["ARM","AZE","GEO","KAZ","KGZ","TJK","TKM","UZB","RUS"]
+  # "South_America": ["BOL","BRA","COL","ECU","GUF","GUY","PRY","PER","SUR","VEN"]
+  # "South_South_America": ["ARG","CHL","URY"]
+  # "Central_America": ["CRI","SLV","GTM","HND","MEX","NIC","PAN","CUB","DOM","JAM","HTI"]
+  # "West_Asia": ["AFG","BGD","BTN","IND","NPL","PAK","LKA"]
+  # "East_Asia": ["CHN","HKG","MNG","TWN"]
+  # "Pacific_Asia": ["BRN","KHM","IDN","LAO","MYS","MMR","PNG","PHL","SGP","THA","VNM"]
+  # "East_East_Asia": ["JPN","KOR","PRK"]
   "Oceania": ["AUS","NZL"]
 
 region_nice_names:
