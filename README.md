@@ -22,6 +22,10 @@ Approximate runtimes:
 - Installation (`pixi install`): ~5 minutes
 - Demo model (this branch): ~1 hour
 
+By default, the model solves with [HiGHS](https://highs.dev/), a license-free
+solver. If you have a [Gurobi](https://www.gurobi.com/) license, set
+`solver.name: gurobi` in `config/config.yaml` for faster solves.
+
 > [!NOTE]
 > This is the `demo` branch: it uses fewer regions and quantities so it
 > runs much faster. For the full-resolution model (~5 hours), see the
