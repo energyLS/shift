@@ -1,5 +1,8 @@
 # SHIFT – Steel & Hydrogen Integrated Freight Trade
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21875103.svg)](https://doi.org/10.5281/zenodo.21875103)
+
 **SHIFT** is a spatially resolved techno-economic optimization of global iron
 and steel supply chains under decarbonization. It explores how
 hydrogen-based direct reduced iron (DRI) production and hot-briquetted iron
@@ -9,6 +12,8 @@ then cross-region LP trade) built on [PyPSA](https://pypsa.org/) and
 orchestrated with [Snakemake](https://snakemake.readthedocs.io/).
 
 ## Quick start – installation & execution
+
+SHIFT requires Python 3.10+ and uses [pixi](https://pixi.sh/latest/installation/) to manage the environment. Install pixi before you continue.
 
 ```sh
 git clone https://github.com/energyLS/shift.git
@@ -21,6 +26,10 @@ Approximate runtimes:
 
 - Installation (`pixi install`): ~5 minutes
 - Full model (`model_trade_all`): ~5 hours
+
+By default, the model solves with [HiGHS](https://highs.dev/), a license-free
+solver. If you have a [Gurobi](https://www.gurobi.com/) license, set
+`solver.name: gurobi` in `config/config.yaml` for faster solves.
 
 > [!TIP]
 > For a quick, low-resolution run, check out the
