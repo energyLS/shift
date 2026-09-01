@@ -135,7 +135,7 @@ scenario:
 # Absolute steel demand levels (Mt/year) for supply curve sweep
 # For each level, PyPSA minimizes cost with fixed renewable capacity
 # Values represent different production scales
-steel_demand_levels: [0.1, 100, 500, 1000] #[0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
+steel_demand_levels: [1, 10, 100, 1000] #[0.1, 0.5, 1, 5, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800, 900, 1000] # Mt/year
 
 electricity_steel_ratio: 5.25 #TWh/Mt or MWh/t, see notebooks 'analysis-steel.ipynb'
 embodied_energy_steel: 2.1 #TWh/Mt or MWh/t, see iron oxide reduction
@@ -254,8 +254,9 @@ plot:
       bus_size: 2.0e-7
       link_width: 3.0e-8
 solver:
-  name: gurobi
-  options: gurobi-default
+  name: highs  # license-free by default; set to "gurobi" (with a valid license) for faster solves
+  options: highs-default  # used for the trade LP, where crossover-derived duals (nodal prices) matter
+  options_lcox: highs-lcox  # used for regional LCOX/supply-curve solves, which only consume the primal solution
   compute_iis: False  # Set to false to skip expensive IIS computation for infeasible models
 solver_options:
     highs-default:
@@ -268,6 +269,21 @@ solver_options:
       primal_feasibility_tolerance: 1e-6
       dual_feasibility_tolerance: 1e-6
       ipm_optimality_tolerance: 1e-6
+      parallel: "on"
+      random_seed: 123
+    highs-lcox:
+      # No crossover: calculate_lcox.py only reads network.objective and the
+      # primal capacity mix, never duals, so a basic (vertex) solution is not
+      # required and skipping crossover saves the simplex clean-up pass.
+      # solver left as "choose" so HiGHS can pick simplex over IPM where cheaper.
+      threads: 4
+      solver: "choose"
+      run_crossover: "off"
+      small_matrix_value: 1e-6
+      large_matrix_value: 1e15
+      primal_feasibility_tolerance: 1e-6
+      dual_feasibility_tolerance: 1e-6
+      ipm_optimality_tolerance: 1e-5
       parallel: "on"
       random_seed: 123
     gurobi-default:
